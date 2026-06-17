@@ -1,21 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <archive type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="8.00">
 	<data>
-		<int key="IBDocument.SystemTarget">1060</int>
+		<int key="IBDocument.SystemTarget">1100</int>
 		<string key="IBDocument.SystemVersion">10D578</string>
 		<string key="IBDocument.InterfaceBuilderVersion">762</string>
 		<string key="IBDocument.AppKitVersion">1038.29</string>
 		<string key="IBDocument.HIToolboxVersion">460.00</string>
 		<dictionary class="NSMutableDictionary" key="IBDocument.PluginVersions">
 			<string key="com.apple.InterfaceBuilder.CocoaPlugin">762</string>
-			<string key="com.brandonwalkin.BWToolkit">1.2.5</string>
 		</dictionary>
 		<array class="NSMutableArray" key="IBDocument.EditedObjectIDs">
 			<integer value="192"/>
 		</array>
 		<array key="IBDocument.PluginDependencies">
 			<string>com.apple.InterfaceBuilder.CocoaPlugin</string>
-			<string>com.brandonwalkin.BWToolkit</string>
 		</array>
 		<dictionary class="NSMutableDictionary" key="IBDocument.Metadata"/>
 		<array class="NSMutableArray" key="IBDocument.RootObjects" id="1000">
@@ -394,11 +392,11 @@
 					<reference key="NSNextResponder"/>
 					<int key="NSvFlags">256</int>
 					<array class="NSMutableArray" key="NSSubviews">
-						<object class="BWSplitView" id="939165556">
+						<object class="NSSplitView" id="939165556">
 							<reference key="NSNextResponder" ref="857265946"/>
 							<int key="NSvFlags">274</int>
 							<array class="NSMutableArray" key="NSSubviews">
-								<object class="BWCustomView" id="903388502">
+								<object class="NSView" id="903388502">
 									<reference key="NSNextResponder" ref="939165556"/>
 									<int key="NSvFlags">258</int>
 									<array class="NSMutableArray" key="NSSubviews">
@@ -614,17 +612,17 @@
 											<reference key="NSContentView" ref="1011111212"/>
 											<bytes key="NSScrollAmts">QSAAAEEgAABBmAAAQZgAAA</bytes>
 										</object>
-										<object class="BWAnchoredButtonBar" id="350741575">
+										<object class="NSView" id="350741575">
 											<reference key="NSNextResponder" ref="903388502"/>
 											<int key="NSvFlags">258</int>
 											<array class="NSMutableArray" key="NSSubviews">
-												<object class="BWAnchoredButton" id="1067256387">
+												<object class="NSButton" id="1067256387">
 													<reference key="NSNextResponder" ref="350741575"/>
 													<int key="NSvFlags">268</int>
 													<string key="NSFrame">{{-1, -1}, {32, 24}}</string>
 													<reference key="NSSuperview" ref="350741575"/>
 													<bool key="NSEnabled">YES</bool>
-													<object class="BWAnchoredButtonCell" key="NSCell" id="180896016">
+													<object class="NSButtonCell" key="NSCell" id="180896016">
 														<int key="NSCellFlags">67239424</int>
 														<int key="NSCellFlags2">134348800</int>
 														<string key="NSContents"/>
@@ -642,13 +640,13 @@
 														<int key="NSPeriodicInterval">25</int>
 													</object>
 												</object>
-												<object class="BWAnchoredButton" id="980172617">
+												<object class="NSButton" id="980172617">
 													<reference key="NSNextResponder" ref="350741575"/>
 													<int key="NSvFlags">268</int>
 													<string key="NSFrame">{{30, -1}, {32, 24}}</string>
 													<reference key="NSSuperview" ref="350741575"/>
 													<bool key="NSEnabled">YES</bool>
-													<object class="BWAnchoredButtonCell" key="NSCell" id="1071267620">
+													<object class="NSButtonCell" key="NSCell" id="1071267620">
 														<int key="NSCellFlags">67239424</int>
 														<int key="NSCellFlags2">134348800</int>
 														<string key="NSContents"/>
@@ -666,13 +664,13 @@
 														<int key="NSPeriodicInterval">25</int>
 													</object>
 												</object>
-												<object class="BWAnchoredButton" id="202709532">
+												<object class="NSButton" id="202709532">
 													<reference key="NSNextResponder" ref="350741575"/>
 													<int key="NSvFlags">268</int>
 													<string key="NSFrame">{{61, -1}, {32, 24}}</string>
 													<reference key="NSSuperview" ref="350741575"/>
 													<bool key="NSEnabled">YES</bool>
-													<object class="BWAnchoredButtonCell" key="NSCell" id="973677707">
+													<object class="NSButtonCell" key="NSCell" id="973677707">
 														<int key="NSCellFlags">67239424</int>
 														<int key="NSCellFlags2">134348800</int>
 														<string key="NSContents"/>
@@ -690,13 +688,13 @@
 														<int key="NSPeriodicInterval">25</int>
 													</object>
 												</object>
-												<object class="BWAnchoredPopUpButton" id="1026027995">
+												<object class="NSPopUpButton" id="1026027995">
 													<reference key="NSNextResponder" ref="350741575"/>
 													<int key="NSvFlags">268</int>
 													<string key="NSFrame">{{92, -1}, {32, 24}}</string>
 													<reference key="NSSuperview" ref="350741575"/>
 													<bool key="NSEnabled">YES</bool>
-													<object class="BWAnchoredPopUpButtonCell" key="NSCell" id="286143201">
+													<object class="NSPopUpButtonCell" key="NSCell" id="286143201">
 														<int key="NSCellFlags">-2076049856</int>
 														<int key="NSCellFlags2">134350848</int>
 														<object class="NSFont" key="NSSupport">
@@ -777,15 +775,15 @@
 									<reference key="NSSuperview" ref="939165556"/>
 									<string key="NSClassName">NSView</string>
 								</object>
-								<object class="BWCustomView" id="161968280">
+								<object class="NSView" id="161968280">
 									<reference key="NSNextResponder" ref="939165556"/>
 									<int key="NSvFlags">258</int>
 									<array class="NSMutableArray" key="NSSubviews">
-										<object class="BWSplitView" id="658172246">
+										<object class="NSSplitView" id="658172246">
 											<reference key="NSNextResponder" ref="161968280"/>
 											<int key="NSvFlags">274</int>
 											<array class="NSMutableArray" key="NSSubviews">
-												<object class="BWCustomView" id="541622580">
+												<object class="NSView" id="541622580">
 													<reference key="NSNextResponder" ref="658172246"/>
 													<int key="NSvFlags">272</int>
 													<array class="NSMutableArray" key="NSSubviews">
@@ -921,7 +919,7 @@
 													<reference key="NSSuperview" ref="658172246"/>
 													<string key="NSClassName">NSView</string>
 												</object>
-												<object class="BWCustomView" id="935997404">
+												<object class="NSView" id="935997404">
 													<reference key="NSNextResponder" ref="658172246"/>
 													<int key="NSvFlags">272</int>
 													<array class="NSMutableArray" key="NSSubviews">
@@ -2118,17 +2116,10 @@
 				<string key="201.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="204.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="205.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
-				<string key="213.IBPluginDependency">com.brandonwalkin.BWToolkit</string>
-				<string key="214.IBPluginDependency">com.brandonwalkin.BWToolkit</string>
-				<string key="215.IBPluginDependency">com.brandonwalkin.BWToolkit</string>
-				<string key="216.IBPluginDependency">com.brandonwalkin.BWToolkit</string>
 				<string key="217.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="218.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="219.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="220.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
-				<string key="226.IBPluginDependency">com.brandonwalkin.BWToolkit</string>
-				<string key="227.IBPluginDependency">com.brandonwalkin.BWToolkit</string>
-				<string key="228.IBPluginDependency">com.brandonwalkin.BWToolkit</string>
 				<string key="229.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="230.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="231.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
@@ -2149,8 +2140,6 @@
 						<string key="toolTip">Add Folder</string>
 					</object>
 				</object>
-				<string key="268.IBPluginDependency">com.brandonwalkin.BWToolkit</string>
-				<string key="269.IBPluginDependency">com.brandonwalkin.BWToolkit</string>
 				<object class="NSMutableDictionary" key="270.IBAttributePlaceholdersKey">
 					<string key="NS.key.0">ToolTip</string>
 					<object class="IBToolTipAttribute" key="NS.object.0">
@@ -2159,8 +2148,6 @@
 						<string key="toolTip">Delete Folder</string>
 					</object>
 				</object>
-				<string key="270.IBPluginDependency">com.brandonwalkin.BWToolkit</string>
-				<string key="271.IBPluginDependency">com.brandonwalkin.BWToolkit</string>
 				<object class="NSMutableDictionary" key="272.IBAttributePlaceholdersKey">
 					<string key="NS.key.0">ToolTip</string>
 					<object class="IBToolTipAttribute" key="NS.object.0">
@@ -2169,15 +2156,7 @@
 						<string key="toolTip">Enable/Disable Folder</string>
 					</object>
 				</object>
-				<string key="272.IBPluginDependency">com.brandonwalkin.BWToolkit</string>
-				<string key="273.IBPluginDependency">com.brandonwalkin.BWToolkit</string>
-				<string key="274.IBPluginDependency">com.brandonwalkin.BWToolkit</string>
-				<string key="275.IBPluginDependency">com.brandonwalkin.BWToolkit</string>
 				<string key="276.IBEditorWindowLastContentRect">{{296, 308}, {156, 54}}</string>
-				<string key="276.IBPluginDependency">com.brandonwalkin.BWToolkit</string>
-				<string key="277.IBPluginDependency">com.brandonwalkin.BWToolkit</string>
-				<string key="278.IBPluginDependency">com.brandonwalkin.BWToolkit</string>
-				<string key="279.IBPluginDependency">com.brandonwalkin.BWToolkit</string>
 				<string key="285.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="290.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="291.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>

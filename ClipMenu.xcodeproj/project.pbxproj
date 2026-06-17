@@ -18,7 +18,7 @@
 		3542AD6F0D62828000B3BBBD /* ActionNode.m in Sources */ = {isa = PBXBuildFile; fileRef = 3542AD6E0D62828000B3BBBD /* ActionNode.m */; };
 		3551F2BF0D75224900069069 /* ActionTypeTransformer.m in Sources */ = {isa = PBXBuildFile; fileRef = 3551F2BE0D75224900069069 /* ActionTypeTransformer.m */; };
 		3551F3720D7658EF00069069 /* JavaScriptSupport.m in Sources */ = {isa = PBXBuildFile; fileRef = 3551F3710D7658EF00069069 /* JavaScriptSupport.m */; };
-		356F060E0D012C68003689C0 /* AppController.m in Sources */ = {isa = PBXBuildFile; fileRef = 356F060D0D012C68003689C0 /* AppController.m */; };
+		7A1000030000000000000001 /* AppController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1000010000000000000001 /* AppController.swift */; };
 		356F073F0D024327003689C0 /* ClipsController.m in Sources */ = {isa = PBXBuildFile; fileRef = 356F073E0D024327003689C0 /* ClipsController.m */; };
 		3578F7700D7E3D5E00E804BF /* Menu.png in Resources */ = {isa = PBXBuildFile; fileRef = 3578F76F0D7E3D5E00E804BF /* Menu.png */; };
 		35939D670D42D38F006504B3 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 35939D660D42D38F006504B3 /* WebKit.framework */; };
@@ -29,6 +29,12 @@
 		35C028950D6838D600B95FF5 /* ActionIcon.tiff in Resources */ = {isa = PBXBuildFile; fileRef = 35C028940D6838D600B95FF5 /* ActionIcon.tiff */; };
 		35C028DC0D683C0200B95FF5 /* ActionIconLarge.tiff in Resources */ = {isa = PBXBuildFile; fileRef = 35C028DB0D683C0200B95FF5 /* ActionIconLarge.tiff */; };
 		35C02FFE0D6BAB8300B95FF5 /* script in Resources */ = {isa = PBXBuildFile; fileRef = 35C02FFA0D6BAB8300B95FF5 /* script */; };
+		7A0000040000000000000001 /* SRRecorderControl.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A0000020000000000000001 /* SRRecorderControl.m */; };
+		7A0000050000000000000001 /* SUUpdater.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A0000030000000000000001 /* SUUpdater.m */; };
+		7A0000060000000000000001 /* SRRecorderControl.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A0000020000000000000001 /* SRRecorderControl.m */; };
+		7A0000070000000000000001 /* SUUpdater.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A0000030000000000000001 /* SUUpdater.m */; };
+		7A00000B0000000000000001 /* NSIndexPath+NaoAdditions.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A00000A0000000000000001 /* NSIndexPath+NaoAdditions.m */; };
+		7A00000C0000000000000001 /* NSIndexPath+NaoAdditions.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A00000A0000000000000001 /* NSIndexPath+NaoAdditions.m */; };
 		8D11072B0486CEB800E47090 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 089C165CFE840E0CC02AAC07 /* InfoPlist.strings */; };
 		8D11072D0486CEB800E47090 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 29B97316FDCFA39411CA2CEA /* main.m */; settings = {ATTRIBUTES = (); }; };
 		8D11072F0486CEB800E47090 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1058C7A1FEA54F0111CA2CBB /* Cocoa.framework */; };
@@ -48,7 +54,7 @@
 		A82B8ABC0EC3F8D700096102 /* Menu.png in Resources */ = {isa = PBXBuildFile; fileRef = 3578F76F0D7E3D5E00E804BF /* Menu.png */; };
 		A82B8ABD0EC3F8D700096102 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = A89716F20EA877CD005EE8E8 /* MainMenu.xib */; };
 		A82B8AC30EC3F8D700096102 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 29B97316FDCFA39411CA2CEA /* main.m */; settings = {ATTRIBUTES = (); }; };
-		A82B8AC40EC3F8D700096102 /* AppController.m in Sources */ = {isa = PBXBuildFile; fileRef = 356F060D0D012C68003689C0 /* AppController.m */; };
+		7A1000040000000000000001 /* AppController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1000010000000000000001 /* AppController.swift */; };
 		A82B8AC50EC3F8D700096102 /* ClipsController.m in Sources */ = {isa = PBXBuildFile; fileRef = 356F073E0D024327003689C0 /* ClipsController.m */; };
 		A82B8AC60EC3F8D700096102 /* Clip.m in Sources */ = {isa = PBXBuildFile; fileRef = 3593F1840D025D5500B95536 /* Clip.m */; };
 		A82B8AC70EC3F8D700096102 /* MenuController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3518CA980D07646C00158053 /* MenuController.m */; };
@@ -73,9 +79,6 @@
 		A82B8AE20EC3F8D700096102 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1058C7A1FEA54F0111CA2CBB /* Cocoa.framework */; };
 		A82B8AE30EC3F8D700096102 /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3518CE060D07966B00158053 /* Carbon.framework */; };
 		A82B8AE40EC3F8D700096102 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 35939D660D42D38F006504B3 /* WebKit.framework */; };
-		A8328DCD108859AE00A54DF4 /* ShortcutRecorder.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8328DCC108859AE00A54DF4 /* ShortcutRecorder.framework */; };
-		A8328DCE108859AE00A54DF4 /* ShortcutRecorder.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8328DCC108859AE00A54DF4 /* ShortcutRecorder.framework */; };
-		A8328DD9108859B100A54DF4 /* ShortcutRecorder.framework in CopyFiles */ = {isa = PBXBuildFile; fileRef = A8328DCC108859AE00A54DF4 /* ShortcutRecorder.framework */; };
 		A8328E0C10885FAF00A54DF4 /* DBPrefsWindowController.m in Sources */ = {isa = PBXBuildFile; fileRef = A8328E0B10885FAF00A54DF4 /* DBPrefsWindowController.m */; };
 		A8328E0D10885FAF00A54DF4 /* DBPrefsWindowController.m in Sources */ = {isa = PBXBuildFile; fileRef = A8328E0B10885FAF00A54DF4 /* DBPrefsWindowController.m */; };
 		A8464D9D108AAC3B0040C8C6 /* StatusMenuIconByDaveUlrich-scissors1-bw-left.png in Resources */ = {isa = PBXBuildFile; fileRef = A8464D95108AAC3B0040C8C6 /* StatusMenuIconByDaveUlrich-scissors1-bw-left.png */; };
@@ -122,9 +125,6 @@
 		A89465EB0EB97B92004ACD23 /* SnippetsController.m in Sources */ = {isa = PBXBuildFile; fileRef = A89465EA0EB97B92004ACD23 /* SnippetsController.m */; };
 		A894673E0EB999B5004ACD23 /* IndexedArrayController.m in Sources */ = {isa = PBXBuildFile; fileRef = A894673D0EB999B5004ACD23 /* IndexedArrayController.m */; };
 		A89716F40EA877CD005EE8E8 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = A89716F20EA877CD005EE8E8 /* MainMenu.xib */; };
-		A897231B1095C6F500676306 /* Sparkle.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A897231A1095C6F500676306 /* Sparkle.framework */; };
-		A897231C1095C6F500676306 /* Sparkle.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A897231A1095C6F500676306 /* Sparkle.framework */; };
-		A89723271095C70900676306 /* Sparkle.framework in CopyFiles */ = {isa = PBXBuildFile; fileRef = A897231A1095C6F500676306 /* Sparkle.framework */; };
 		A8975E9C1087042E00973851 /* SparkleIcon.tif in Resources */ = {isa = PBXBuildFile; fileRef = A8975E9B1087042E00973851 /* SparkleIcon.tif */; };
 		A8975E9D1087042E00973851 /* SparkleIcon.tif in Resources */ = {isa = PBXBuildFile; fileRef = A8975E9B1087042E00973851 /* SparkleIcon.tif */; };
 		A8A2D2760EC1735C007DE280 /* PTHotKey.m in Sources */ = {isa = PBXBuildFile; fileRef = A8A2D26F0EC1735C007DE280 /* PTHotKey.m */; };
@@ -139,8 +139,6 @@
 		A8C53AB710AA6585001930BE /* SnippetEditor.xib in Resources */ = {isa = PBXBuildFile; fileRef = A8C53AB510AA6585001930BE /* SnippetEditor.xib */; };
 		A8CEEA0610AA42B500C3823F /* SnippetEditorController.m in Sources */ = {isa = PBXBuildFile; fileRef = A8CEEA0510AA42B500C3823F /* SnippetEditorController.m */; };
 		A8CEEA0710AA42B500C3823F /* SnippetEditorController.m in Sources */ = {isa = PBXBuildFile; fileRef = A8CEEA0510AA42B500C3823F /* SnippetEditorController.m */; };
-		A8CEEA4C10AA465800C3823F /* BWToolkitFramework.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8CEEA4B10AA465800C3823F /* BWToolkitFramework.framework */; };
-		A8CEEA4D10AA465800C3823F /* BWToolkitFramework.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8CEEA4B10AA465800C3823F /* BWToolkitFramework.framework */; };
 		A8CEEA8010AA466800C3823F /* BWToolkitFramework.framework in CopyFiles */ = {isa = PBXBuildFile; fileRef = A8CEEA4B10AA465800C3823F /* BWToolkitFramework.framework */; };
 		A8DCABDE10819C81006E02C8 /* StatusMenuIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = A8DCABD810819C81006E02C8 /* StatusMenuIcon.png */; };
 		A8DCABDF10819C81006E02C8 /* StatusMenuIcon_pressed.png in Resources */ = {isa = PBXBuildFile; fileRef = A8DCABD910819C81006E02C8 /* StatusMenuIcon_pressed.png */; };
@@ -176,8 +174,6 @@
 			dstSubfolderSpec = 10;
 			files = (
 				A8CEEA8010AA466800C3823F /* BWToolkitFramework.framework in CopyFiles */,
-				A89723271095C70900676306 /* Sparkle.framework in CopyFiles */,
-				A8328DD9108859B100A54DF4 /* ShortcutRecorder.framework in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -214,6 +210,8 @@
 		3551F3710D7658EF00069069 /* JavaScriptSupport.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = JavaScriptSupport.m; sourceTree = "<group>"; };
 		356F060C0D012C68003689C0 /* AppController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = AppController.h; path = Source/AppController.h; sourceTree = "<group>"; };
 		356F060D0D012C68003689C0 /* AppController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = AppController.m; path = Source/AppController.m; sourceTree = "<group>"; };
+		7A1000010000000000000001 /* AppController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppController.swift; path = Source/AppController.swift; sourceTree = "<group>"; };
+		7A1000020000000000000001 /* ClipMenu-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "ClipMenu-Bridging-Header.h"; path = "Source/ClipMenu-Bridging-Header.h"; sourceTree = "<group>"; };
 		356F073D0D024327003689C0 /* ClipsController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ClipsController.h; sourceTree = "<group>"; };
 		356F073E0D024327003689C0 /* ClipsController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ClipsController.m; sourceTree = "<group>"; };
 		3578645D0D23A82400FAFFC5 /* English */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = English; path = English.lproj/Localizable.strings; sourceTree = "<group>"; };
@@ -229,6 +227,12 @@
 		35C028940D6838D600B95FF5 /* ActionIcon.tiff */ = {isa = PBXFileReference; lastKnownFileType = image.tiff; name = ActionIcon.tiff; path = resource/ActionIcon.tiff; sourceTree = "<group>"; };
 		35C028DB0D683C0200B95FF5 /* ActionIconLarge.tiff */ = {isa = PBXFileReference; lastKnownFileType = image.tiff; name = ActionIconLarge.tiff; path = resource/ActionIconLarge.tiff; sourceTree = "<group>"; };
 		35C02FFA0D6BAB8300B95FF5 /* script */ = {isa = PBXFileReference; lastKnownFileType = folder; name = script; path = resource/script; sourceTree = "<group>"; };
+		7A0000010000000000000001 /* SRRecorderControl.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = SRRecorderControl.h; path = Source/Compatibility/SRRecorderControl.h; sourceTree = "<group>"; };
+		7A0000020000000000000001 /* SRRecorderControl.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = SRRecorderControl.m; path = Source/Compatibility/SRRecorderControl.m; sourceTree = "<group>"; };
+		7A0000030000000000000001 /* SUUpdater.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = SUUpdater.m; path = Source/Compatibility/SUUpdater.m; sourceTree = "<group>"; };
+		7A0000080000000000000001 /* SUUpdater.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = SUUpdater.h; path = Source/Compatibility/SUUpdater.h; sourceTree = "<group>"; };
+		7A0000090000000000000001 /* NSIndexPath+NaoAdditions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSIndexPath+NaoAdditions.h"; sourceTree = "<group>"; };
+		7A00000A0000000000000001 /* NSIndexPath+NaoAdditions.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "NSIndexPath+NaoAdditions.m"; sourceTree = "<group>"; };
 		8D1107310486CEB800E47090 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		8D1107320486CEB800E47090 /* ClipMenu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClipMenu.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A821F5401085696E00B25C8B /* dsa_pub.pem */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = dsa_pub.pem; path = resource/dsa_pub.pem; sourceTree = "<group>"; };
@@ -305,8 +309,8 @@
 		A8F56B1510C272AF00646BDB /* FolderNode.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = FolderNode.m; path = Source/FolderNode.m; sourceTree = "<group>"; };
 		A8F56BB910C292D400646BDB /* NSIndexPath_Extensions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = NSIndexPath_Extensions.h; path = Source/CocoaExtensions/NSIndexPath_Extensions.h; sourceTree = "<group>"; };
 		A8F56BBA10C292D400646BDB /* NSIndexPath_Extensions.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = NSIndexPath_Extensions.m; path = Source/CocoaExtensions/NSIndexPath_Extensions.m; sourceTree = "<group>"; };
-		A8F56BCE10C2942D00646BDB /* NMLoginItems.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = NMLoginItems.h; path = ../../Library/NM/NMLoginItems.h; sourceTree = SOURCE_ROOT; };
-		A8F56BCF10C2942D00646BDB /* NMLoginItems.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = NMLoginItems.m; path = ../../Library/NM/NMLoginItems.m; sourceTree = SOURCE_ROOT; };
+		A8F56BCE10C2942D00646BDB /* NMLoginItems.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = NMLoginItems.h; path = Source/NaoAdditions/NMLoginItems.h; sourceTree = "<group>"; };
+		A8F56BCF10C2942D00646BDB /* NMLoginItems.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = NMLoginItems.m; path = Source/NaoAdditions/NMLoginItems.m; sourceTree = "<group>"; };
 		A8FA6E5810AD66E200AFAB75 /* ScriptableClip.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ScriptableClip.h; sourceTree = "<group>"; };
 		A8FA6E5910AD66E200AFAB75 /* ScriptableClip.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ScriptableClip.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -319,9 +323,6 @@
 				8D11072F0486CEB800E47090 /* Cocoa.framework in Frameworks */,
 				3518CE070D07966B00158053 /* Carbon.framework in Frameworks */,
 				35939D670D42D38F006504B3 /* WebKit.framework in Frameworks */,
-				A8328DCD108859AE00A54DF4 /* ShortcutRecorder.framework in Frameworks */,
-				A897231B1095C6F500676306 /* Sparkle.framework in Frameworks */,
-				A8CEEA4D10AA465800C3823F /* BWToolkitFramework.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -332,9 +333,6 @@
 				A82B8AE20EC3F8D700096102 /* Cocoa.framework in Frameworks */,
 				A82B8AE30EC3F8D700096102 /* Carbon.framework in Frameworks */,
 				A82B8AE40EC3F8D700096102 /* WebKit.framework in Frameworks */,
-				A8328DCE108859AE00A54DF4 /* ShortcutRecorder.framework in Frameworks */,
-				A897231C1095C6F500676306 /* Sparkle.framework in Frameworks */,
-				A8CEEA4C10AA465800C3823F /* BWToolkitFramework.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -346,6 +344,8 @@
 			children = (
 				356F060C0D012C68003689C0 /* AppController.h */,
 				356F060D0D012C68003689C0 /* AppController.m */,
+				7A1000010000000000000001 /* AppController.swift */,
+				7A1000020000000000000001 /* ClipMenu-Bridging-Header.h */,
 				A842D3230EA97DA200DCB303 /* constants.h */,
 				3542A9290D5EC6C300B3BBBD /* CMUtilities.h */,
 				3542A92A0D5EC6C300B3BBBD /* CMUtilities.m */,
@@ -452,6 +452,10 @@
 			children = (
 				35A42CC20D7D0ABA005FFB4C /* PrefsWindowController.h */,
 				35A42CC30D7D0ABA005FFB4C /* PrefsWindowController.m */,
+				7A0000010000000000000001 /* SRRecorderControl.h */,
+				7A0000020000000000000001 /* SRRecorderControl.m */,
+				7A0000080000000000000001 /* SUUpdater.h */,
+				7A0000030000000000000001 /* SUUpdater.m */,
 				3542A8C90D5EC15000B3BBBD /* ActionNodeController.h */,
 				3542A8CA0D5EC15000B3BBBD /* ActionNodeController.m */,
 				3551F2BD0D75224900069069 /* ActionTypeTransformer.h */,
@@ -503,9 +507,11 @@
 			children = (
 				3542A8AD0D5EBF3800B3BBBD /* NSString+NaoAdditions.h */,
 				3542A8AE0D5EBF3800B3BBBD /* NSString+NaoAdditions.m */,
+				7A0000090000000000000001 /* NSIndexPath+NaoAdditions.h */,
+				7A00000A0000000000000001 /* NSIndexPath+NaoAdditions.m */,
 			);
 			name = NaoAdditions;
-			path = ../../Library/NaoAdditions;
+			path = Source/NaoAdditions;
 			sourceTree = SOURCE_ROOT;
 		};
 		A8328E0910885FAF00A54DF4 /* DBPrefsWindowController */ = {
@@ -673,9 +679,18 @@
 /* Begin PBXProject section */
 		29B97313FDCFA39411CA2CEA /* Project object */ = {
 			isa = PBXProject;
+			attributes = {
+			};
 			buildConfigurationList = C01FCF4E08A954540054247B /* Build configuration list for PBXProject "ClipMenu" */;
 			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = en;
 			hasScannedForEncodings = 1;
+			knownRegions = (
+				en,
+				Base,
+				English,
+				Japanese,
+			);
 			mainGroup = 29B97314FDCFA39411CA2CEA /* ClipMenu */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -800,7 +815,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				8D11072D0486CEB800E47090 /* main.m in Sources */,
-				356F060E0D012C68003689C0 /* AppController.m in Sources */,
+				7A1000030000000000000001 /* AppController.swift in Sources */,
 				356F073F0D024327003689C0 /* ClipsController.m in Sources */,
 				3593F1850D025D5500B95536 /* Clip.m in Sources */,
 				3518CA990D07646C00158053 /* MenuController.m in Sources */,
@@ -834,6 +849,9 @@
 				A8F56B1710C272AF00646BDB /* FolderNode.m in Sources */,
 				A8F56BBC10C292D400646BDB /* NSIndexPath_Extensions.m in Sources */,
 				A8F56BD110C2942D00646BDB /* NMLoginItems.m in Sources */,
+				7A0000040000000000000001 /* SRRecorderControl.m in Sources */,
+				7A0000050000000000000001 /* SUUpdater.m in Sources */,
+				7A00000B0000000000000001 /* NSIndexPath+NaoAdditions.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -843,7 +861,7 @@
 			files = (
 				A86F939A0ED183FC0058E899 /* ActionPopUpButton.m in Sources */,
 				A82B8AC30EC3F8D700096102 /* main.m in Sources */,
-				A82B8AC40EC3F8D700096102 /* AppController.m in Sources */,
+				7A1000040000000000000001 /* AppController.swift in Sources */,
 				A82B8AC50EC3F8D700096102 /* ClipsController.m in Sources */,
 				A82B8AC60EC3F8D700096102 /* Clip.m in Sources */,
 				A82B8AC70EC3F8D700096102 /* MenuController.m in Sources */,
@@ -876,6 +894,9 @@
 				A8F56B1610C272AF00646BDB /* FolderNode.m in Sources */,
 				A8F56BBB10C292D400646BDB /* NSIndexPath_Extensions.m in Sources */,
 				A8F56BD010C2942D00646BDB /* NMLoginItems.m in Sources */,
+				7A0000060000000000000001 /* SRRecorderControl.m in Sources */,
+				7A0000070000000000000001 /* SUUpdater.m in Sources */,
+				7A00000C0000000000000001 /* NSIndexPath+NaoAdditions.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -950,17 +971,12 @@
 		A82B8AE90EC3F8D700096102 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
+				ARCHS = "$(ARCHS_STANDARD)";
 				COPY_PHASE_STRIP = NO;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"\"$(SRCROOT)/Frameworks\"",
-				);
+				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_ENABLE_FIX_AND_CONTINUE = YES;
 				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
-				GCC_MODEL_TUNING = G5;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				GCC_WARN_ABOUT_MISSING_NEWLINE = YES;
 				GCC_WARN_CHECK_SWITCH_STATEMENTS = YES;
@@ -968,38 +984,39 @@
 				GCC_WARN_MISSING_PARENTHESES = NO;
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
-				MACOSX_DEPLOYMENT_TARGET = 10.5;
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
+				PRODUCT_MODULE_NAME = ClipMenu;
 				PRODUCT_NAME = ClipMenu;
 				RUN_CLANG_STATIC_ANALYZER = YES;
-				SDKROOT = macosx10.6;
+				SDKROOT = macosx;
+				SWIFT_OBJC_BRIDGING_HEADER = "Source/ClipMenu-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
 				WRAPPER_EXTENSION = app;
-				ZERO_LINK = YES;
 			};
 			name = Debug;
 		};
 		A82B8AEA0EC3F8D700096102 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
+				ARCHS = "$(ARCHS_STANDARD)";
 				DEPLOYMENT_POSTPROCESSING = YES;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"\"$(SRCROOT)/Frameworks\"",
-				);
+				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
 				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
-				GCC_MODEL_TUNING = G5;
 				GCC_WARN_ABOUT_MISSING_NEWLINE = YES;
 				GCC_WARN_CHECK_SWITCH_STATEMENTS = YES;
 				GCC_WARN_INITIALIZER_NOT_FULLY_BRACKETED = YES;
 				GCC_WARN_MISSING_PARENTHESES = NO;
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
-				MACOSX_DEPLOYMENT_TARGET = 10.5;
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
+				PRODUCT_MODULE_NAME = ClipMenu;
 				PRODUCT_NAME = ClipMenu;
 				RUN_CLANG_STATIC_ANALYZER = YES;
-				SDKROOT = macosx10.6;
+				SDKROOT = macosx;
+				SWIFT_OBJC_BRIDGING_HEADER = "Source/ClipMenu-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
 				WRAPPER_EXTENSION = app;
 			};
 			name = Release;
@@ -1007,54 +1024,50 @@
 		C01FCF4B08A954540054247B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
+				ARCHS = "$(ARCHS_STANDARD)";
 				COPY_PHASE_STRIP = NO;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"\"$(SRCROOT)/Frameworks\"",
-				);
+				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_ENABLE_FIX_AND_CONTINUE = YES;
 				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
-				GCC_MODEL_TUNING = G5;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				GCC_WARN_ABOUT_MISSING_NEWLINE = YES;
 				GCC_WARN_CHECK_SWITCH_STATEMENTS = YES;
 				GCC_WARN_MISSING_PARENTHESES = NO;
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
-				MACOSX_DEPLOYMENT_TARGET = 10.5;
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
+				PRODUCT_MODULE_NAME = ClipMenu;
 				PRODUCT_NAME = ClipMenu;
 				RUN_CLANG_STATIC_ANALYZER = NO;
-				SDKROOT = macosx10.6;
+				SDKROOT = macosx;
+				SWIFT_OBJC_BRIDGING_HEADER = "Source/ClipMenu-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
 				WRAPPER_EXTENSION = app;
-				ZERO_LINK = YES;
 			};
 			name = Debug;
 		};
 		C01FCF4C08A954540054247B /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
+				ARCHS = "$(ARCHS_STANDARD)";
 				DEPLOYMENT_POSTPROCESSING = YES;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"\"$(SRCROOT)/Frameworks\"",
-				);
+				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
 				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
-				GCC_MODEL_TUNING = G5;
 				GCC_WARN_ABOUT_MISSING_NEWLINE = YES;
 				GCC_WARN_CHECK_SWITCH_STATEMENTS = YES;
 				GCC_WARN_MISSING_PARENTHESES = NO;
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
-				MACOSX_DEPLOYMENT_TARGET = 10.5;
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
+				PRODUCT_MODULE_NAME = ClipMenu;
 				PRODUCT_NAME = ClipMenu;
 				RUN_CLANG_STATIC_ANALYZER = YES;
-				SDKROOT = macosx10.6;
+				SDKROOT = macosx;
+				SWIFT_OBJC_BRIDGING_HEADER = "Source/ClipMenu-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
 				WRAPPER_EXTENSION = app;
 			};
 			name = Release;

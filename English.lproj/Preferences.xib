@@ -1,21 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <archive type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="8.00">
 	<data>
-		<int key="IBDocument.SystemTarget">1050</int>
+		<int key="IBDocument.SystemTarget">1100</int>
 		<string key="IBDocument.SystemVersion">10D573</string>
 		<string key="IBDocument.InterfaceBuilderVersion">762</string>
 		<string key="IBDocument.AppKitVersion">1038.29</string>
 		<string key="IBDocument.HIToolboxVersion">460.00</string>
 		<dictionary class="NSMutableDictionary" key="IBDocument.PluginVersions">
 			<string key="com.apple.InterfaceBuilder.CocoaPlugin">762</string>
-			<string key="net.wafflesoftware.ShortcutRecorder.IB.Leopard">1</string>
 		</dictionary>
 		<array class="NSMutableArray" key="IBDocument.EditedObjectIDs">
 			<integer value="412"/>
 		</array>
 		<array key="IBDocument.PluginDependencies">
 			<string>com.apple.InterfaceBuilder.CocoaPlugin</string>
-			<string>net.wafflesoftware.ShortcutRecorder.IB.Leopard</string>
 		</array>
 		<dictionary class="NSMutableDictionary" key="IBDocument.Metadata"/>
 		<array class="NSMutableArray" key="IBDocument.RootObjects" id="699911454">
@@ -4207,13 +4205,13 @@ AAMAAAABAAEAAAFTAAMAAAAEAAAFwgAAAAAACAAIAAgACAABAAEAAQABA</bytes>
 											<reference key="NSTextColor" ref="652553575"/>
 										</object>
 									</object>
-									<object class="SRRecorderControl" id="886858360">
+									<object class="NSControl" id="886858360">
 										<reference key="NSNextResponder" ref="315615729"/>
 										<int key="NSvFlags">298</int>
 										<string key="NSFrame">{{172, 42}, {169, 22}}</string>
 										<reference key="NSSuperview" ref="315615729"/>
 										<bool key="NSEnabled">YES</bool>
-										<object class="SRRecorderCell" key="NSCell" id="263172126">
+										<object class="NSActionCell" key="NSCell" id="263172126">
 											<int key="NSCellFlags">130560</int>
 											<int key="NSCellFlags2">0</int>
 											<reference key="NSControlView" ref="886858360"/>
@@ -4244,13 +4242,13 @@ AAMAAAABAAEAAAFTAAMAAAAEAAAFwgAAAAAACAAIAAgACAABAAEAAQABA</bytes>
 											<reference key="NSTextColor" ref="652553575"/>
 										</object>
 									</object>
-									<object class="SRRecorderControl" id="21953582">
+									<object class="NSControl" id="21953582">
 										<reference key="NSNextResponder" ref="315615729"/>
 										<int key="NSvFlags">298</int>
 										<string key="NSFrame">{{172, 72}, {169, 22}}</string>
 										<reference key="NSSuperview" ref="315615729"/>
 										<bool key="NSEnabled">YES</bool>
-										<object class="SRRecorderCell" key="NSCell" id="343580499">
+										<object class="NSActionCell" key="NSCell" id="343580499">
 											<int key="NSCellFlags">130560</int>
 											<int key="NSCellFlags2">0</int>
 											<reference key="NSControlView" ref="21953582"/>
@@ -4281,13 +4279,13 @@ AAMAAAABAAEAAAFTAAMAAAAEAAAFwgAAAAAACAAIAAgACAABAAEAAQABA</bytes>
 											<reference key="NSTextColor" ref="652553575"/>
 										</object>
 									</object>
-									<object class="SRRecorderControl" id="1006610802">
+									<object class="NSControl" id="1006610802">
 										<reference key="NSNextResponder" ref="315615729"/>
 										<int key="NSvFlags">298</int>
 										<string key="NSFrame">{{172, 14}, {169, 22}}</string>
 										<reference key="NSSuperview" ref="315615729"/>
 										<bool key="NSEnabled">YES</bool>
-										<object class="SRRecorderCell" key="NSCell" id="39087418">
+										<object class="NSActionCell" key="NSCell" id="39087418">
 											<int key="NSCellFlags">130560</int>
 											<int key="NSCellFlags2">0</int>
 											<reference key="NSControlView" ref="1006610802"/>
@@ -9542,8 +9540,6 @@ AAMAAAABAAEAAAFTAAMAAAAEAAAFwgAAAAAACAAIAAgACAABAAEAAQABA</bytes>
 				<string key="1364.IBEditorWindowLastContentRect">{{371, 645}, {460, 170}}</string>
 				<string key="1364.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="1366.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
-				<string key="1367.IBPluginDependency">net.wafflesoftware.ShortcutRecorder.IB.Leopard</string>
-				<string key="1368.IBPluginDependency">net.wafflesoftware.ShortcutRecorder.IB.Leopard</string>
 				<string key="1369.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="1370.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="1371.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
@@ -9609,7 +9605,6 @@ AAMAAAABAAEAAAFTAAMAAAAEAAAFwgAAAAAACAAIAAgACAABAAEAAQABA</bytes>
 				<string key="1475.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="1481.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="1500.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
-				<string key="1501.IBPluginDependency">net.wafflesoftware.ShortcutRecorder.IB.Leopard</string>
 				<string key="1503.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="1507.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
 				<string key="1508.IBPluginDependency">com.apple.InterfaceBuilder.CocoaPlugin</string>
@@ -10016,14 +10011,14 @@ AAMAAAABAAEAAAFTAAMAAAAEAAAFwgAAAAAACAAIAAgACAABAAEAAQABA</bytes>
 						<string key="excludeListController">NSArrayController</string>
 						<string key="excludeListPanel">NSPanel</string>
 						<string key="generalPrefsView">NSView</string>
-						<string key="historyShortCutRecorder">SRRecorderControl</string>
+						<string key="historyShortCutRecorder">NSControl</string>
 						<string key="iconPrefsView">NSView</string>
 						<string key="menuPrefsView">NSView</string>
 						<string key="optionPopUpButton">NSPopUpButton</string>
 						<string key="shiftPopUpButton">NSPopUpButton</string>
 						<string key="shortcutPrefsView">NSView</string>
-						<string key="shortcutRecorder">SRRecorderControl</string>
-						<string key="snippetsShortcutRecorder">SRRecorderControl</string>
+						<string key="shortcutRecorder">NSControl</string>
+						<string key="snippetsShortcutRecorder">NSControl</string>
 						<string key="updatesPrefsView">NSView</string>
 					</dictionary>
 					<object class="IBClassDescriptionSource" key="sourceIdentifier">
@@ -10467,21 +10462,18 @@ AAMAAAABAAEAAAFTAAMAAAAEAAAFwgAAAAAACAAIAAgACAABAAEAAQABA</bytes>
 					<string key="className">NSObject</string>
 					<object class="IBClassDescriptionSource" key="sourceIdentifier" id="31445482">
 						<string key="majorKey">IBFrameworkSource</string>
-						<string key="minorKey">ShortcutRecorder.framework/Headers/SRRecorderCell.h</string>
 					</object>
 				</object>
 				<object class="IBPartialClassDescription">
 					<string key="className">NSObject</string>
 					<object class="IBClassDescriptionSource" key="sourceIdentifier" id="260165861">
 						<string key="majorKey">IBFrameworkSource</string>
-						<string key="minorKey">ShortcutRecorder.framework/Headers/SRRecorderControl.h</string>
 					</object>
 				</object>
 				<object class="IBPartialClassDescription">
 					<string key="className">NSObject</string>
 					<object class="IBClassDescriptionSource" key="sourceIdentifier">
 						<string key="majorKey">IBFrameworkSource</string>
-						<string key="minorKey">ShortcutRecorder.framework/Headers/SRValidator.h</string>
 					</object>
 				</object>
 				<object class="IBPartialClassDescription">
@@ -10809,7 +10801,7 @@ AAMAAAABAAEAAAFTAAMAAAAEAAAFwgAAAAAACAAIAAgACAABAAEAAQABA</bytes>
 					</object>
 				</object>
 				<object class="IBPartialClassDescription">
-					<string key="className">SRRecorderCell</string>
+					<string key="className">NSActionCell</string>
 					<string key="superclassName">NSActionCell</string>
 					<object class="NSMutableDictionary" key="outlets">
 						<string key="NS.key.0">delegate</string>
@@ -10818,7 +10810,7 @@ AAMAAAABAAEAAAFTAAMAAAAEAAAFwgAAAAAACAAIAAgACAABAAEAAQABA</bytes>
 					<reference key="sourceIdentifier" ref="31445482"/>
 				</object>
 				<object class="IBPartialClassDescription">
-					<string key="className">SRRecorderControl</string>
+					<string key="className">NSControl</string>
 					<string key="superclassName">NSControl</string>
 					<object class="NSMutableDictionary" key="outlets">
 						<string key="NS.key.0">delegate</string>
@@ -10845,11 +10837,11 @@ AAMAAAABAAEAAAFTAAMAAAAEAAAFwgAAAAAACAAIAAgACAABAAEAAQABA</bytes>
 		<string key="IBDocument.TargetRuntimeIdentifier">IBCocoaFramework</string>
 		<object class="NSMutableDictionary" key="IBDocument.PluginDeclaredDependencies">
 			<string key="NS.key.0">com.apple.InterfaceBuilder.CocoaPlugin.macosx</string>
-			<integer value="1050" key="NS.object.0"/>
+			<integer value="1100" key="NS.object.0"/>
 		</object>
 		<object class="NSMutableDictionary" key="IBDocument.PluginDeclaredDependencyDefaults">
 			<string key="NS.key.0">com.apple.InterfaceBuilder.CocoaPlugin.macosx</string>
-			<integer value="1060" key="NS.object.0"/>
+			<integer value="1100" key="NS.object.0"/>
 		</object>
 		<bool key="IBDocument.PluginDeclaredDependenciesTrackSystemTargetVersion">YES</bool>
 		<string key="IBDocument.LastKnownRelativeProjectPath">../ClipMenu.xcodeproj</string>

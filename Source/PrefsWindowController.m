@@ -19,7 +19,7 @@
 
 #import "PTHotKey.h"
 #import "PTHotKeyCenter.h"
-#import <ShortcutRecorder/SRRecorderControl.h>
+#import "SRRecorderControl.h"
 
 
 #pragma mark Preference Keys

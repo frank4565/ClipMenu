@@ -203,6 +203,8 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 - (void)_changeStatusItem:(NSUInteger)tag;
 - (void)_removeStatusItem;
 - (void)_refreshStatusItem;
+- (void)_attachMenuToStatusItem;
+- (NSImage *)_statusImageNamed:(NSString *)imageName;
 
 - (NSImage *)_iconForPboardType:(NSString *)type;
 - (NSString *)_iconCacheKeyForType:(NSString *)type;
@@ -216,6 +218,8 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 - (void)_resetMenuIconSize;
 - (void)_resetIconCaches;
 - (void)_unhighlightMenuItem;
+
+- (void)_forwardActionToAppController:(SEL)action sender:(id)sender;
 
 - (void)_handlePreferencePanelWillClose:(NSNotification *)aNotification;
 - (void)_handleSnippetEditorWillClose:(NSNotification *)aNotification;
@@ -436,7 +440,7 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 //		[self _resetMenuIconSize];		// XXX Need to modify?
 		
 		[self _buildClipMenu];
-		[statusItem setMenu:clipMenu];
+		[self _attachMenuToStatusItem];
 	}
 }
 
@@ -507,8 +511,49 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 	[dummyWindow orderOut:self];
 }
 
+- (void)showPreferencePanel:(id)sender
+{
+	PrefsWindowController *controller = (PrefsWindowController *)[PrefsWindowController sharedPrefWindowController];
+	[controller showWindow:sender];
+	[NSApp activateIgnoringOtherApps:YES];
+	[[controller window] makeKeyAndOrderFront:sender];
+}
+
+- (void)showSnippetEditor:(id)sender
+{
+	[self _forwardActionToAppController:_cmd sender:sender];
+}
+
+- (void)clearHistory:(id)sender
+{
+	[self _forwardActionToAppController:_cmd sender:sender];
+}
+
+- (void)selectMenuItem:(id)sender
+{
+	[self _forwardActionToAppController:_cmd sender:sender];
+}
+
+- (void)selectSnippetMenuItem:(id)sender
+{
+	[self _forwardActionToAppController:_cmd sender:sender];
+}
+
+- (void)selectActionMenuItem:(id)sender
+{
+	[self _forwardActionToAppController:_cmd sender:sender];
+}
+
 #pragma mark -
 #pragma mark Private
+
+- (void)_forwardActionToAppController:(SEL)action sender:(id)sender
+{
+	id appController = [NSApp delegate];
+	if ([appController respondsToSelector:action]) {
+		[appController performSelector:action withObject:sender];
+	}
+}
 
 #pragma mark - Menu -
 
@@ -534,22 +579,30 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 	[newMenu addItem:[NSMenuItem separatorItem]];	
 	
 	if (addClearHistory) {
-		[newMenu addItem:[self _makeMenuItemWithTitle:NSLocalizedString(@"Clear History", nil)
-											   action:@selector( clearHistory: )]];
+		NSMenuItem *clearHistoryItem = [self _makeMenuItemWithTitle:NSLocalizedString(@"Clear History", nil)
+															  action:@selector( clearHistory: )];
+		[clearHistoryItem setTarget:self];
+		[newMenu addItem:clearHistoryItem];
 	}
 	
-	[newMenu addItem:[self _makeMenuItemWithTitle:NSLocalizedString(@"Edit Snippets...", nil)
-										   action:@selector( showSnippetEditor: )]];
+	NSMenuItem *snippetEditorItem = [self _makeMenuItemWithTitle:NSLocalizedString(@"Edit Snippets...", nil)
+														  action:@selector( showSnippetEditor: )];
+	[snippetEditorItem setTarget:self];
+	[newMenu addItem:snippetEditorItem];
 	
-	[newMenu addItem:[self _makeMenuItemWithTitle:NSLocalizedString(@"Preferences...", nil)
-										   action:@selector( showPreferencePanel: )]];
+	NSMenuItem *preferencesItem = [self _makeMenuItemWithTitle:NSLocalizedString(@"Preferences...", nil)
+														action:@selector( showPreferencePanel: )];
+	[preferencesItem setTarget:self];
+	[newMenu addItem:preferencesItem];
 	
 	//	[newMenu addItemWithTitle:NSLocalizedString(@"About ClipMenu", nil)
 	//					   action:@selector( orderFrontStandardAboutPanel: )
 	//				keyEquivalent:kEmptyString];
 	[newMenu addItem:[NSMenuItem separatorItem]];
-	[newMenu addItem:[self _makeMenuItemWithTitle:NSLocalizedString(@"Quit ClipMenu", nil)
-										   action:@selector( terminate: )]];
+	NSMenuItem *quitItem = [self _makeMenuItemWithTitle:NSLocalizedString(@"Quit ClipMenu", nil)
+												 action:@selector( terminate: )];
+	[quitItem setTarget:NSApp];
+	[newMenu addItem:quitItem];
 	
 	[self setValue:newMenu forKey:@"clipMenu"];
 	[newMenu release], newMenu = nil;
@@ -790,6 +843,7 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 							 initWithTitle:titleWithMark
 							 action:@selector( selectMenuItem: )
 							 keyEquivalent:keyEquivalent] autorelease];
+	[menuItem setTarget:self];
 	[menuItem setTag:count];
 	
 	/* Tool Tip */
@@ -883,6 +937,7 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 							 initWithTitle:titleWithMark
 							 action:@selector( selectSnippetMenuItem: )
 							 keyEquivalent:keyEquivalent] autorelease];
+	[menuItem setTarget:self];
 	[menuItem setRepresentedObject:snippet];
 	//	[menuItem setTag:count];
 	[menuItem setToolTip:[snippet valueForKey:kContent]];
@@ -1120,6 +1175,7 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 									   initWithTitle:[node nodeTitle]
 									   action:@selector( selectActionMenuItem: )
 									   keyEquivalent:kEmptyString] autorelease];
+		[actionMenuItem setTarget:self];
 		
 		NSDictionary *action = [node action];
 		
@@ -1287,13 +1343,13 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 	
 	NSString *pressedStatusMenuIconName = [statusMenuIconName stringByAppendingString:STATUS_MENU_ICON_POSTFIX];
 	
-	NSImage *statusIcon = [NSImage imageNamed:
+	NSImage *statusIcon = [self _statusImageNamed:
 						   [statusMenuIconName stringByAppendingString:STATUS_MENU_ICON_FILE_EXTENSION]];
 	if (statusIcon == nil) {
-		statusIcon = [NSImage imageNamed:STATUS_MENU_ICON];
+		statusIcon = [self _statusImageNamed:[STATUS_MENU_ICON stringByAppendingString:STATUS_MENU_ICON_FILE_EXTENSION]];
 	}
 	
-	NSImage *statusIconPressed = [NSImage imageNamed:
+	NSImage *statusIconPressed = [self _statusImageNamed:
 								  [pressedStatusMenuIconName stringByAppendingString:STATUS_MENU_ICON_FILE_EXTENSION]];
 	if (statusIconPressed == nil) {
 		statusIconPressed = statusIcon;
@@ -1303,15 +1359,28 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 	
 	NSStatusBar *statusBar = [NSStatusBar systemStatusBar];
 	
-	statusItem = [[statusBar statusItemWithLength:NSVariableStatusItemLength] retain];
-	[statusItem setImage:statusIcon];
-	[statusItem setAlternateImage:statusIconPressed];
-	[statusItem setHighlightMode:YES];
-	[statusItem setToolTip:toolTipLabel];
+	if (!clipMenu) {
+		[self _buildClipMenu];
+	}
 	
+	statusItem = [[statusBar statusItemWithLength:24.0] retain];
+	if ([statusItem respondsToSelector:@selector(button)] && [statusItem button]) {
+		NSStatusBarButton *button = [statusItem button];
+		[button setTitle:@""];
+		[button setEnabled:YES];
+		[button setImage:statusIcon];
+		[button setImagePosition:NSImageOnly];
+		[button setImageScaling:NSImageScaleProportionallyDown];
+		[button setToolTip:toolTipLabel];
+	}
+	else {
+		[statusItem setImage:statusIcon];
+		[statusItem setAlternateImage:statusIconPressed];
+		[statusItem setHighlightMode:YES];
+		[statusItem setToolTip:toolTipLabel];
+	}
 	if (clipMenu) {
-		
-		[statusItem setMenu:clipMenu];
+		[self _attachMenuToStatusItem];
 	}
 }
 
@@ -1326,8 +1395,48 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 - (void)_refreshStatusItem
 {
 	if (statusItem) {
-		[statusItem setMenu:clipMenu];
+		[self _attachMenuToStatusItem];
 	}
+}
+
+- (void)_attachMenuToStatusItem
+{
+	[statusItem setMenu:clipMenu];
+}
+
+- (NSImage *)_statusImageNamed:(NSString *)imageName
+{
+	NSSize statusImageSize = NSMakeSize(18.0, 18.0);
+	NSImage *templateImage = [[[NSImage alloc] initWithSize:statusImageSize] autorelease];
+	[templateImage lockFocus];
+	[[NSColor blackColor] setStroke];
+	[[NSColor blackColor] setFill];
+
+	NSBezierPath *board = [NSBezierPath bezierPathWithRoundedRect:NSMakeRect(4.0, 3.0, 10.0, 12.0)
+														 xRadius:1.5
+														 yRadius:1.5];
+	[board setLineWidth:1.8];
+	[board stroke];
+
+	NSBezierPath *clip = [NSBezierPath bezierPathWithRoundedRect:NSMakeRect(6.0, 13.0, 6.0, 3.0)
+														xRadius:1.4
+														yRadius:1.4];
+	[clip fill];
+
+	NSBezierPath *line = [NSBezierPath bezierPath];
+	[line setLineWidth:1.4];
+	[line moveToPoint:NSMakePoint(6.5, 9.5)];
+	[line lineToPoint:NSMakePoint(11.5, 9.5)];
+	[line moveToPoint:NSMakePoint(6.5, 6.5)];
+	[line lineToPoint:NSMakePoint(10.5, 6.5)];
+	[line stroke];
+	[templateImage unlockFocus];
+
+	if ([templateImage respondsToSelector:@selector(setTemplate:)]) {
+		[templateImage setTemplate:YES];
+	}
+
+	return templateImage;
 }
 
 #pragma mark - Icon -
@@ -1512,4 +1621,3 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 }
 
 @end
-

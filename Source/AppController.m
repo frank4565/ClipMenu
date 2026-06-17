@@ -12,7 +12,7 @@
 
 #import "PTHotKey.h"
 #import "PTHotKeyCenter.h"
-#import <Sparkle/Sparkle.h>
+#import "SUUpdater.h"
 
 
 @interface AppController ()
@@ -230,10 +230,6 @@ NSDictionary *_storeTypesDictionary()
 	
 	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
 	
-	if ([defaults boolForKey:CMPrefShowStatusItemKey]) {
-		[[MenuController sharedInstance] createStatusItem];
-	}
-	
 	/* KVO */
 	[defaults addObserver:self
 			   forKeyPath:CMPrefHotKeysKey
@@ -297,7 +293,13 @@ NSDictionary *_storeTypesDictionary()
 	
 	NSOperationQueue *queue = [[NSOperationQueue alloc] init];
 	NSOperation *operation;
-	
+
+	if ([defaults boolForKey:CMPrefShowStatusItemKey]) {
+		[[MenuController sharedInstance] performSelector:@selector(createStatusItem)
+											  withObject:nil
+											  afterDelay:0.5];
+	}
+
 	/* load clips */
 	operation = [[NSInvocationOperation alloc] initWithTarget:[ClipsController sharedInstance]
 													 selector:@selector( loadClips )
