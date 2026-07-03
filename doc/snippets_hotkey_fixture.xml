@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<folders>
+  <folder>
+    <index>0</index>
+    <enabled>1</enabled>
+    <title>Templates</title>
+    <snippets>
+      <snippet>
+        <index>0</index>
+        <enabled>1</enabled>
+        <title>Greeting</title>
+        <content>Hello from fixture</content>
+      </snippet>
+      <snippet>
+        <index>1</index>
+        <enabled>1</enabled>
+        <title>Signature</title>
+        <content>Kind regards,
+ClipMenu</content>
+      </snippet>
+      <snippet>
+        <index>2</index>
+        <enabled>0</enabled>
+        <title>Hidden</title>
+        <content>You should not see this</content>
+      </snippet>
+    </snippets>
+  </folder>
+  <folder>
+    <index>1</index>
+    <enabled>1</enabled>
+    <title>Empty Enabled Folder</title>
+    <snippets>
+      <snippet>
+        <index>0</index>
+        <enabled>0</enabled>
+        <title>Suppressed Child</title>
+        <content>Disabled child</content>
+      </snippet>
+    </snippets>
+  </folder>
+  <folder>
+    <index>2</index>
+    <enabled>0</enabled>
+    <title>Disabled Folder</title>
+    <snippets>
+      <snippet>
+        <index>0</index>
+        <enabled>1</enabled>
+        <title>Invisible</title>
+        <content>You should not see this either</content>
+      </snippet>
+    </snippets>
+  </folder>
+</folders>

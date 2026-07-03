@@ -1,0 +1,29 @@
+[
+  {
+    "id": "11111111-2222-3333-4444-555555555555",
+    "types": [
+      "public.utf8-plain-text"
+    ],
+    "createdAt": 803600000,
+    "lastUsedAt": 803600000,
+    "text": "fixture-alpha"
+  },
+  {
+    "id": "66666666-7777-8888-9999-AAAAAAAAAAAA",
+    "types": [
+      "public.utf8-plain-text"
+    ],
+    "createdAt": 803599000,
+    "lastUsedAt": 803599000,
+    "text": "fixture-beta"
+  },
+  {
+    "id": "BBBBBBBB-CCCC-DDDD-EEEE-FFFFFFFFFFFF",
+    "types": [
+      "public.utf8-plain-text"
+    ],
+    "createdAt": 803598000,
+    "lastUsedAt": 803598000,
+    "text": "fixture-gamma"
+  }
+]

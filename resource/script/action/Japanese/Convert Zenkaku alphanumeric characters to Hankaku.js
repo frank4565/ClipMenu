@@ -1,6 +1,6 @@
 var isExist = ClipMenu.require('fhconvert');
 if (!isExist) {
-    throw new Error('Could not find the library');
+    throw new Error('Cound not find the library');
 }
 
 var lines = clipText.split('\n');

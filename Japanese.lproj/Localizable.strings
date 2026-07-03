@@ -1,195 +1,1674 @@
-﻿/* Hot Keys: Key Combo text for 'empty' combo */
-"(None)" = "(None)";
-
-/* No comment provided by engineer. */
-"About ClipMenu" = "ClipMenu について";
-
-/* No comment provided by engineer. */
-"Action" = "アクション";
-
-/* No comment provided by engineer. */
-"Add" = "追加";
-
-/* No comment provided by engineer. */
-"Are you sure you want to clear your clipboard history?" = "本当にクリップボード履歴をクリアしますか？";
-
-/* No comment provided by engineer. */
-"Built-in" = "内蔵";
-
-/* No comment provided by engineer. */
-"Cancel" = "キャンセル";
-
-/* No comment provided by engineer. */
-"Case" = "Case";
-
-/* No comment provided by engineer. */
-"Clear History" = "履歴をクリア";
-
-/* No comment provided by engineer. */
-"Could not save changes while quitting. Quit anyway?" = "変更点を保存できませんでした。それでも終了しますか？";
-
-/* No comment provided by engineer. */
-"Could not save your clipboard history to file." = "クリップボード履歴をファイルに保存できませんでした";
-
-/* No comment provided by engineer. */
-"Could not write document out..." = "ドキュメントの書き出しができません...";
-
-/* No comment provided by engineer. */
-"Don't Launch" = "起動しない";
-
-/* No comment provided by engineer. */
-"Edit Snippets..." = "スニペットを編集...";
-
-/* No comment provided by engineer. */
-"Error" = "エラー";
-
-/* No comment provided by engineer. */
-"Failed to evaluate script" = "スクリプトの実行に失敗しました";
-
-/* No comment provided by engineer. */
-"Failed to export history" = "履歴の書き出しに失敗しました";
-
-/* No comment provided by engineer. */
-"Failed to parse XML file" = "XMLファイルの解析に失敗しました";
-
-/* No comment provided by engineer. */
-"General" = "一般";
-
-/* No comment provided by engineer. */
-"History" = "履歴";
-
-/* No comment provided by engineer. */
-"JavaScript" = "JavaScript";
-
-/* No comment provided by engineer. */
-"Launch ClipMenu on system startup?" = "システム起動時にClipMenuを起動しますか？";
-
-/* No comment provided by engineer. */
-"Launch on system startup" = "起動する";
-
-/* No comment provided by engineer. */
-"Menu" = "メニュー";
-
-/* No comment provided by engineer. */
-"None" = "なし";
-
-/* No comment provided by engineer. */
-"OK" = "OK";
-
-/* No comment provided by engineer. */
-"Other..." = "その他...";
-
-/* No comment provided by engineer. */
-"Paste as File Path" = "ファイルパスとしてペースト";
-
-/* No comment provided by engineer. */
-"Paste as HFS File Path" = "HFSファイルパスとしてペースト";
-
-/* No comment provided by engineer. */
-"Paste as Plain Text" = "プレーンテキストとしてペースト";
-
-/* No comment provided by engineer. */
-"Paste the clip as HFS File Path" = "HFSファイルパスとしてペースト";
-
-/* No comment provided by engineer. */
-"Paste the clip as Plain Text" = "プレーンテキストとしてペースト";
-
-/* No comment provided by engineer. */
-"Paste the clip as POSIX File Path" = "POSIXファイルパスとしてペースト";
-
-/* No comment provided by engineer. */
-"Pop up Action Menu" = "アクションメニューをポップアップ";
-
-/* No comment provided by engineer. */
-"Preferences..." = "環境設定...";
-
-/* No comment provided by engineer. */
-"Quit anyway" = "それでも終了";
-
-/* No comment provided by engineer. */
-"Quit ClipMenu" = "ClipMenuを終了";
-
-/* No comment provided by engineer. */
-"Remove" = "削除";
-
-/* No comment provided by engineer. */
-"Remove the clip from the clipboard history" = "クリップボード履歴から削除";
-
-/* No comment provided by engineer. */
-"Script Error" = "スクリプトエラー";
-
-/* No comment provided by engineer. */
-"Script error has occurred" = "スクリプトエラーが起こりました";
-
-/* No comment provided by engineer. */
-"Script Exception Raised" = "スクリプトで例外が発生しました";
-
-/* No comment provided by engineer. */
-"Select" = "選択";
-
-/* No comment provided by engineer. */
-"Shortcuts" = "ショートカット";
-
-/* No comment provided by engineer. */
-"Snippet" = "スニペット";
-
-/* No comment provided by engineer. */
-"Snippets" = "スニペット";
-
-/* No comment provided by engineer. */
-"The script you selected does not exist" = "選択したスクリプトが見つかりません";
-
-/* No comment provided by engineer. */
-"Trim" = "Trim";
-
-/* No comment provided by engineer. */
-"Type" = "対応形式";
-
-/* No comment provided by engineer. */
-"Unable to end editing" = "編集できません";
-
-/* No comment provided by engineer. */
-"Unable to load script" = "スクリプトを読み込めません";
-
-/* No comment provided by engineer. */
-"untitled snippet" = "untitled snippet";
-
-/* No comment provided by engineer. */
-"Updates" = "アップデート";
-
-/* No comment provided by engineer. */
-"You can change this setting in the Preferences if you want." = "この設定は、いつでも変更できます。";
-
-/* No comment provided by engineer. */
-"Your script file does not exist." = "スクリプトファイルが見つかりませんでした";
-
-/* JavaScript actions */
-"Collapse Spaces" = "空白を縮める";
-"Reverse" = "逆順にする";
-
-"Japanese" = "日本語";
-"Convert Hankaku alphanumeric characters to Zenkaku" = "半角英数字 → 全角";
-"Convert Zenkaku alphanumeric characters to Hankaku" = "全角英数字 → 半角";
-"Convert Hankaku katakana to Zenkaku katakana" = "半角カタカナ → 全角";
-"Convert Zenkaku katakana to Hankaku katakana" = "全角カタカナ → 半角";
-"Convert Hiragana to Katakana" = "ひらがな → カタカナ";
-"Convert Katakana to Hiragana" = "カタカナ → ひらがな";
-
-"Crypt" = "暗号";
-"Calculate MD5 hash" = "MD5ハッシュを計算";
-"Calculate SHA-1 hash" = "SHA-1ハッシュを計算";
-"Decode from Base64" = "Base64からデコード";
-"Encode to Base64" = "Base64にエンコード";
-
-"Convert Character to Decimal" = "文字 → 数値文字参照";
-"Convert Decimal to Character" = "数値文字参照 → 文字";
-"Convert Markdown to HTML" = "Markdown → HTML";
-"Decode URI component" = "URIコンポーネントをデコード";
-"Encode URI component" = "URIコンポーネントをエンコード";
-"Escape HTML characters" = "HTML文字実体参照にエスケープ";
-"Unescape HTML characters" = "HTML文字実体参照からアンエスケープ";
-"Strip Tags" = "タグを除去";
-"Surround with Tags..." = "タグで囲む...";
-
-"Surround with" = "囲む";
-"Surround with (Japanese)" = "囲む（全角）";
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>%1$@ %2$@ has been downloaded and is ready to use! Would you like to install it and relaunch %1$@ now?</key>
+	<string>%1$@ %2$@ のダウンロードが完了し、使用できる状態になりました。今すぐインストールして %1$@ を再起動しますか？</string>
+	<key>%@ %@ is now available--you have %@. Would you like to download it now?</key>
+	<string>%1$@ %2$@ が入手できます — 使用中のバージョンは %3$@ です。今すぐダウンロードしますか?</string>
+	<key>%@ is now available.</key>
+	<string>%@ が利用可能です。</string>
+	<key>%@ needs Accessibility access to paste into the frontmost app. Allow access in System Settings, then relaunch %@.</key>
+	<string>%@ が最前面のアプリにペーストするにはアクセシビリティの許可が必要です。システム設定で許可してから、%@ を再起動してください。</string>
+	<key>%d applications</key>
+	<string>%d個のアプリケーション</string>
+	<key>%d characters, %d lines</key>
+	<string>%d文字、%d行</string>
+	<key>%d chars, %d lines</key>
+	<string>%d文字、%d行</string>
+	<key>%d enabled of %d snippets</key>
+	<string>%d/%d個のスニペットが有効</string>
+	<key>(None)</key>
+	<string>(None)</string>
+	<key>About ClipMenu</key>
+	<string>ClipMenu について</string>
+	<key>Above clipboard history</key>
+	<string>クリップボード履歴の上</string>
+	<key>Above the clipboard history</key>
+	<string>クリップボード履歴の上</string>
+	<key>Accessibility</key>
+	<string>アクセシビリティ</string>
+	<key>Action</key>
+	<string>アクション</string>
+	<key>Action Menu</key>
+	<string>アクションメニュー</string>
+	<key>Add</key>
+	<string>追加</string>
+	<key>Add Clear History menu item</key>
+	<string>「履歴をクリア」メニュー項目を追加</string>
+	<key>Add Folder</key>
+	<string>フォルダを追加</string>
+	<key>Add Snippet</key>
+	<string>スニペットを追加</string>
+	<key>Add a folder to start organizing snippets.</key>
+	<string>フォルダを追加してスニペットを整理します。</string>
+	<key>Add a menu item to clear clipboard history</key>
+	<string>履歴をクリアするメニュー項目を追加</string>
+	<key>Add a snippet to the selected folder.</key>
+	<string>選択したフォルダにスニペットを追加します。</string>
+	<key>Add key equivalents to numeric keys</key>
+	<string>数字キーを使ったショートカットを追加</string>
+	<key>Add numeric key equivalents</key>
+	<string>数字キーショートカットを追加</string>
+	<key>Add running apps or choose app bundles to stop ClipMenu from recording them.</key>
+	<string>実行中のアプリまたはアプリバンドルを追加して、ClipMenu の記録対象から除外します。</string>
+	<key>All</key>
+	<string>すべて</string>
+	<key>Allow Paste Automation</key>
+	<string>自動ペーストを許可</string>
+	<key>Appearance</key>
+	<string>アピアランス</string>
+	<key>Are you sure you want to clear your clipboard history?</key>
+	<string>本当にクリップボード履歴をクリアしますか？</string>
+	<key>Automatically check for updates:</key>
+	<string>アップデートを自動的にチェック:</string>
+	<key>Automatically download and install updates in the future</key>
+	<string>今後のアップデートを自動的にダウンロードしてインストールする</string>
+	<key>Autosaving clipboard history</key>
+	<string>クリップボード履歴の自動保存</string>
+	<key>Autosaving clipboard history:</key>
+	<string>クリップボード履歴を自動保存:</string>
+	<key>Balanced polling</key>
+	<string>バランス重視</string>
+	<key>Available Actions</key>
+	<string>利用可能なアクション</string>
+	<key>Below clipboard history</key>
+	<string>クリップボード履歴の下</string>
+	<key>Below the clipboard history</key>
+	<string>クリップボード履歴の下</string>
+	<key>Built-in</key>
+	<string>内蔵</string>
+	<key>Bundled Scripts</key>
+	<string>内蔵スクリプト</string>
+	<key>CR</key>
+	<string>CR</string>
+	<key>CR+LF</key>
+	<string>CR+LF</string>
+	<key>CRLF</key>
+	<string>CRLF</string>
+	<key>Calculate MD5 hash</key>
+	<string>MD5ハッシュを計算</string>
+	<key>Calculate SHA-1 hash</key>
+	<string>SHA-1ハッシュを計算</string>
+	<key>Cancel</key>
+	<string>キャンセル</string>
+	<key>Cancel Update</key>
+	<string>アップデートをキャンセル</string>
+	<key>Carriage Return</key>
+	<string>キャリッジリターン</string>
+	<key>Case</key>
+	<string>Case</string>
+	<key>Change font size in the menu</key>
+	<string>メニューのフォントサイズを変更</string>
+	<key>Check All</key>
+	<string>すべてにチェック</string>
+	<key>Check Now</key>
+	<string>今すぐチェック</string>
+	<key>Choose a Folder</key>
+	<string>フォルダを選択</string>
+	<key>Choose a category from the sidebar.</key>
+	<string>サイドバーからカテゴリを選択してください。</string>
+	<key>Choose a snippet to edit its title and content.</key>
+	<string>タイトルと内容を編集するスニペットを選択してください。</string>
+	<key>Clear History</key>
+	<string>履歴をクリア</string>
+	<key>Clear Menu</key>
+	<string>メニューを消去</string>
+	<key>Clear Search</key>
+	<string>検索をクリア</string>
+	<key>ClipMenu %@ is available. You’re currently using %@.</key>
+	<string>ClipMenu %@ が利用可能です。現在は %@ を使用中です。</string>
+	<key>ClipMenu %@ is currently the newest version available.</key>
+	<string>ClipMenu %@ は現在利用可能な最新バージョンです。</string>
+	<key>ClipMenu Help</key>
+	<string>ClipMenu ヘルプ</string>
+	<key>ClipMenu can send Command-V to the frontmost app.</key>
+	<string>ClipMenu は最前面のアプリに Command-V を送信できます。</string>
+	<key>ClipMenu is up to date.</key>
+	<string>ClipMenu は最新です。</string>
+	<key>ClipMenu keeps up to %1$d history items and saves them on the selected %2$@ cadence.</key>
+	<string>ClipMenu は最大 %1$d 件の履歴を保持し、選択した %2$@ の間隔で保存します。</string>
+	<key>ClipMenu keeps up to %d history items and saves them only when you ask it to.</key>
+	<string>ClipMenu は最大 %d 件の履歴を保持し、必要なときだけ保存します。</string>
+	<key>ClipMenu is checking now, so manual actions stay paused until the current updater pass finishes.</key>
+	<string>ClipMenu は現在確認中のため、このアップデート処理が完了するまで手動操作は一時停止されます。</string>
+	<key>ClipMenu:</key>
+	<string>ClipMenu:</string>
+	<key>Clipboard</key>
+	<string>クリップボード</string>
+	<key>Clipboard History</key>
+	<string>クリップボード履歴</string>
+	<key>Clipboard polling interval</key>
+	<string>クリップボード監視間隔</string>
+	<key>ClipMenu keeps clips from every app and leaves them ordered by date created.</key>
+	<string>ClipMenu はすべてのアプリのクリップを記録し、作成日順のまま保持します。</string>
+	<key>ClipMenu keeps clips from every app and reorders them by last use after pasting.</key>
+	<string>ClipMenu はすべてのアプリのクリップを記録し、ペースト後は最終使用日順に並べ替えます。</string>
+	<key>ClipMenu skips %1$d apps while preserving date-created ordering.</key>
+	<string>ClipMenu は %1$d 個のアプリを除外し、作成日順を維持します。</string>
+	<key>ClipMenu skips %1$d apps while still reordering pasted clips by last use.</key>
+	<string>ClipMenu は %1$d 個のアプリを除外しつつ、ペースト後は最終使用日順に並べ替えます。</string>
+	<key>ClipMenu skips %@ while preserving date-created ordering.</key>
+	<string>ClipMenu は %@ を除外し、作成日順を維持します。</string>
+	<key>ClipMenu skips %@ while still reordering pasted clips by last use.</key>
+	<string>ClipMenu は %@ を除外しつつ、ペースト後は最終使用日順に並べ替えます。</string>
+	<key>ClipMenu balances quick capture with steadier background activity.</key>
+	<string>ClipMenu はすばやい取得と安定したバックグラウンド動作のバランスを取ります。</string>
+	<key>ClipMenu checks less often to keep background activity light.</key>
+	<string>ClipMenu はバックグラウンド動作を軽く保つため、確認の頻度を下げます。</string>
+	<key>ClipMenu checks the clipboard as often as possible for the quickest capture.</key>
+	<string>ClipMenu は最も素早く取得できるよう、できるだけ頻繁にクリップボードを確認します。</string>
+	<key>Current Shortcut Map</key>
+	<string>現在のショートカット一覧</string>
+	<key>Current Modifier Map</key>
+	<string>現在の修飾キー割り当て</string>
+	<key>Current Menu Order</key>
+	<string>現在のメニュー順</string>
+	<key>Current Editing Context</key>
+	<string>現在の編集コンテキスト</string>
+	<key>Current Browser State</key>
+	<string>現在のブラウズ状態</string>
+	<key>Current Save State</key>
+	<string>現在の保存状態</string>
+	<key>Current Command Availability</key>
+	<string>現在のコマンド利用状況</string>
+	<key>Current Selection Context</key>
+	<string>現在の選択コンテキスト</string>
+	<key>The active browser, selected item, and editing mode stay in sync here while you work in the Action pane.</key>
+	<string>アクションペインで作業している間、現在アクティブなブラウザ、選択項目、編集モードがここで同期して表示されます。</string>
+	<key>These action commands reflect the current selection and tree position before you click anything.</key>
+	<string>これらのアクションコマンドは、クリックする前の現在の選択状態とツリー位置を反映しています。</string>
+	<key>No Action Selected</key>
+	<string>アクションが選択されていません</string>
+	<key>No Available Action Selected</key>
+	<string>利用可能なアクションが選択されていません</string>
+	<key>Editable</key>
+	<string>編集可能</string>
+	<key>Preview Only</key>
+	<string>プレビューのみ</string>
+	<key>Close</key>
+	<string>閉じる</string>
+	<key>Collapse Spaces</key>
+	<string>空白を縮める</string>
+	<key>Command + Click:</key>
+	<string>Command + クリック:</string>
+	<key>Command-click</key>
+	<string>Commandクリック</string>
+	<key>Confirm</key>
+	<string>確認</string>
+	<key>Content</key>
+	<string>内容</string>
+	<key>Control + Click:</key>
+	<string>Control + クリック:</string>
+	<key>Control-click</key>
+	<string>Controlクリック</string>
+	<key>Convert Character to Decimal</key>
+	<string>文字 → 数値文字参照</string>
+	<key>Convert Decimal to Character</key>
+	<string>数値文字参照 → 文字</string>
+	<key>Convert Hankaku alphanumeric characters to Zenkaku</key>
+	<string>半角英数字 → 全角</string>
+	<key>Convert Hankaku katakana to Zenkaku katakana</key>
+	<string>半角カタカナ → 全角</string>
+	<key>Convert Hiragana to Katakana</key>
+	<string>ひらがな → カタカナ</string>
+	<key>Convert Katakana to Hiragana</key>
+	<string>カタカナ → ひらがな</string>
+	<key>Convert Markdown to HTML</key>
+	<string>Markdown → HTML</string>
+	<key>Convert Zenkaku alphanumeric characters to Hankaku</key>
+	<string>全角英数字 → 半角</string>
+	<key>Convert Zenkaku katakana to Hankaku katakana</key>
+	<string>全角カタカナ → 半角</string>
+	<key>Copy</key>
+	<string>コピー</string>
+	<key>Could not create a unique file in Downloads.</key>
+	<string>ダウンロードフォルダに一意のファイルを作成できませんでした。</string>
+	<key>Could not save actions.</key>
+	<string>アクションを保存できませんでした。</string>
+	<key>Could not save changes while quitting. Quit anyway?</key>
+	<string>変更点を保存できませんでした。それでも終了しますか？</string>
+	<key>Could not save snippets.</key>
+	<string>スニペットを保存できませんでした。</string>
+	<key>Could not save your clipboard history to file.</key>
+	<string>クリップボード履歴をファイルに保存できませんでした</string>
+	<key>Could not write document out...</key>
+	<string>ドキュメントの書き出しができません...</string>
+	<key>Crypt</key>
+	<string>暗号</string>
+	<key>Cut</key>
+	<string>カット</string>
+	<key>Date Created</key>
+	<string>作成日</string>
+	<key>Decode URI component</key>
+	<string>URIコンポーネントをデコード</string>
+	<key>Decode from Base64</key>
+	<string>Base64からデコード</string>
+	<key>Default</key>
+	<string>デフォルト</string>
+	<key>Define Exclude Options...</key>
+	<string>除外設定...</string>
+	<key>Delete</key>
+	<string>削除</string>
+	<key>Delete Folder</key>
+	<string>フォルダを削除</string>
+	<key>Delete Snippet</key>
+	<string>スニペットを削除</string>
+	<key>Diagonal</key>
+	<string>斜め</string>
+	<key>Diagonal Color</key>
+	<string>斜め（カラー）</string>
+	<key>Disabled</key>
+	<string>無効</string>
+	<key>Do not ask about startup launch</key>
+	<string>起動時の確認を表示しない</string>
+	<key>Do not show snippets</key>
+	<string>表示しない</string>
+	<key>Don't Launch</key>
+	<string>起動しない</string>
+	<key>Done</key>
+	<string>完了</string>
+	<key>Download</key>
+	<string>ダウンロード</string>
+	<key>Downloading %@.</key>
+	<string>%@ をダウンロード中です。</string>
+	<key>Downloading Update</key>
+	<string>アップデートをダウンロード中</string>
+	<key>Downloading update...</key>
+	<string>アップデートをダウンロードしています...</string>
+	<key>Edit</key>
+	<string>編集</string>
+	<key>Edit Snippets...</key>
+	<string>スニペットを編集...</string>
+	<key>Enable Action</key>
+	<string>アクションを使用する</string>
+	<key>Enable actions</key>
+	<string>アクションを有効にする</string>
+	<key>Enable menu hot key</key>
+	<string>メニューホットキーを有効にする</string>
+	<key>Enable or disable the selected folder</key>
+	<string>選択したフォルダの有効/無効を切り替え</string>
+	<key>Enable or disable the selected snippet</key>
+	<string>選択したスニペットの有効/無効を切り替え</string>
+	<key>Enable snippets hot key</key>
+	<string>スニペットホットキーを有効にする</string>
+	<key>Enable/Disable Folder</key>
+	<string>フォルダを有効/無効</string>
+	<key>Enable/Disable Snippet</key>
+	<string>スニペットを有効/無効</string>
+	<key>Enabled</key>
+	<string>有効</string>
+	<key>Encode URI component</key>
+	<string>URIコンポーネントをエンコード</string>
+	<key>Encode to Base64</key>
+	<string>Base64にエンコード</string>
+	<key>Error</key>
+	<string>エラー</string>
+	<key>Escape HTML characters</key>
+	<string>HTML文字実体参照にエスケープ</string>
+	<key>Every 10 minutes</key>
+	<string>10 分ごと</string>
+	<key>Every 12 hours</key>
+	<string>12 時間ごと</string>
+	<key>Every 3 hours</key>
+	<string>3 時間ごと</string>
+	<key>Every 30 minutes</key>
+	<string>30 分ごと</string>
+	<key>Every 5 minutes</key>
+	<string>5 分ごと</string>
+	<key>Every 6 hours</key>
+	<string>6 時間ごと</string>
+	<key>Every day</key>
+	<string>毎日</string>
+	<key>Every hour</key>
+	<string>毎時</string>
+	<key>Every minute</key>
+	<string>毎分</string>
+	<key>Exclude Applications</key>
+	<string>除外アプリケーション</string>
+	<key>Exclude Apps</key>
+	<string>除外アプリケーション</string>
+	<key>Exclude these applications:</key>
+	<string>除外するアプリケーション:</string>
+	<key>Excluded Applications</key>
+	<string>除外アプリケーション</string>
+	<key>Export Snippets</key>
+	<string>スニペットを書き出す</string>
+	<key>Export Snippets...</key>
+	<string>スニペットを書き出す...</string>
+	<key>Export clipboard history as</key>
+	<string>クリップボード履歴の書き出し形式</string>
+	<key>Export clipboard history as:</key>
+	<string>クリップボード履歴を書き出す:</string>
+	<key>Export history</key>
+	<string>履歴を書き出す</string>
+	<key>Export...</key>
+	<string>書き出し...</string>
+	<key>Extension</key>
+	<string>拡張子</string>
+	<key>Failed to Check for Updates</key>
+	<string>アップデートの確認に失敗しました</string>
+	<key>Failed to Download Update</key>
+	<string>アップデートのダウンロードに失敗しました</string>
+	<key>Failed to evaluate script</key>
+	<string>スクリプトの実行に失敗しました</string>
+	<key>Failed to export history</key>
+	<string>履歴の書き出しに失敗しました</string>
+	<key>Failed to parse XML file</key>
+	<string>XMLファイルの解析に失敗しました</string>
+	<key>File</key>
+	<string>ファイル</string>
+	<key>File Type Icons</key>
+	<string>ファイルタイプアイコン</string>
+	<key>File extension</key>
+	<string>ファイル拡張子</string>
+	<key>File type code</key>
+	<string>タイプコード</string>
+	<key>Filenames</key>
+	<string>ファイル名</string>
+	<key>Filenames:</key>
+	<string>ファイル名:</string>
+	<key>Fit to the icon size</key>
+	<string>アイコンの大きさに合わせる</string>
+	<key>Font</key>
+	<string>フォント</string>
+	<key>Font size mode</key>
+	<string>フォントサイズの指定方法</string>
+	<key>General</key>
+	<string>一般</string>
+	<key>Groups</key>
+	<string>グループ</string>
+	<key>Global Hot Keys</key>
+	<string>グローバルホットキー</string>
+	<key>HFS Code</key>
+	<string>HFSコード</string>
+	<key>Height:</key>
+	<string>高さ:</string>
+	<key>Help</key>
+	<string>ヘルプ</string>
+	<key>Hide ClipMenu</key>
+	<string>ClipMenu を隠す</string>
+	<key>Hide Others</key>
+	<string>ほかを隠す</string>
+	<key>History</key>
+	<string>履歴</string>
+	<key>History retention</key>
+	<string>履歴の保持</string>
+	<key>History hot key</key>
+	<string>履歴ホットキー</string>
+	<key>Icon size:</key>
+	<string>アイコンの大きさ:</string>
+	<key>Icons</key>
+	<string>アイコン</string>
+	<key>Images</key>
+	<string>画像</string>
+	<key>Import Snippets</key>
+	<string>スニペットを読み込む</string>
+	<key>Import Snippets...</key>
+	<string>スニペットを読み込む...</string>
+	<key>Include pre-releases</key>
+	<string>プレリリース版も含める</string>
+	<key>Input</key>
+	<string>入力</string>
+	<key>Input "⌘ + V" after menu item selection</key>
+	<string>メニュー項目選択後に "⌘ + V" を入力</string>
+	<key>Input paste command</key>
+	<string>ペーストコマンドを入力</string>
+	<key>Install Update</key>
+	<string>アップデートをインストール</string>
+	<key>Install and Relaunch</key>
+	<string>インストールして再起動</string>
+	<key>Invoke action immediately</key>
+	<string>アクションをすぐに実行</string>
+	<key>Invoke an action immediately if only one action was registered</key>
+	<string>登録したアクションが一つだけなら、即座にアクションを実行する</string>
+	<key>Japanese</key>
+	<string>日本語</string>
+	<key>JavaScript</key>
+	<string>JavaScript</string>
+	<key>JavaScript Alert</key>
+	<string>JavaScriptアラート</string>
+	<key>LF</key>
+	<string>LF</string>
+	<key>Last Used</key>
+	<string>最終使用日</string>
+	<key>Last checked</key>
+	<string>最終確認</string>
+	<key>Later</key>
+	<string>あとで</string>
+	<key>Launch ClipMenu on system startup</key>
+	<string>システム起動時にClipMenuを起動</string>
+	<key>Launch ClipMenu on system startup?</key>
+	<string>システム起動時にClipMenuを起動しますか？</string>
+	<key>Launch on Login</key>
+	<string>ログイン時に起動</string>
+	<key>Launch on system startup</key>
+	<string>起動する</string>
+	<key>Layout</key>
+	<string>レイアウト</string>
+	<key>Mark menu items with numbers</key>
+	<string>メニュー項目の先頭に数字を付加</string>
+	<key>Match icon size</key>
+	<string>アイコンサイズに合わせる</string>
+	<key>Max clipboard history size:</key>
+	<string>記憶する履歴の数:</string>
+	<key>Max length of tool tip string:</key>
+	<string>ツールチップに表示する文字列の長さ:</string>
+	<key>Maximum history size</key>
+	<string>最大履歴数</string>
+	<key>Maximum menu item title length</key>
+	<string>メニュー項目タイトルの最大長</string>
+	<key>Menu</key>
+	<string>メニュー</string>
+	<key>Menu Items</key>
+	<string>メニュー項目</string>
+	<key>Menu font size</key>
+	<string>メニューフォントサイズ</string>
+	<key>Menu hot key</key>
+	<string>メニューホットキー</string>
+	<key>Menu icon size</key>
+	<string>メニューアイコンサイズ</string>
+	<key>Menu items' title starts with 0</key>
+	<string>メニュー項目のタイトルを 0 で始める</string>
+	<key>Modifier Click Behavior</key>
+	<string>修飾キークリック時の動作</string>
+	<key>Modifier key + Click behaviors on history menu items</key>
+	<string>履歴メニュー項目上での、修飾キー + クリック の動作</string>
+	<key>Monthly</key>
+	<string>毎月</string>
+	<key>Move Down</key>
+	<string>下へ移動</string>
+	<key>Move Up</key>
+	<string>上へ移動</string>
+	<key>Multiple files</key>
+	<string>複数ファイル</string>
+	<key>Needs Access</key>
+	<string>許可が必要</string>
+	<key>Never</key>
+	<string>しない</string>
+	<key>New</key>
+	<string>新規</string>
+	<key>New Line</key>
+	<string>改行</string>
+	<key>No Excluded Applications</key>
+	<string>除外アプリケーションはありません</string>
+	<key>No Folders</key>
+	<string>フォルダはありません</string>
+	<key>No Matches</key>
+	<string>一致する項目はありません</string>
+	<key>No Running Applications</key>
+	<string>実行中のアプリケーションはありません</string>
+	<key>No Snippet Selected</key>
+	<string>スニペットが選択されていません</string>
+	<key>No Snippets</key>
+	<string>スニペットはありません</string>
+	<key>No update data was returned.</key>
+	<string>アップデート情報が返されませんでした。</string>
+	<key>None</key>
+	<string>なし</string>
+	<key>Number of characters in the menu:</key>
+	<string>メニューに表示する文字数:</string>
+	<key>Number of items place inline:</key>
+	<string>インライン表示する項目の数:</string>
+	<key>Number of items place inside a folder:</key>
+	<string>フォルダに内包する項目の数:</string>
+	<key>OK</key>
+	<string>OK</string>
+	<key>Open Accessibility Settings</key>
+	<string>アクセシビリティ設定を開く</string>
+	<key>Open Recent</key>
+	<string>最近使った項目を開く</string>
+	<key>Open Settings</key>
+	<string>設定を開く</string>
+	<key>Open in Browser</key>
+	<string>ブラウザで開く</string>
+	<key>Open...</key>
+	<string>開く...</string>
+	<key>Option + Click:</key>
+	<string>Option + クリック:</string>
+	<key>Option-click</key>
+	<string>Optionクリック</string>
+	<key>Original</key>
+	<string>オリジナル</string>
+	<key>Other...</key>
+	<string>その他...</string>
+	<key>PDF</key>
+	<string>PDF</string>
+	<key>PDF:</key>
+	<string>PDF:</string>
+	<key>PICT</key>
+	<string>PICT</string>
+	<key>PICT Image</key>
+	<string>PICT画像</string>
+	<key>PICT:</key>
+	<string>PICT:</string>
+	<key>Page Setup...</key>
+	<string>ページ設定...</string>
+	<key>Page Setup…</key>
+	<string>ページ設定...</string>
+	<key>Paste</key>
+	<string>ペースト</string>
+	<key>Paste as File Path</key>
+	<string>ファイルパスとしてペースト</string>
+	<key>Paste as HFS File Path</key>
+	<string>HFSファイルパスとしてペースト</string>
+	<key>Paste as Plain Text</key>
+	<string>プレーンテキストとしてペースト</string>
+	<key>Paste automation</key>
+	<string>自動ペースト</string>
+	<key>Paste the clip as HFS File Path</key>
+	<string>HFSファイルパスとしてペースト</string>
+	<key>Paste the clip as POSIX File Path</key>
+	<string>POSIXファイルパスとしてペースト</string>
+	<key>Paste the clip as Plain Text</key>
+	<string>プレーンテキストとしてペースト</string>
+	<key>Plain Text</key>
+	<string>プレーンテキスト</string>
+	<key>Plain Text:</key>
+	<string>プレーンテキスト:</string>
+	<key>Pop up Action Menu</key>
+	<string>アクションメニューをポップアップ</string>
+	<key>Post Events</key>
+	<string>イベント送信</string>
+	<key>Preferences</key>
+	<string>環境設定</string>
+	<key>Preferences...</key>
+	<string>環境設定...</string>
+	<key>Preferences…</key>
+	<string>環境設定...</string>
+	<key>Print...</key>
+	<string>プリント...</string>
+	<key>Print…</key>
+	<string>プリント...</string>
+	<key>Quit ClipMenu</key>
+	<string>ClipMenuを終了</string>
+	<key>Quit anyway</key>
+	<string>それでも終了</string>
+	<key>RTF</key>
+	<string>RTF</string>
+	<key>RTF:</key>
+	<string>RTF:</string>
+	<key>RTFD</key>
+	<string>RTFD</string>
+	<key>RTFD:</key>
+	<string>RTFD:</string>
+	<key>Ready</key>
+	<string>準備完了</string>
+	<key>Ready to Install</key>
+	<string>インストールの準備ができました</string>
+	<key>Redo</key>
+	<string>やり直す</string>
+	<key>Refresh permission status</key>
+	<string>許可状態を更新</string>
+	<key>Release Notes</key>
+	<string>リリースノート</string>
+	<key>Remove</key>
+	<string>削除</string>
+	<key>Remove Folder</key>
+	<string>フォルダを削除</string>
+	<key>Remove Snippet</key>
+	<string>スニペットを削除</string>
+	<key>Remove the clip from the clipboard history</key>
+	<string>クリップボード履歴から削除</string>
+	<key>Request Access</key>
+	<string>アクセスを要求</string>
+	<key>Reset</key>
+	<string>リセット</string>
+	<key>Reverse</key>
+	<string>逆順にする</string>
+	<key>Revert</key>
+	<string>最後に保存した状態に戻す</string>
+	<key>Rich Text Format (RTF)</key>
+	<string>リッチテキスト形式（RTF）</string>
+	<key>Rich Text Format Directory (RTFD)</key>
+	<string>リッチテキスト形式ディレクトリ（RTFD）</string>
+	<key>Save</key>
+	<string>保存</string>
+	<key>Save As...</key>
+	<string>別名で保存...</string>
+	<key>Save As…</key>
+	<string>別名で保存...</string>
+	<key>Save clipboard history on quit</key>
+	<string>終了時にクリップボード履歴を保存</string>
+	<key>Save history on quit</key>
+	<string>終了時に履歴を保存</string>
+	<key>Scissors 1 Left</key>
+	<string>はさみ1 左</string>
+	<key>Scissors 1 Left Color</key>
+	<string>はさみ1 左（カラー）</string>
+	<key>Scissors 1 Right</key>
+	<string>はさみ1 右</string>
+	<key>Scissors 1 Right Color</key>
+	<string>はさみ1 右（カラー）</string>
+	<key>Scissors 2 Left</key>
+	<string>はさみ2 左</string>
+	<key>Scissors 2 Left Color</key>
+	<string>はさみ2 左（カラー）</string>
+	<key>Scissors 2 Right</key>
+	<string>はさみ2 右</string>
+	<key>Scissors 2 Right Color</key>
+	<string>はさみ2 右（カラー）</string>
+	<key>Script Error</key>
+	<string>スクリプトエラー</string>
+	<key>Script Exception Raised</key>
+	<string>スクリプトで例外が発生しました</string>
+	<key>Script error has occured</key>
+	<string>スクリプトエラーが起こりました</string>
+	<key>Script error has occurred</key>
+	<string>スクリプトエラーが起こりました</string>
+	<key>Search snippets</key>
+	<string>スニペットを検索</string>
+	<key>Select</key>
+	<string>選択</string>
+	<key>Select All</key>
+	<string>すべてを選択</string>
+	<key>Select a Settings Area</key>
+	<string>設定項目を選択</string>
+	<key>Select a folder to browse its snippets.</key>
+	<string>スニペットを表示するフォルダを選択してください。</string>
+	<key>Select clipboard types to store:</key>
+	<string>保存するクリップボードの種類を選択:</string>
+	<key>Select:</key>
+	<string>選択:</string>
+	<key>Selected size</key>
+	<string>指定サイズ</string>
+	<key>Services</key>
+	<string>サービス</string>
+	<key>Shift + Click:</key>
+	<string>Shift + クリック:</string>
+	<key>Shift-click</key>
+	<string>Shiftクリック</string>
+	<key>Shortcuts</key>
+	<string>ショートカット</string>
+	<key>Show All</key>
+	<string>すべてを表示</string>
+	<key>Show Icon in the Menu</key>
+	<string>メニューにアイコンを表示</string>
+	<key>Show Image</key>
+	<string>画像を表示</string>
+	<key>Show alert before clearing history</key>
+	<string>履歴をクリアする前に確認</string>
+	<key>Show alert panel before clear history</key>
+	<string>履歴クリアの前に警告パネルを表示</string>
+	<key>Show file type icons</key>
+	<string>ファイルタイプアイコンを表示</string>
+	<key>Show images in the menu</key>
+	<string>メニューに画像を表示</string>
+	<key>Show labels to indicate item types</key>
+	<string>種類を示すラベルを表示</string>
+	<key>Show tool tip on a menu item</key>
+	<string>メニュー項目上にツールチップを表示</string>
+	<key>Show tooltips</key>
+	<string>ツールチップを表示</string>
+	<key>Single file</key>
+	<string>単一ファイル</string>
+	<key>Skip This Version</key>
+	<string>このバージョンをスキップ</string>
+	<key>Snippet</key>
+	<string>スニペット</string>
+	<key>Snippet Editor</key>
+	<string>スニペットエディタ</string>
+	<key>Snippets</key>
+	<string>スニペット</string>
+	<key>Snippets hot key</key>
+	<string>スニペットホットキー</string>
+	<key>Snippets menu:</key>
+	<string>スニペットメニュー:</string>
+	<key>Sort history order by</key>
+	<string>履歴の並び順</string>
+	<key>Sort history order by:</key>
+	<string>履歴のソート順:</string>
+	<key>Space</key>
+	<string>空白</string>
+	<key>Startup</key>
+	<string>起動</string>
+	<key>Status Bar icon style</key>
+	<string>ステータスバーアイコンのスタイル</string>
+	<key>Status Bar icon style:</key>
+	<string>ステータスバー・アイコン:</string>
+	<key>Store Types</key>
+	<string>保存する形式</string>
+	<key>Strip Tags</key>
+	<string>タグを除去</string>
+	<key>Surround with</key>
+	<string>囲む</string>
+	<key>Surround with (Japanese)</key>
+	<string>囲む（全角）</string>
+	<key>Surround with Tags...</key>
+	<string>タグで囲む...</string>
+	<key>TIFF</key>
+	<string>TIFF</string>
+	<key>TIFF Image</key>
+	<string>TIFF画像</string>
+	<key>TIFF:</key>
+	<string>TIFF:</string>
+	<key>Tab</key>
+	<string>タブ</string>
+	<key>The position to show snippets in ClipMenu:</key>
+	<string>ClipMenuでスニペットを表示する位置:</string>
+	<key>The script you selected does not exist</key>
+	<string>選択したスクリプトが見つかりません</string>
+	<key>The update download did not return a file.</key>
+	<string>アップデートのダウンロードでファイルが返されませんでした。</string>
+	<key>The update feed did not contain any items.</key>
+	<string>アップデートフィードに項目がありませんでした。</string>
+	<key>The update signature could not be verified.</key>
+	<string>アップデートの署名を検証できませんでした。</string>
+	<key>The update was not signed with a valid DSA signature.</key>
+	<string>アップデートに有効なDSA署名がありません。</string>
+	<key>Time interval</key>
+	<string>時間間隔</string>
+	<key>Time interval to observe the clipboard:</key>
+	<string>クリップボードを監視する間隔:</string>
+	<key>Title</key>
+	<string>タイトル</string>
+	<key>Tooltips</key>
+	<string>ツールチップ</string>
+	<key>Trim</key>
+	<string>Trim</string>
+	<key>Try a different search term.</key>
+	<string>別の検索語を試してください。</string>
+	<key>Type</key>
+	<string>対応形式</string>
+	<key>Type shortcut</key>
+	<string>ショートカットを入力</string>
+	<key>URL</key>
+	<string>URL</string>
+	<key>URL:</key>
+	<string>URL:</string>
+	<key>Unable to end editing</key>
+	<string>編集できません</string>
+	<key>Unable to load script</key>
+	<string>スクリプトを読み込めません</string>
+	<key>Undo</key>
+	<string>取り消す</string>
+	<key>Update checks are currently manual only.</key>
+	<string>アップデート確認は現在手動のみです。</string>
+	<key>Update status is active right now.</key>
+	<string>アップデート状態は現在アクティブです。</string>
+	<key>Update status is idle and ready.</key>
+	<string>アップデート状態は待機中で、すぐに利用できます。</string>
+	<key>Unescape HTML characters</key>
+	<string>HTML文字実体参照からアンエスケープ</string>
+	<key>Update Available</key>
+	<string>アップデートがあります</string>
+	<key>Updates</key>
+	<string>アップデート</string>
+	<key>Use custom menu font size</key>
+	<string>メニューフォントサイズを変更</string>
+	<key>User Scripts</key>
+	<string>ユーザースクリプト</string>
+	<key>User's</key>
+	<string>User's</string>
+	<key>Weekly</key>
+	<string>毎週</string>
+	<key>Width:</key>
+	<string>幅:</string>
+	<key>You already have the newest version of %@.</key>
+	<string>すでに %@ の最新バージョンを使用しています。</string>
+	<key>You can change this setting in the Preferences if you want.</key>
+	<string>この設定は、いつでも変更できます。</string>
+	<key>You're up to date!</key>
+	<string>最新版を使用しています！</string>
+	<key>Your script file does not exist.</key>
+	<string>スクリプトファイルが見つかりませんでした</string>
+	<key>You’re Up to Date</key>
+	<string>最新です</string>
+	<key>macOS needs to allow ClipMenu to control the keyboard before automatic paste will work.</key>
+	<string>自動ペーストを使用するには、macOSでClipMenuによるキーボード制御を許可する必要があります。</string>
+	<key>%d areas</key>
+	<string>%d項目</string>
+	<key>%d capture types</key>
+	<string>%d種類を保存</string>
+	<key>%d folders</key>
+	<string>%d個のフォルダ</string>
+	<key>%d matches</key>
+	<string>%d件一致</string>
+	<key>%d menu nodes</key>
+	<string>%d個のメニューノード</string>
+	<key>%d of %d granted</key>
+	<string>%d / %d 個が許可済み</string>
+	<key>%d snippets</key>
+	<string>%d個のスニペット</string>
+	<key>%d visible</key>
+	<string>%d件表示</string>
+	<key>%1$@, %2$@, and %3$d more</key>
+	<string>%1$@、%2$@、ほか %3$d 件</string>
+	<key>%1$d custom mappings active across %2$d clipboard types, with %3$d using file type codes.</key>
+	<string>%2$d 種類のクリップボード種別に %1$d 件のカスタム対応が有効で、そのうち %3$d 件はファイルタイプコードを使用しています。</string>
+	<key>%d custom mappings</key>
+	<string>%d 件のカスタム割り当て</string>
+	<key>%d file type codes</key>
+	<string>%d 件のファイルタイプコード</string>
+	<key>%@ %@ is ready to install</key>
+	<string>%1$@ %2$@ をインストールできます</string>
+	<key>%@ is current</key>
+	<string>%@ を使用中</string>
+	<key>Above History</key>
+	<string>履歴の上</string>
+	<key>Action Menu Behavior</key>
+	<string>アクションメニューの動作</string>
+	<key>Action dispatch is currently disabled, so modifier-click and direct action behavior stay dormant.</key>
+	<string>現在アクションは無効のため、修飾キークリックや直接アクション実行は待機状態です。</string>
+	<key>Action dispatch paused.</key>
+	<string>アクション実行は一時停止中です。</string>
+	<key>Action menu behavior, modifier clicks, and available actions.</key>
+	<string>アクションの動作、修飾キークリック、利用可能なアクション。</string>
+	<key>Actions Off</key>
+	<string>アクション無効</string>
+	<key>Actions On</key>
+	<string>アクション有効</string>
+	<key>All defaults</key>
+	<string>すべて既定値</string>
+	<key>Actions and modifiers</key>
+	<string>アクションと修飾キー</string>
+	<key>Active</key>
+	<string>有効</string>
+	<key>Add Applications</key>
+	<string>アプリケーションを追加</string>
+	<key>Add running apps quickly, or choose any app bundle manually.</key>
+	<string>実行中のアプリをすばやく追加するか、任意のアプリバンドルを手動で選択します。</string>
+	<key>Always On</key>
+	<string>常に有効</string>
+	<key>Arrange the runtime action menu with folders, drag and drop, and inspector-based renaming.</key>
+	<string>フォルダ、ドラッグ＆ドロップ、インスペクタでの名前変更を使って実行時のアクションメニューを整理します。</string>
+	<key>Automatic Paste Permissions</key>
+	<string>自動ペーストの許可</string>
+	<key>Automatic paste is currently off, but permission readiness is still shown here.</key>
+	<string>自動ペーストは現在オフですが、許可の準備状況はここで確認できます。</string>
+	<key>Automatic checks are off, so update controls stay in manual-only mode.</key>
+	<string>自動チェックがオフのため、更新コントロールは手動専用モードのままです。</string>
+	<key>Automatic update checks are configured.</key>
+	<string>自動アップデート確認が設定されています。</string>
+	<key>Automatic checks on</key>
+	<string>自動チェック有効</string>
+	<key>Automatic checks, channel selection, and install behavior follow the same Sparkle-style rules as the original app.</key>
+	<string>自動チェック、チャンネル選択、インストール動作は元のアプリと同じ Sparkle 風ルールに従います。</string>
+	<key>Automatic checks, channels, and update timing.</key>
+	<string>自動チェック、チャンネル、更新タイミング。</string>
+	<key>Autosave %d hr</key>
+	<string>%d時間ごとに自動保存</string>
+	<key>Autosave %d min</key>
+	<string>%d分ごとに自動保存</string>
+	<key>Autosave 1 day</key>
+	<string>1日ごとに自動保存</string>
+	<key>Autosave 1 min</key>
+	<string>1分ごとに自動保存</string>
+	<key>Autosave Never</key>
+	<string>自動保存しない</string>
+	<key>Available Action Details</key>
+	<string>利用可能なアクションの詳細</string>
+	<key>Below History</key>
+	<string>履歴の下</string>
+	<key>Browse built-in actions before adding them to the runtime menu.</key>
+	<string>実行時メニューへ追加する前に組み込みアクションを参照します。</string>
+	<key>Checks and channels</key>
+	<string>チェックとチャンネル</string>
+	<key>The updater keeps the original Sparkle-style scheduling rules while staying ready for a manual check from this pane.</key>
+	<string>アップデータは元の Sparkle スタイルのスケジュール規則を保ちながら、このペインからの手動確認にも対応できます。</string>
+	<key>Choose a folder to browse and edit saved snippets.</key>
+	<string>フォルダを選択して保存済みスニペットを参照・編集します。</string>
+	<key>Choose a running app or browse for another bundle.</key>
+	<string>実行中のアプリを選ぶか、別のアプリバンドルを参照してください。</string>
+	<key>Choose a single folder to browse its snippets.</key>
+	<string>1つのフォルダを選択してそのスニペットを表示します。</string>
+	<key>Choose a single snippet to edit its title and content.</key>
+	<string>1つのスニペットを選択してタイトルと内容を編集します。</string>
+	<key>Choose which pasteboard types are stored, how image clips preview, and which icons represent non-image content in the menu.</key>
+	<string>保存するペーストボード種別、画像クリップのプレビュー方法、非画像コンテンツをメニューで表すアイコンを選択します。</string>
+	<key>Capture Rules</key>
+	<string>記録ルール</string>
+	<key>Capture is currently paused for every clipboard type.</key>
+	<string>現在はすべてのクリップボード種別で記録が一時停止されています。</string>
+	<key>Capture rules are active for the selected clipboard types.</key>
+	<string>選択したクリップボード種別に対して記録ルールが有効です。</string>
+	<key>ClipMenu will ignore new clipboard content until at least one stored type is re-enabled.</key>
+	<string>少なくとも1つの保存対象種別を再度有効にするまで、ClipMenu は新しいクリップボード内容を無視します。</string>
+	<key>ClipMenu stores the selected clipboard types with the same close-time save behavior as the original app.</key>
+	<string>ClipMenu は選択したクリップボード種別を、元のアプリと同じ「閉じるときに保存する」動作で保存します。</string>
+	<key>Chooser First</key>
+	<string>まず選択</string>
+	<key>ClipMenu can send Command-V automatically after menu item selection.</key>
+	<string>ClipMenu はメニュー項目の選択後に自動で Command-V を送信できます。</string>
+	<key>ClipMenu stays manual at sign-in unless you enable launch at login.</key>
+	<string>ログイン時起動を有効にしない限り、ClipMenu はサインイン時に手動起動のままです。</string>
+	<key>ClipMenu will be requested at login after you close Preferences.</key>
+	<string>ClipMenu はログイン時に起動するよう設定され、環境設定を閉じたときに適用されます。</string>
+	<key>ClipMenu will be requested at login and applied when Preferences closes.</key>
+	<string>ClipMenu はログイン時に起動するよう設定され、Preferences を閉じたときに適用されます。</string>
+	<key>Clipboard Types</key>
+	<string>クリップボード種別</string>
+	<key>Clipboard Types and Previews</key>
+	<string>クリップボード種別とプレビュー</string>
+	<key>Color</key>
+	<string>カラー</string>
+	<key>Current Menu Bar Style</key>
+	<string>現在のメニューバースタイル</string>
+	<key>Currently previewing the %@ status item style.</key>
+	<string>現在 %@ のステータス項目スタイルをプレビューしています。</string>
+	<key>Delete clears a shortcut</key>
+	<string>Delete キーでショートカットを解除</string>
+	<key>Fixed point size</key>
+	<string>固定ポイントサイズ</string>
+	<key>Global Shortcuts</key>
+	<string>グローバルショートカット</string>
+	<key>Global hotkeys</key>
+	<string>グローバルホットキー</string>
+	<key>Global shortcuts for the main menu and snippets menu.</key>
+	<string>メインメニューとスニペットメニューのグローバルショートカット。</string>
+	<key>Hidden</key>
+	<string>非表示</string>
+	<key>History menu:</key>
+	<string>履歴メニュー:</string>
+	<key>Icons Off</key>
+	<string>アイコンオフ</string>
+	<key>Icons On</key>
+	<string>アイコンオン</string>
+	<key>Immediate When Single</key>
+	<string>1件なら即実行</string>
+	<key>Inspect user-installed scripts that can be added to the runtime menu.</key>
+	<string>実行時メニューへ追加できるユーザーインストール済みスクリプトを確認します。</string>
+	<key>Labels hidden</key>
+	<string>ラベル非表示</string>
+	<key>Labels shown</key>
+	<string>ラベル表示</string>
+	<key>Launch Off</key>
+	<string>起動オフ</string>
+	<key>Launch On</key>
+	<string>起動オン</string>
+	<key>Layout and visuals</key>
+	<string>レイアウトと見た目</string>
+	<key>Legacy</key>
+	<string>レガシー</string>
+	<key>Legacy behavior, refreshed pane by pane.</key>
+	<string>従来の動作を保ちながら、各ペインを新しい見た目に更新。</string>
+	<key>Legacy icon mapping</key>
+	<string>レガシーアイコン対応</string>
+	<key>Manual only</key>
+	<string>手動のみ</string>
+	<key>Menu bar utility</key>
+	<string>メニューバーユーティリティ</string>
+	<key>Menu stays history-only</key>
+	<string>メニューは履歴のみ</string>
+	<key>Main Menu Placement</key>
+	<string>メインメニュー内の配置</string>
+	<key>This preview shows the live top-to-bottom order that ClipMenu uses in the main popup right now.</key>
+	<string>このプレビューは、現在 ClipMenu のメインポップアップで使われている実際の上から下への並び順を示します。</string>
+	<key>Track the active folder, enabled state, and content size for the snippet currently in focus.</key>
+	<string>現在フォーカスされているスニペットについて、対象フォルダ、有効状態、内容のサイズを確認できます。</string>
+	<key>Search scope, visible results, and current selection stay in sync here while you browse the library.</key>
+	<string>ライブラリを閲覧している間、検索範囲、表示結果数、現在の選択内容がここで同期して表示されます。</string>
+	<key>Snippet edits are still in memory and can be saved or reverted from the footer controls.</key>
+	<string>スニペットの編集内容はまだメモリ上にあり、フッターの操作で保存または復元できます。</string>
+	<key>The current snippet library is saved, so you can close the editor without losing changes.</key>
+	<string>現在のスニペットライブラリは保存済みなので、変更を失わずにエディタを閉じられます。</string>
+	<key>All Changes Saved</key>
+	<string>すべての変更を保存済み</string>
+	<key>These editor actions reflect the current selection and save state before you click anything.</key>
+	<string>これらの編集コマンドは、クリックする前の現在の選択状態と保存状態を反映しています。</string>
+	<key>Available</key>
+	<string>利用可能</string>
+	<key>Choose Folder First</key>
+	<string>先にフォルダを選択</string>
+	<key>Selection Needed</key>
+	<string>選択が必要</string>
+	<key>Already Saved</key>
+	<string>保存済み</string>
+	<key>Modifier-click choices, available built-ins and scripts, and the editable Action Menu draft continue to follow the original close-time commit model.</key>
+	<string>修飾キークリックの選択肢、利用可能な組み込み／スクリプト、編集可能なアクションメニュー下書きは、元の「ウインドウを閉じたときに確定する」モデルに従います。</string>
+	<key>Modifier clicks stay active.</key>
+	<string>修飾キー操作は有効のままです。</string>
+	<key>Multiple Folders Selected</key>
+	<string>複数のフォルダを選択中</string>
+	<key>Multiple Snippets Selected</key>
+	<string>複数のスニペットを選択中</string>
+	<key>Multiple folders selected; choose one to browse snippets.</key>
+	<string>複数のフォルダが選択されています。スニペットを見るには1つ選んでください。</string>
+	<key>Multiple snippets selected for batch work.</key>
+	<string>一括操作用に複数のスニペットが選択されています。</string>
+	<key>No applications excluded</key>
+	<string>除外アプリなし</string>
+	<key>No running app suggestions</key>
+	<string>候補の実行中アプリなし</string>
+	<key>Numbered from 0</key>
+	<string>0から番号付け</string>
+	<key>Numbered from 1</key>
+	<string>1から番号付け</string>
+	<key>Placement and editor</key>
+	<string>配置とエディタ</string>
+	<key>Preview Off</key>
+	<string>プレビューオフ</string>
+	<key>Preview On</key>
+	<string>プレビューオン</string>
+	<key>Preview rules</key>
+	<string>プレビュー規則</string>
+	<key>Review bundled JavaScript actions shipped with ClipMenu.</key>
+	<string>ClipMenu に同梱された JavaScript アクションを確認します。</string>
+	<key>Set the visible ClipMenu and Snippets hotkeys while the legacy history shortcut stays registered behind the scenes.</key>
+	<string>表示される ClipMenu とスニペットのホットキーを設定しつつ、従来の履歴ショートカットは内部で登録されたままにします。</string>
+	<key>Show snippet folders after clipboard history in the main menu.</key>
+	<string>メインメニューでスニペットフォルダをクリップボード履歴の後に表示します。</string>
+	<key>Show snippet folders before clipboard history in the main menu.</key>
+	<string>メインメニューでスニペットフォルダをクリップボード履歴の前に表示します。</string>
+	<key>Snippets are hidden from the main menu.</key>
+	<string>スニペットはメインメニューで非表示です。</string>
+	<key>Snippets appear before clipboard history.</key>
+	<string>スニペットはクリップボード履歴の前に表示されます。</string>
+	<key>Snippets appear after clipboard history.</key>
+	<string>スニペットはクリップボード履歴の後に表示されます。</string>
+	<key>Snippet folders stay available in the editor and data store even when the main menu shows clipboard history only.</key>
+	<string>メインメニューがクリップボード履歴のみを表示していても、スニペットフォルダはエディタとデータ保存先で引き続き利用できます。</string>
+	<key>The main menu opens with snippets first, while the editor and saved snippet order continue to use the same underlying data.</key>
+	<string>メインメニューではスニペットが先頭に表示されますが、エディタと保存済みスニペットの順序は同じ基盤データを使い続けます。</string>
+	<key>Clipboard history stays first in the main menu, with snippets still available immediately afterward from the same saved data.</key>
+	<string>メインメニューではクリップボード履歴が先頭のままで、同じ保存データからスニペットもその直後に利用できます。</string>
+	<key>Snippet Menu Position</key>
+	<string>スニペットメニューの位置</string>
+	<key>Snippets follow clipboard history</key>
+	<string>スニペットは履歴の後</string>
+	<key>Snippets lead the main menu</key>
+	<string>スニペットを先頭に表示</string>
+	<key>Software Update Behavior</key>
+	<string>ソフトウェアアップデートの動作</string>
+	<key>Startup Launch</key>
+	<string>起動時設定</string>
+	<key>Startup and history</key>
+	<string>起動と履歴</string>
+	<key>Status Bar Icon</key>
+	<string>ステータスバーアイコン</string>
+	<key>Tooltips Off</key>
+	<string>ツールチップオフ</string>
+	<key>Tooltips On</key>
+	<string>ツールチップオン</string>
+	<key>Types and previews</key>
+	<string>種別とプレビュー</string>
+	<key>Visible shortcuts update live</key>
+	<string>表示中のショートカットは即時更新</string>
+	<key>Visible Menu Shortcuts</key>
+	<string>表示メニュー用ショートカット</string>
+	<key>Legacy Shortcut</key>
+	<string>従来ショートカット</string>
+	<key>These two shortcuts are the editable preferences-backed menu triggers from the original pane.</key>
+	<string>この 2 つのショートカットは、元のペインにあった編集可能な設定連動メニュートリガーです。</string>
+	<key>Shortcut behavior summary</key>
+	<string>ショートカット動作の概要</string>
+	<key>ClipMenu and Snippets update immediately, while the original History shortcut remains registered in the background.</key>
+	<string>ClipMenu とスニペットのショートカットはすぐ更新され、元の履歴ショートカットは裏側で登録されたままです。</string>
+	<key>ClipMenu and Snippets can be edited here, while History keeps its original reserved binding.</key>
+	<string>ここでは ClipMenu とスニペットを編集でき、History は元の予約済みショートカットのまま保持されます。</string>
+	<key>These four modifier routes stay live for history clicks whenever actions are enabled.</key>
+	<string>アクションが有効な間は、この 4 つの修飾キー経路が履歴クリックで常に有効です。</string>
+	<key>%@ currently holds %d snippets.</key>
+	<string>%@ には現在 %d 個のスニペットがあります。</string>
+	<key>%d applications excluded</key>
+	<string>%d 個のアプリを除外中</string>
+	<key>%d apps</key>
+	<string>%d 個のアプリ</string>
+	<key>%d disabled types</key>
+	<string>%d 種類を無効化</string>
+	<key>%d of %d enabled</key>
+	<string>%d / %d 個が有効</string>
+	<key>%d running apps ready</key>
+	<string>%d 個の実行中アプリを追加可能</string>
+	<key>1 app</key>
+	<string>1 個のアプリ</string>
+	<key>1 application excluded</key>
+	<string>1 個のアプリを除外中</string>
+	<key>1 running app ready</key>
+	<string>1 個の実行中アプリを追加可能</string>
+	<key>All %d file-type icon mappings are using their legacy defaults.</key>
+	<string>すべての %d 件のファイルタイプアイコン対応は従来の既定値を使用しています。</string>
+	<key>Allows synthetic keyboard events after a menu selection.</key>
+	<string>メニュー選択後に擬似キーボードイベントを送信できます。</string>
+	<key>Ask for confirmation before clearing unless suppression has been chosen.</key>
+	<string>確認を省略する設定が選ばれていない限り、消去前に確認します。</string>
+	<key>Capture active</key>
+	<string>記録有効</string>
+	<key>Capture filtered by app</key>
+	<string>アプリで記録を制限</string>
+	<key>Capture open to all apps</key>
+	<string>すべてのアプリを記録対象</string>
+	<key>Capture rules</key>
+	<string>記録ルール</string>
+	<key>Capture paused</key>
+	<string>記録停止中</string>
+	<key>Changes apply to the visible menu titles while preserving the original Objective-C sizing rules.</key>
+	<string>元の Objective-C のサイズ規則を保ったまま、表示中のメニュータイトルに変更を適用します。</string>
+	<key>Check your connection or feed configuration, then try again.</key>
+	<string>接続またはフィード設定を確認してから、もう一度試してください。</string>
+	<key>Checking for updates...</key>
+	<string>アップデートを確認しています...</string>
+	<key>Checking now</key>
+	<string>確認中</string>
+	<key>Choose Later to leave the downloaded update where it is and install it yourself when convenient.</key>
+	<string>「あとで」を選ぶと、ダウンロード済みアップデートはそのまま残り、都合のよいときに自分でインストールできます。</string>
+	<key>Choose which pasteboard representations ClipMenu keeps in history.</key>
+	<string>ClipMenu が履歴に保持するペーストボード表現を選択します。</string>
+	<key>Classic</key>
+	<string>クラシック</string>
+	<key>Clip</key>
+	<string>Clip</string>
+	<key>ClipMenu did not modify the installed app. Try the download again when the connection is stable.</key>
+	<string>ClipMenu はインストール済みアプリを変更していません。接続が安定したらもう一度ダウンロードしてください。</string>
+	<key>ClipMenu is actively checking the configured feed right now.</key>
+	<string>ClipMenu は現在、設定済みフィードを確認しています。</string>
+	<key>ClipMenu is checking the current update feed.</key>
+	<string>ClipMenu は現在のアップデートフィードを確認しています。</string>
+	<key>Current version: %@</key>
+	<string>現在のバージョン: %@</string>
+	<key>Current version: %@  Updated version: %@</key>
+	<string>現在のバージョン: %@  更新後のバージョン: %@</string>
+	<key>Currently resolving %@ icons with HFS code '%@'.</key>
+	<string>現在 %@ アイコンは HFS コード '%@' で解決しています。</string>
+	<key>Currently resolving %@ icons with file extension '%@'.</key>
+	<string>現在 %@ アイコンはファイル拡張子 '%@' で解決しています。</string>
+	<key>Custom</key>
+	<string>カスタム</string>
+	<key>Each clipboard type still writes the same legacy icon-mapping defaults while the editor keeps extension and HFS-code modes easier to scan.</key>
+	<string>各クリップボード種別は従来どおりのアイコン対応設定を書き込みつつ、エディタでは拡張子モードと HFS コードモードを見やすく保ちます。</string>
+	<key>Edited</key>
+	<string>編集中</string>
+	<key>Enable tooltips to preview clipped menu titles without changing stored clipboard content.</key>
+	<string>保存済みクリップボード内容を変えずに、切り詰められたメニュータイトルをツールチップで確認できます。</string>
+	<key>Faster</key>
+	<string>高速</string>
+	<key>Fast capture</key>
+	<string>高速取得</string>
+	<key>Feed</key>
+	<string>フィード</string>
+	<key>File Extension</key>
+	<string>ファイル拡張子</string>
+	<key>Files and Links</key>
+	<string>ファイルとリンク</string>
+	<key>File Type Code</key>
+	<string>ファイルタイプコード</string>
+	<key>File-type icons hidden</key>
+	<string>ファイルタイプアイコンは非表示</string>
+	<key>File-type icons: %d px</key>
+	<string>ファイルタイプアイコン: %d px</string>
+	<key>Folder</key>
+	<string>フォルダ</string>
+	<key>Folder pages currently hold %d items each, preserving the original menu pagination rules.</key>
+	<string>フォルダページは現在それぞれ %d 項目を保持し、元のメニューのページ分け規則を保っています。</string>
+	<key>Folder pages currently hold %d items each.</key>
+	<string>フォルダページは現在それぞれ %d 項目ずつ表示します。</string>
+	<key>Choose how file lists and URLs identify themselves in the menu.</key>
+	<string>ファイル一覧や URL がメニュー内でどう識別されるかを選びます。</string>
+	<key>Control the icons used for text-rich and document-style clipboard content.</key>
+	<string>テキスト系や書類系のクリップボード内容に使うアイコンを調整します。</string>
+	<key>Hide snippets from the main ClipMenu popup while leaving the editor and runtime data intact.</key>
+	<string>エディタと実行時データはそのままに、メインの ClipMenu ポップアップからスニペットを非表示にします。</string>
+	<key>History stays on Command-Control-V</key>
+	<string>履歴ショートカットは Command-Control-V のままです</string>
+	<key>Ignored during capture</key>
+	<string>記録時に無視</string>
+	<key>Image clips fall back to text-only treatment unless another icon rule applies.</key>
+	<string>別のアイコン規則が適用されない限り、画像クリップはテキストのみの扱いになります。</string>
+	<key>Image clips will render thumbnail previews in the menu when available.</key>
+	<string>画像クリップは利用可能な場合、メニュー内でサムネイルプレビューを表示します。</string>
+	<key>Image thumbnails hidden</key>
+	<string>画像サムネイルは非表示</string>
+	<key>Image thumbnails: %d x %d px</key>
+	<string>画像サムネイル: %d x %d px</string>
+	<key>Invoke action immediately when there is only one action</key>
+	<string>アクションが1つだけのときは直ちに実行する</string>
+	<key>Keep clipboard capture open to every app, or add exceptions for tools ClipMenu should ignore.</key>
+	<string>すべてのアプリを記録対象にするか、ClipMenu が無視すべきツールを例外として追加します。</string>
+	<key>Keep snippets available after the history list.</key>
+	<string>履歴リストの後にスニペットを表示します。</string>
+	<key>Keep the explicit Clear History command visible in the main status menu.</key>
+	<string>メインのステータスメニューに「履歴をクリア」コマンドを表示したままにします。</string>
+	<key>Keep the main menu focused on clipboard history and commands only.</key>
+	<string>メインメニューをクリップボード履歴とコマンドのみに絞ります。</string>
+	<key>Keep visible numeric shortcuts aligned with the original menu-numbering behavior.</key>
+	<string>表示される数字ショートカットを元のメニュー番号付け動作に合わせます。</string>
+	<key>Layout, numbering, tooltips, fonts, and menu visuals.</key>
+	<string>レイアウト、番号付け、ツールチップ、フォント、メニューの見た目。</string>
+	<key>Let snippets lead the popup before the history section.</key>
+	<string>ポップアップで履歴セクションより前にスニペットを表示します。</string>
+	<key>Lets ClipMenu control Command-V in the frontmost app.</key>
+	<string>ClipMenu が最前面のアプリで Command-V を実行できるようにします。</string>
+	<key>Lighter</key>
+	<string>軽め</string>
+	<key>Light background load</key>
+	<string>軽いバックグラウンド負荷</string>
+	<key>Long menu content still keeps the original tooltip fallback while preserving the unclipped paste payload.</key>
+	<string>長いメニュー内容でも、切り詰められていないペースト内容を保ちながら、元のツールチップ補完動作を維持します。</string>
+	<key>Menu font follows the current icon size.</key>
+	<string>メニューフォントは現在のアイコンサイズに従います。</string>
+	<key>Menu font is matching the icon size.</key>
+	<string>メニューフォントはアイコンサイズに合わせています。</string>
+	<key>Menu font is fixed at %d pt.</key>
+	<string>メニューフォントは %d pt に固定されています。</string>
+	<key>Menu titles keep the standard AppKit size until custom sizing is enabled.</key>
+	<string>カスタムサイズを有効にするまで、メニュータイトルは標準の AppKit サイズを保ちます。</string>
+	<key>Menu titles scale with the current icon size while preserving the legacy fit-to-icon rule.</key>
+	<string>従来のアイコン連動ルールを保ちながら、メニュータイトルは現在のアイコンサイズに合わせて拡大縮小されます。</string>
+	<key>Menu titles use a fixed %d pt size while preserving the original Objective-C sizing behavior.</key>
+	<string>元の Objective-C のサイズ動作を保ちながら、メニュータイトルは固定の %d pt サイズを使います。</string>
+	<key>Menu titles cap at %d characters with %d inline items before folders begin.</key>
+	<string>メニュータイトルは %d 文字までで、フォルダ化の前に %d 項目をインライン表示します。</string>
+	<key>Menu commands and numbering stay visible.</key>
+	<string>メニューコマンドと番号付けは表示されたままです。</string>
+	<key>Menu numbering and labels stay configurable.</key>
+	<string>メニューの番号付けとラベルは引き続き設定できます。</string>
+	<key>Numbering, labels, numeric shortcuts, and the clear-history command all stay visible with confirmation before destructive clears.</key>
+	<string>番号付け、ラベル、数字ショートカット、履歴消去コマンドはすべて表示されたままで、破壊的な消去の前には確認が行われます。</string>
+	<key>Numbering, labels, numeric shortcuts, and the clear-history command all stay visible while repeated clears skip confirmation.</key>
+	<string>番号付け、ラベル、数字ショートカット、履歴消去コマンドはすべて表示されたままで、繰り返しの消去では確認を省略します。</string>
+	<key>Numbering, labels, and numeric shortcuts remain configurable while the explicit clear-history command stays hidden from the menu.</key>
+	<string>明示的な履歴消去コマンドはメニューに表示しないまま、番号付け、ラベル、数字ショートカットは引き続き設定できます。</string>
+	<key>Multiple selected</key>
+	<string>複数選択中</string>
+	<key>No applications are currently excluded from clipboard capture.</key>
+	<string>現在、クリップボード記録から除外されているアプリはありません。</string>
+	<key>No currently running apps are available to add.</key>
+	<string>追加できる実行中アプリは現在ありません。</string>
+	<key>No exclusions</key>
+	<string>除外なし</string>
+	<key>No folder selected</key>
+	<string>フォルダ未選択</string>
+	<key>No newer version is currently available from the configured update feed.</key>
+	<string>設定済みアップデートフィードから利用可能な新しいバージョンは現在ありません。</string>
+	<key>Non-image clips keep their configured file-type icons in the menu.</key>
+	<string>画像以外のクリップは、設定されたファイルタイプアイコンをメニュー内で維持します。</string>
+	<key>Non-image clips show no menu icon unless another renderer supplies one.</key>
+	<string>別のレンダラが提供しない限り、画像以外のクリップにはメニューアイコンを表示しません。</string>
+	<key>Numeric shortcuts off</key>
+	<string>数字ショートカットオフ</string>
+	<key>Numeric shortcuts on</key>
+	<string>数字ショートカットオン</string>
+	<key>Objective-C parity</key>
+	<string>Objective-C 版との一致</string>
+	<key>Observe cadence updates on close</key>
+	<string>監視間隔の更新は閉じるときに適用</string>
+	<key>Off</key>
+	<string>オフ</string>
+	<key>Open the full ClipMenu popup at the pointer.</key>
+	<string>ポインタ位置に完全な ClipMenu ポップアップを開きます。</string>
+	<key>Open the snippets-only menu when folders are available.</key>
+	<string>フォルダがある場合、スニペット専用メニューを開きます。</string>
+	<key>Other… from /Applications</key>
+	<string>/Applications からその他…</string>
+	<key>Path</key>
+	<string>パス</string>
+	<key>Pre-release</key>
+	<string>プレリリース</string>
+	<key>Prefix menu rows with the same legacy numeric titles used by the Objective-C app.</key>
+	<string>メニュー行の先頭に、Objective-C 版と同じ従来の番号タイトルを付けます。</string>
+	<key>Preserve the legacy menu-font sizing behavior while using a cleaner control layout.</key>
+	<string>より整理されたコントロール配置を使いながら、従来のメニューフォントサイズ動作を保ちます。</string>
+	<key>Preview long or multiline content without changing the stored clipboard payload.</key>
+	<string>保存済みクリップボード内容を変えずに、長文や複数行の内容をプレビューできます。</string>
+	<key>Preview the selected built-in or script action before adding it to the runtime menu.</key>
+	<string>選択した組み込みアクションやスクリプトを、実行時メニューに追加する前に確認します。</string>
+	<key>Prompt Hidden</key>
+	<string>確認非表示</string>
+	<key>Prompt Visible</key>
+	<string>確認表示</string>
+	<key>Ready to Paste</key>
+	<string>ペースト可能</string>
+	<key>Refresh Status</key>
+	<string>状態を更新</string>
+	<key>Rename and inspect the live menu item currently selected in the editable action tree.</key>
+	<string>編集可能なアクションツリーで現在選択されているライブメニュー項目の名前変更と確認を行います。</string>
+	<key>Review the release notes below, then choose whether to install now, skip this version, or come back later.</key>
+	<string>以下のリリースノートを確認し、今すぐインストールするか、このバージョンをスキップするか、あとで戻るかを選択してください。</string>
+	<key>Review which apps are blocked from clipboard capture and keep their draft changes isolated until you choose Done.</key>
+	<string>クリップボード記録から除外されているアプリを確認し、「完了」を選ぶまで下書き変更を分離して保ちます。</string>
+	<key>Running now</key>
+	<string>現在実行中</string>
+	<key>Scissors</key>
+	<string>はさみ</string>
+	<key>Scope</key>
+	<string>範囲</string>
+	<key>Selected Action</key>
+	<string>選択中のアクション</string>
+	<key>Setup Needed</key>
+	<string>設定が必要</string>
+	<key>Show or hide the legacy History and Snippets section labels in the menu.</key>
+	<string>メニュー内の従来の「履歴」と「スニペット」セクションラベルの表示・非表示を切り替えます。</string>
+	<key>Show the system prompts for missing permissions.</key>
+	<string>不足している権限のシステム確認画面を表示します。</string>
+	<key>Snippet Library</key>
+	<string>スニペットライブラリ</string>
+	<key>Snippet placement and editor-related preferences.</key>
+	<string>スニペットの配置とエディタ関連の設定。</string>
+	<key>Stable</key>
+	<string>安定版</string>
+	<key>Startup launch control is unavailable on this system configuration.</key>
+	<string>このシステム構成では起動時設定を利用できません。</string>
+	<key>Startup, history capture, paste behavior, and appearance.</key>
+	<string>起動、履歴取得、ペースト動作、外観。</string>
+	<key>Status</key>
+	<string>状態</string>
+	<key>Status item hidden</key>
+	<string>ステータス項目は非表示です</string>
+	<key>Stored clipboard types, previews, and file type icons.</key>
+	<string>保存するクリップボード種別、プレビュー、ファイルタイプアイコン。</string>
+	<key>Stored in clipboard history</key>
+	<string>クリップボード履歴に保存</string>
+	<key>Switch numbering from `1.` to `0.` while preserving the existing shortcut rules.</key>
+	<string>既存のショートカット規則を保ちながら、番号付けを `1.` から `0.` に切り替えます。</string>
+	<key>Template</key>
+	<string>テンプレート</string>
+	<key>This style follows template rendering for a system-tinted appearance.</key>
+	<string>このスタイルはテンプレート描画に従い、システムの色合いに馴染む外観になります。</string>
+	<key>This style preserves its bundled color artwork in the menu bar.</key>
+	<string>このスタイルは同梱されたカラーアートワークをメニューバー内でもそのまま保ちます。</string>
+	<key>Text and Documents</key>
+	<string>テキストと書類</string>
+	<key>The menu bar icon is hidden until a visible style is selected.</key>
+	<string>表示スタイルを選ぶまで、メニューバーアイコンは非表示です。</string>
+	<key>The menu bar is currently previewing %@.</key>
+	<string>メニューバーは現在 %@ をプレビューしています。</string>
+	<key>The status item is currently hidden from the menu bar.</key>
+	<string>ステータス項目は現在メニューバーから非表示です。</string>
+	<key>The update feed could not be loaded</key>
+	<string>アップデートフィードを読み込めませんでした</string>
+	<key>The update package could not be downloaded</key>
+	<string>アップデートパッケージをダウンロードできませんでした</string>
+	<key>The verified download is ready. Install now to open it and relaunch into the updated app.</key>
+	<string>検証済みダウンロードの準備ができました。今すぐインストールすると開いて、更新済みアプリとして再起動します。</string>
+	<key>This legacy shortcut stays registered for history-only access.</key>
+	<string>この従来のショートカットは履歴専用アクセス用に登録されたままです。</string>
+	<key>Titles only</key>
+	<string>タイトルのみ</string>
+	<key>Set fallback icon rules for image clip types when thumbnails are not used.</key>
+	<string>サムネイルを使わない場合の画像クリップ種別向け代替アイコン規則を設定します。</string>
+	<key>Tooltips are currently hidden from menu items.</key>
+	<string>ツールチップは現在メニュー項目で非表示です。</string>
+	<key>Tooltips are visible and trimmed to %d characters.</key>
+	<string>ツールチップは表示され、%d 文字に切り詰められます。</string>
+	<key>Tune capture, export, autosave, and paste behavior for the main history list.</key>
+	<string>メイン履歴リストの記録、書き出し、自動保存、ペースト動作を調整します。</string>
+	<key>Turn font sizing on to match the legacy Preferences behavior for menu text.</key>
+	<string>メニューテキストを従来の Preferences の動作に合わせるにはフォントサイズ変更を有効にします。</string>
+	<key>%1$@ %2$@</key>
+	<string>%1$@ %2$@</string>
+	<key>Unavailable</key>
+	<string>利用不可</string>
+	<key>Unsaved Changes</key>
+	<string>未保存の変更</string>
+	<key>Using the standard menu font size.</key>
+	<string>標準のメニューフォントサイズを使用しています。</string>
+	<key>Version %@ is ready to download</key>
+	<string>バージョン %@ をダウンロードできます</string>
+	<key>Visible</key>
+	<string>表示中</string>
+	<key>Classic Styles</key>
+	<string>クラシックスタイル</string>
+	<key>Diagonal Styles</key>
+	<string>対角線スタイル</string>
+	<key>Scissors Styles</key>
+	<string>シザースタイル</string>
+	<key>Hidden, default, and original menu bar treatments.</key>
+	<string>非表示、標準、オリジナルのメニューバー表示をまとめています。</string>
+	<key>Monochrome and color variants built around the scissors motif.</key>
+	<string>はさみモチーフのモノクロ版とカラー版をまとめています。</string>
+	<key>Compact diagonal variants for a lighter menu bar presence.</key>
+	<string>メニューバーで軽やかに見せるコンパクトな対角線バリエーションです。</string>
+	<key>%@ is active in the menu bar preview.</key>
+	<string>%@ がメニューバープレビューで選択されています。</string>
+	<key>ClipMenu stays available by shortcut and launch behavior, but the menu bar icon itself is hidden.</key>
+	<string>ショートカットや起動時動作では ClipMenu を利用できますが、メニューバーアイコン自体は非表示になります。</string>
+	<key>You can check again later if a newer release is published.</key>
+	<string>新しいリリースが公開されたら、あとで再度確認できます。</string>
+	<key>items</key>
+	<string>項目</string>
+	<key>macOS still needs permission before automatic paste can drive the keyboard on your behalf.</key>
+	<string>自動ペーストがキーボード操作を代行するには、macOS でまだ許可が必要です。</string>
+	<key>pixel</key>
+	<string>ピクセル</string>
+	<key>pt</key>
+	<string>pt</string>
+	<key>sec.</key>
+	<string>秒</string>
+	<key>separator</key>
+	<string>区切り</string>
+	<key>separator:</key>
+	<string>セパレータ:</string>
+	<key>untitled folder</key>
+	<string>名称未設定のフォルダ</string>
+	<key>untitled snippet</key>
+	<string>untitled snippet</string>
+	<key>Auto-paste off</key>
+	<string>自動ペースト: オフ</string>
+	<key>Auto-paste on</key>
+	<string>自動ペースト: オン</string>
+	<key>Current Icon Size</key>
+	<string>現在のアイコンサイズ</string>
+	<key>Current Menu Row Preview</key>
+	<string>現在のメニュー行プレビュー</string>
+	<key>Current Mapping Highlights</key>
+	<string>現在の代表マッピング</string>
+	<key>Current Thumbnail Frame</key>
+	<string>現在のサムネイル枠</string>
+	<key>Height %d pixel</key>
+	<string>高さ %d ピクセル</string>
+	<key>History Export</key>
+	<string>履歴の書き出し</string>
+	<key>Quit discards history</key>
+	<string>終了時に履歴を破棄</string>
+	<key>Quit saves history</key>
+	<string>終了時に履歴を保存</string>
+	<key>Size %d pixel</key>
+	<string>サイズ %d ピクセル</string>
+	<key>Sort by Date Created</key>
+	<string>作成日順</string>
+	<key>Sort by Last Used</key>
+	<string>最終使用日順</string>
+	<key>Width %d pixel</key>
+	<string>幅 %d ピクセル</string>
+	<key>Scissors 1 Styles</key>
+	<string>はさみ1スタイル</string>
+	<key>Scissors 2 Styles</key>
+	<string>はさみ2スタイル</string>
+	<key>Export the current history into one file using the selected separator.</key>
+	<string>選択した区切り文字を使って、現在の履歴を 1 つのファイルに書き出します。</string>
+	<key>Menu rows reflect numbering, labels, key equivalents, and tooltip trimming from the active settings.</key>
+	<string>メニュー行には、現在の設定に応じた番号、ラベル、キー相当、ツールチップの切り詰め結果が反映されます。</string>
+	<key>This is a very long history clip title that wraps past the visible menu limit.</key>
+	<string>これは表示上のメニュー上限を超えて続く、とても長い履歴クリップのタイトルです。</string>
+	<key>Reusable snippet for previews</key>
+	<string>プレビュー用の再利用スニペット</string>
+	<key>Export each clipboard item as a separate file in one batch.</key>
+	<string>各クリップボード項目を個別のファイルとしてまとめて書き出します。</string>
+	<key>Each clipboard type keeps its default icon mapping while the editor makes extension and HFS-code modes easier to scan.</key>
+	<string>各クリップボード種別は既定のアイコン対応を保ちながら、エディタでは拡張子モードと HFS コードモードを見やすく確認できます。</string>
+	<key>Representative mappings for text, files, and image clips.</key>
+	<string>テキスト、ファイル、画像クリップの代表的なマッピングを表示します。</string>
+	<key>All %d file-type icon mappings are using their defaults.</key>
+	<string>%d 個のファイルタイプアイコン対応はすべて既定値です。</string>
+	<key>%1$d custom mappings active across %2$d clipboard types, with %3$d using file type codes.</key>
+	<string>%2$d 個のクリップボード種別のうち %1$d 個でカスタム対応が有効で、そのうち %3$d 個はファイルタイプコードを使用しています。</string>
+	<key>ClipMenu stores the selected clipboard types with the current capture rules.</key>
+	<string>ClipMenu は現在の記録ルールで選択したクリップボード種別を保存します。</string>
+	<key>Width %d %@</key>
+	<string>幅 %d %@</string>
+	<key>Height %d %@</key>
+	<string>高さ %d %@</string>
+	<key>Size %d %@</key>
+	<string>サイズ %d %@</string>
+	<key>An update check is already in progress.</key>
+	<string>アップデートの確認はすでに進行中です。</string>
+	<key>Automatic checks are turned off.</key>
+	<string>自動チェックはオフです。</string>
+	<key>Automatic checks and channel selection are managed from this pane.</key>
+	<string>このペインから自動チェックとチャンネル選択を管理します。</string>
+	<key>Automatic install on</key>
+	<string>自動インストール有効</string>
+	<key>Busy</key>
+	<string>処理中</string>
+	<key>Ask before install</key>
+	<string>インストール前に確認</string>
+	<key>Background checks can download and continue into installation automatically.</key>
+	<string>バックグラウンドチェックでは、自動的にダウンロードしてインストールまで進められます。</string>
+	<key>Channel</key>
+	<string>チャンネル</string>
+	<key>Daily, weekly, or monthly cadence is selected.</key>
+	<string>日次、週次、または月次の間隔が選択されています。</string>
+	<key>Enable automatic checks to use Check Now from this pane.</key>
+	<string>このペインで「今すぐチェック」を使うには、自動チェックを有効にしてください。</string>
+	<key>Finish the current check before starting another one.</key>
+	<string>次の確認を始める前に、現在のチェックが終わるのを待ってください。</string>
+	<key>Interval</key>
+	<string>間隔</string>
+	<key>Last checked: %@</key>
+	<string>最終確認: %@</string>
+	<key>Mode</key>
+	<string>モード</string>
+	<key>Install</key>
+	<string>インストール</string>
+	<key>No update feed is available for this build.</key>
+	<string>このビルドでは利用可能なアップデートフィードがありません。</string>
+	<key>Pre-release updates are included.</key>
+	<string>プレリリース版のアップデートを含めます。</string>
+	<key>Scheduled checks are enabled.</key>
+	<string>定期チェックが有効です。</string>
+	<key>Stable releases only.</key>
+	<string>安定版リリースのみ確認します。</string>
+	<key>Turn automatic checks back on to manage install automation.</key>
+	<string>インストール自動化を管理するには、自動チェックを再びオンにしてください。</string>
+	<key>Turn automatic checks back on to choose a schedule.</key>
+	<string>スケジュールを選ぶには、自動チェックを再びオンにしてください。</string>
+	<key>Bundled JavaScript action</key>
+	<string>同梱 JavaScript アクション</string>
+	<key>Check for Updates...</key>
+	<string>アップデートを確認...</string>
+	<key>Choose a single snippet to edit its content.</key>
+	<string>内容を編集するスニペットを 1 つ選択してください。</string>
+	<key>Choose a snippet to edit its content.</key>
+	<string>内容を編集するスニペットを選択してください。</string>
+	<key>Choose whether menu titles follow the icon size or a fixed point size.</key>
+	<string>メニュータイトルをアイコンサイズに合わせるか、固定ポイントサイズにするかを選びます。</string>
+	<key>ClipMenu and Snippets update immediately when you record a new shortcut.</key>
+	<string>新しいショートカットを記録すると、ClipMenu とスニペットはすぐに更新されます。</string>
+	<key>Downloaded updates still stop for confirmation before installation.</key>
+	<string>ダウンロード済みのアップデートは、インストール前に確認のため停止します。</string>
+	<key>Close All</key>
+	<string>すべて閉じる</string>
+	<key>Currently Ignored</key>
+	<string>現在無視中</string>
+	<key>Hidden, standard, and full color menu bar styles.</key>
+	<string>非表示、標準、フルカラーのメニューバースタイル。</string>
+	<key>Long menu content still shows a tooltip while pasted content stays complete.</key>
+	<string>長いメニュー内容はツールチップで表示され、ペーストされる内容は完全なままです。</string>
+	<key>Modifier-click choices, available built-ins and scripts, and the editable Action Menu draft are all managed here.</key>
+	<string>修飾キークリックの設定、利用可能な組み込み/スクリプト、編集可能なアクションメニューの下書きをここで管理します。</string>
+	<key>No JavaScript Actions</key>
+	<string>JavaScript アクションはありません</string>
+	<key>No bundled JavaScript actions were found.</key>
+	<string>同梱の JavaScript アクションは見つかりませんでした。</string>
+	<key>Show or hide the History and Snippets section labels in the menu.</key>
+	<string>メニュー内の History と Snippets のセクションラベルを表示または非表示にします。</string>
+	<key>Snippet Actions</key>
+	<string>スニペットアクション</string>
+	<key>Standard menu font size remains active.</key>
+	<string>標準のメニューフォントサイズが有効のままです。</string>
+	<key>%d more</key>
+	<string>ほか %d 件</string>
+	<key>Quit skips save</key>
+	<string>終了時に保存しない</string>
+	<key>The first scissors set, in monochrome and color left and right variants.</key>
+	<string>最初のはさみセットです。左右それぞれにモノクロ版とカラー版があります。</string>
+	<key>The second scissors set, in monochrome and color left and right variants.</key>
+	<string>2 つ目のはさみセットです。左右それぞれにモノクロ版とカラー版があります。</string>
+	<key>The updater stays ready for a manual check from this pane.</key>
+	<string>このペインからいつでも手動でアップデートを確認できます。</string>
+	<key>This style keeps its full color artwork in the menu bar.</key>
+	<string>このスタイルではメニューバーでフルカラーのアートワークを維持します。</string>
+	<key>User JavaScript action</key>
+	<string>ユーザー JavaScript アクション</string>
+	<key>Action Library Save Failed</key>
+	<string>アクションライブラリを保存できません</string>
+	<key>ClipMenu could not write the current action library to disk. Review storage permissions or available space, then try again.</key>
+	<string>ClipMenu が現在のアクションライブラリをディスクに書き込めませんでした。保存先の権限や空き容量を確認してから、もう一度お試しください。</string>
+	<key>ClipMenu needs the current inline edit to finish before it can continue with this snippet command.</key>
+	<string>このスニペットコマンドを続ける前に、現在のインライン編集を ClipMenu が完了する必要があります。</string>
+	<key>Finish Editing First</key>
+	<string>先に編集を完了してください</string>
+	<key>Snippet Export Failed</key>
+	<string>スニペットを書き出せません</string>
+	<key>Snippet Import Failed</key>
+	<string>スニペットを読み込めません</string>
+	<key>Snippet Library Save Failed</key>
+	<string>スニペットライブラリを保存できません</string>
+	<key>ClipMenu could not write the current snippet library to disk. Review storage permissions or available space, then try again.</key>
+	<string>ClipMenu が現在のスニペットライブラリをディスクに書き込めませんでした。保存先の権限や空き容量を確認してから、もう一度お試しください。</string>
+	<key>ClipMenu could not read the selected snippet XML file. Review the file contents and try again.</key>
+	<string>選択したスニペット XML ファイルを ClipMenu が読み込めませんでした。ファイル内容を確認してから、もう一度お試しください。</string>
+	<key>ClipMenu could not finish writing the selected snippet export. Check the destination and try again.</key>
+	<string>選択したスニペット書き出しを ClipMenu が完了できませんでした。保存先を確認して、もう一度お試しください。</string>
+	<key>Search</key>
+	<string>検索</string>
+	<key>Folders</key>
+	<string>フォルダ</string>
+	<key>Original icons</key>
+	<string>オリジナルアイコン</string>
+	<key>Legacy behavior, refreshed pane by pane.</key>
+	<string>従来の動作を保ちながら、各ペインを新しく整えています。</string>
+	<key>Select a Settings Area</key>
+	<string>設定項目を選択</string>
+	<key>Choose a category from the sidebar.</key>
+	<string>サイドバーからカテゴリを選択してください。</string>
+	<key>Set the visible ClipMenu and Snippets hotkeys from the original preferences pane.</key>
+	<string>元の環境設定ペインと同じく、表示される ClipMenu と Snippets のショートカットを設定します。</string>
+	<key>ClipMenu and Snippets can be edited here and update immediately.</key>
+	<string>ここで ClipMenu と Snippets を編集すると、すぐに反映されます。</string>
+	<key>ClipMenu and Snippets update immediately when you record a new shortcut, while the original History shortcut stays reserved in the background.</key>
+	<string>新しいショートカットを記録すると ClipMenu と Snippets はすぐに更新され、元の History ショートカットはバックグラウンドで予約されたまま維持されます。</string>
+	<key>No Built-in Actions</key>
+	<string>内蔵アクションはありません</string>
+	<key>No Bundled Scripts</key>
+	<string>同梱スクリプトはありません</string>
+	<key>No User Scripts</key>
+	<string>ユーザースクリプトはありません</string>
+	<key>No User JavaScript Actions</key>
+	<string>ユーザー JavaScript アクションはありません</string>
+	<key>No bundled scripts were found.</key>
+	<string>同梱スクリプトは見つかりませんでした。</string>
+	<key>No built-in actions are available right now.</key>
+	<string>現在利用できる内蔵アクションはありません。</string>
+	<key>Add scripts under Application Support to make them available here.</key>
+	<string>Application Support にユーザースクリプトを追加すると、ここで利用できるようになります。</string>
+	<key>Add JavaScript actions under Application Support to make them available here.</key>
+	<string>Application Support に JavaScript アクションを追加すると、ここで利用できるようになります。</string>
+	<key>Action Menu is Empty</key>
+	<string>アクションメニューは空です</string>
+	<key>Add an action or folder to build the runtime action menu.</key>
+	<string>アクションまたはフォルダを追加して、実行時のアクションメニューを作成してください。</string>
+	<key>Never checked</key>
+	<string>未確認</string>
+	<key>Unsaved Changes</key>
+	<string>未保存の変更</string>
+	<key>Action menu behavior, modifier clicks, and built-in actions and JavaScript actions.</key>
+	<string>アクションメニューの動作、修飾キークリック、内蔵アクションと JavaScript アクション。</string>
+	<key>Modifier-click choices, available built-in actions and JavaScript actions, and the editable Action Menu draft are all managed here.</key>
+	<string>修飾キークリックの設定、利用可能な内蔵アクションと JavaScript アクション、編集可能なアクションメニューの下書きをここで管理します。</string>
+	<key>Inspect user-installed JavaScript actions that can be added to the runtime menu.</key>
+	<string>実行時メニューへ追加できるユーザー製 JavaScript アクションを確認します。</string>
+	<key>Preview the selected built-in or JavaScript action before adding it to the runtime menu.</key>
+	<string>選択した内蔵アクションまたは JavaScript アクションを実行時メニューへ追加する前に確認します。</string>
+	<key>No folder selected</key>
+	<string>フォルダ未選択</string>
+	<key>Snippet edits stay in memory until Save, window close, or app termination.</key>
+	<string>編集中の変更は、保存、ウインドウを閉じる、または終了するまでメモリ上に保たれます。</string>
+	<key>Add a folder to start organizing snippets.</key>
+	<string>フォルダを追加してスニペットを整理します。</string>
+	<key>Choose a folder to browse and edit saved snippets.</key>
+	<string>フォルダを選択して保存済みスニペットを閲覧・編集します。</string>
+	<key>Unsaved snippet changes are ready to save or revert.</key>
+	<string>未保存のスニペット変更は、保存または復元できます。</string>
+	<key>Choose a folder to focus the snippet browser.</key>
+	<string>フォルダを選択してスニペット一覧を表示します。</string>
+	<key>Choose a snippet to review or edit its contents.</key>
+	<string>スニペットを選択して内容を確認または編集してください。</string>
+	<key>Check manually whenever you want to review updates.</key>
+	<string>更新内容を確認したいときに手動でチェックできます。</string>
+	<key>No update feed is currently available.</key>
+	<string>現在利用できる更新フィードはありません。</string>
+	<key>Imported legacy interval: %@. Choose Daily, Weekly, or Monthly to replace it.</key>
+	<string>以前の設定から引き継いだ間隔: %@。置き換えるには「毎日」「毎週」「毎月」を選択してください。</string>
+</dict>
+</plist>

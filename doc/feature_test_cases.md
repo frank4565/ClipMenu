@@ -34,7 +34,7 @@ Suggested sample content:
 
 | ID | Feature | Steps | Expected result |
 | --- | --- | --- | --- |
-| CM-LAUNCH-001 | Launch as menu-bar app | Open `/Applications/ClipMenu.app`. | App starts without a Dock icon, menu-bar status item is visible, and no main window appears. |
+| CM-LAUNCH-001 | Launch as menu-bar app | Open `/Applications/ClipMenu.app`. | App starts without a Dock icon, menu-bar status item is visible, and no main window appears. On a truly first-launch defaults domain, the original login-item prompt may still appear modally after startup while the Sparkle automatic-update permission prompt is deferred until the next launch. |
 | CM-LAUNCH-002 | First-run login prompt | Start with clean user defaults. Launch the app. | The app prompts whether to launch ClipMenu on system startup unless the prompt has been suppressed. Selecting either option stores the preference. |
 | CM-LAUNCH-003 | Quit | Open the ClipMenu menu and choose `Quit ClipMenu`. | App exits. If save-history-on-quit is enabled, history is saved before termination. |
 | CM-LAUNCH-004 | Relaunch persistence | Copy several text items, quit, relaunch. | Previous history is restored from `clips.data` when save-history-on-quit is enabled and max-history trimming is honored. |
@@ -61,13 +61,13 @@ Suggested sample content:
 | CM-PASTE-001 | Select clip from menu | Focus a text field in another app, open ClipMenu, choose a history item. | The item is copied to the system pasteboard and Command+V is synthesized into the target app. |
 | CM-PASTE-002 | Disable automatic paste | Disable `Input "Command + V" after menu item selection`. Select a history item. | The item becomes the current system pasteboard content but is not automatically pasted. |
 | CM-PASTE-003 | Main hotkey | Press the configured main ClipMenu hotkey. Default is Command+Shift+V. | Full ClipMenu menu appears at the cursor location. |
-| CM-PASTE-004 | History hotkey | Press the configured History hotkey. Default is Command+Control+V. | History-only menu appears. |
+| CM-PASTE-004 | History hotkey | Press the default History hotkey. Default is Command+Control+V. | History-only menu appears, matching the installed app's registered `HistoryMenu` hotkey even though the installed Preferences UI does not show a recorder for it. |
 | CM-PASTE-005 | Snippets hotkey | Press the configured Snippets hotkey. Default is Command+Shift+B. | Snippets-only menu appears when snippets exist. |
 | CM-PASTE-006 | Numeric labels | Enable numbered menu items. Open ClipMenu. | Clips and snippets are prefixed with list numbers. |
 | CM-PASTE-007 | Zero-based labels | Enable `Menu items' title starts with 0`. Open ClipMenu. | Numbered items start at `0.` instead of `1.`. |
 | CM-PASTE-008 | Numeric key equivalents | Enable numeric key equivalents and open the menu. Press a number matching a visible item. | The matching item is selected without mouse interaction. |
 | CM-PASTE-009 | Foldered history menu | Set inline count to 2 and folder size to 3. Copy at least 8 items. | First 2 clips are inline; remaining clips are grouped into range submenus of up to 3 items each. |
-| CM-PASTE-010 | Clear history menu item | Ensure clear-history menu item is enabled. Copy text, open ClipMenu, choose `Clear History`. | Confirmation appears if enabled; confirming removes all history items and disables Clear History until new clips exist. |
+| CM-PASTE-010 | Clear history menu item | Ensure clear-history menu item is enabled. Copy text, open ClipMenu, choose `Clear History`. | Confirmation appears if enabled; confirming removes all history items. In the main status menu, `Clear History` remains enabled even when history is empty, matching the installed Objective-C app's `MenuController`-targeted item. |
 | CM-PASTE-011 | Clear history suppression | In the clear-history alert, check suppression and confirm. Trigger clear again after adding clips. | The confirmation alert no longer appears and preference is persisted. |
 
 ## Pasteboard types and rendering
@@ -99,8 +99,10 @@ Suggested sample content:
 | CM-SNIP-008 | Reorder folders | Drag snippet folders in the editor. Close and reopen. | Folder order persists and menu order matches. |
 | CM-SNIP-009 | Move snippet between folders | Drag a snippet from one folder to another. | Snippet moves, indexes are renumbered, and the destination menu shows it. |
 | CM-SNIP-010 | Search snippets | Use the Snippet Editor search field with All, Title, and Content scopes. | Results filter according to selected scope. |
-| CM-SNIP-011 | Export snippets | Choose `Export Snippets...` and save XML. | XML file contains folders, snippets, titles, content, indexes, and enabled state. |
+| CM-SNIP-011 | Export snippets | Choose `Export Snippets...` and save XML. | XML file matches the Objective-C manual export format: folders/snippets with titles and snippet content only. Swift-only ordering and enabled-state metadata remains in the app's own store, not the manual export. |
 | CM-SNIP-012 | Import snippets | Import a previously exported XML into a clean store. | Imported folders/snippets appear and can be pasted. Invalid XML shows an error. |
+| CM-SNIP-013 | File menu save and revert | Open Snippet Editor, edit snippet content, then use `File > Save`, edit again, and use `File > Revert`. | `Save As...` is available whenever the Snippet Editor window is open, including an empty snippet library, `Save` and `Revert` become enabled only while there are unsaved snippet changes, `Save` persists the edited snippet store, and `Revert` restores the last saved snippet content. |
+| CM-SNIP-014 | Reopen restores selection | In Snippet Editor, select a non-default folder/snippet, close the window, then reopen `Edit Snippets...`. | The same folder/snippet selection is restored after reopen, matching the original editor's last-selection behavior instead of jumping back to the first available folder. |
 
 ## Actions
 
@@ -129,7 +131,13 @@ Suggested sample content:
 
 | ID | Feature | Steps | Expected result |
 | --- | --- | --- | --- |
-| CM-PREF-001 | Open preferences | Choose `Preferences...`. | Preferences window opens with General, Menu, Action, Snippets, Shortcuts, and Updates areas available. |
+| CM-PREF-001 | Open preferences | Choose `Preferences...`. | Preferences window opens with the same six top-level areas as the installed app: General, Menu, Type, Action, Shortcuts, and Updates. The legacy snippet-position control remains available inside General rather than as a separate top-level pane. |
+| CM-PREF-001A | File menu close routing | Open `Preferences...`, then `Edit Snippets...`, checking the File menu in each state. | In the bare menu-bar state, `File > Close` stays disabled. When Preferences or Snippet Editor is visible, `File > Close` becomes enabled and closes the visible window. |
+| CM-PREF-001B | Launch-on-login apply timing | Open Preferences, toggle `Launch on Login`, and keep the window open briefly before closing it. | The visible checkbox state updates immediately, but the actual login-item mutation is applied when Preferences closes, matching the original preferences-close timing instead of mutating login items on every toggle while the window stays open. |
+| CM-PREF-001C | Modifier-click behavior apply timing | Open Preferences, change at least `Control + Click` and `Shift + Click` action mappings, keep the window open briefly, then close it. | The picker selections update immediately in the visible UI, but the underlying `controlClickBehavior` and modifier-action defaults do not change until Preferences closes, matching the original Objective-C close-time commit behavior. |
+| CM-PREF-001D | Store types apply timing | Open Preferences, toggle at least one `Store Types` checkbox, and keep the window open briefly before closing it. | The visible checkbox state updates immediately in the Preferences UI, but the persisted `storeTypes` defaults dictionary does not change until Preferences closes, matching the original Objective-C save-on-close path for recording types. |
+| CM-PREF-001E | Action tree apply timing | Open Preferences, add/remove/rename/reorder an action or folder in the Action pane, and keep the window open briefly before closing it. | The visible action tree updates immediately in the Preferences UI, but the live runtime action menu and persisted action-menu storage do not advance during the open edit. Closing Preferences publishes the edited tree into the live action menu immediately, and the persisted `actions.plist` catches up during the app's termination save path, matching the original Objective-C `PrefsWindowController` plus `ActionController saveActions` lifecycle. |
+| CM-PREF-001F | Excluded-app editor cancel timing | Open Preferences, open `Exclude Applications`, add an app, then dismiss the sheet without using `Done` (for example with `Cancel` or window-close). Reopen the sheet. | The temporary row disappears and the persisted `excludeApps` defaults stay unchanged until `Done` is used, matching the original Objective-C exclude panel's Done/Cancel semantics instead of committing on every intermediate edit. |
 | CM-PREF-002 | Observe interval | Change clipboard observation interval, copy a value, time capture. | Clipboard polling follows the configured interval after preferences close. |
 | CM-PREF-003 | Stored type toggles | Toggle each stored type and copy matching/non-matching content. | Only enabled types are captured. If all types are disabled, no clips are captured. |
 | CM-PREF-004 | Save history on quit | Toggle save-history-on-quit, add history, quit, relaunch. | Enabled preserves history; disabled does not persist new quit-time history. |
@@ -137,10 +145,10 @@ Suggested sample content:
 | CM-PREF-006 | Export history multiple files | Configure multiple-file export and export text history to a folder. | Each text clip is written as a numbered `.txt` file. |
 | CM-PREF-007 | Snippet menu position | Set snippets above clips, below clips, and none. Open ClipMenu each time. | Snippet section appears in selected position or is hidden. |
 | CM-PREF-008 | Font size behavior | Enable menu font size changes via icon size and selected point size. | Menu font size changes according to preference without truncating or preventing selection. |
-| CM-PREF-009 | Login item toggle | Toggle `Launch on Login`. | App is added to or removed from login items and preference state matches. |
-| CM-PREF-010 | Update preferences | Toggle automatic update checks and pre-release update checks. | Preferences persist and the updater feed switches between release and pre-release URLs. |
-| CM-PREF-011 | Hotkey customization | Change main/history/snippets hotkeys, close preferences, use new hotkeys. | Old hotkeys are unregistered and new hotkeys trigger the correct menus. |
-| CM-PREF-012 | Action tree editing | Add/remove/reorder action folders and actions in preferences. Close and relaunch. | Action tree persists in `actions.plist`; removed/disabled actions no longer appear. |
+| CM-PREF-009 | Login item toggle | Toggle `Launch on Login`. | App is added to or removed from login items and preference state matches. The selected `Status Bar icon style` tag should also take effect on the live status item itself, including the installed app's surviving `None`, Default, Original, and Dave Ulrich variants, rather than changing only the preferences preview. |
+| CM-PREF-010 | Update preferences | Toggle automatic update checks and pre-release update checks. Use `Check Now` while a reachable feed is configured. | Preferences persist and the updater feed switches between release and pre-release URLs. When automatic update checks are off, the interval popup, pre-release checkbox, and `Check Now` button are disabled together like the original Preferences nib. When a manual check is started, the app shows a cancellable `Checking for updates...` status panel before the final result surface. On the first launch of a clean defaults domain, the updater path only records `SUHasLaunchedBefore = 1`; on the second launch it asks whether it should check automatically and persists the modern flag plus Sparkle's legacy `SUEnableAutomaticChecks`, `SUAllowsAutomaticUpdates`, `SUHasLaunchedBefore`, and `SUSendProfileInfo` keys from that choice. If an imported very-old Sparkle defaults domain only carries `SUCheckAtStartup`, the migrated app treats that key as the source of truth for automatic-check scheduling instead of falling back to the registered modern default. Because the installed `/Applications/ClipMenu.app` does not opt into Sparkle system profiling, that update-permission prompt does not show the anonymous-profile checkbox and does not create a user-defaults `SUEnableSystemProfiling` key. If anonymous profile sending is later enabled through imported defaults, the appcast request appends Sparkle-style system-profile query items and records `SULastProfileSubmissionDate`, then suppresses those extra profile parameters again until roughly a week has passed. |
+| CM-PREF-011 | Hotkey customization | Change ClipMenu/snippets hotkeys, close preferences, use new hotkeys. | Old visible hotkeys are unregistered and new hotkeys trigger the installed Preferences UI's two editable global menus; the hidden default History hotkey remains registered from defaults/imported legacy `hotKeys`. |
+| CM-PREF-012 | Action tree editing | Add/remove/reorder action folders and actions in preferences. Close and relaunch. | Action tree persists in `actions.plist`; removed/disabled actions no longer appear. Saved leaf nodes use the Objective-C plist shape, with no `children` key. |
 
 ## Migration data checks
 
@@ -150,7 +158,7 @@ Suggested sample content:
 | CM-MIG-002 | Existing snippets XML | Start migrated app with a representative legacy `Snippets.xml`. | Folders, snippets, order, content, and enabled states are preserved. |
 | CM-MIG-003 | Existing actions plist | Start migrated app with a representative legacy `actions.plist`. | Built-in, bundled JavaScript, user JavaScript, and folder structure are preserved or safely migrated. |
 | CM-MIG-004 | Existing user scripts | Place user scripts and libraries under the legacy Application Support script folders. | Migrated app discovers user actions and can run scripts with expected library resolution. |
-| CM-MIG-005 | Existing preferences | Import legacy user defaults. | Preferences map to migrated controls and behavior, including hotkeys, menu formatting, type filters, and action settings. |
+| CM-MIG-005 | Existing preferences | Import legacy user defaults. | Preferences map to migrated controls and behavior, including hotkeys, menu formatting, type filters, and action settings. Legacy updater defaults are bridged too: `SUEnableAutomaticChecks`, `SUCheckAtStartup`, `SUScheduledCheckInterval`, `SUAutomaticallyUpdate`, and related Sparkle keys should preserve the same effective scheduling behavior after migration, and modern preference changes should keep the old Sparkle compatibility keys synchronized instead of leaving `SUCheckAtStartup` stale. |
 
 ## Non-regression expectations
 

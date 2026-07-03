@@ -10,7 +10,7 @@ Before rerun, the installed app at `/Applications/ClipMenu.app/Contents/MacOS/Cl
 .derivedData/Build/Products/Debug/ClipMenu.app
 ```
 
-Overall result: **partial pass with blockers**. The migrated build launches as a menu-bar app, exposes a status item, captures text clipboard changes, opens Preferences and Snippet Editor, and renders long clipboard titles truncated in the menu. A clean full-suite run was still not possible because the app loaded the real existing ClipMenu history despite launching the process with a temporary `HOME`.
+Overall result at the time: **partial pass with blockers**. The migrated build launched as a menu-bar app, exposed a status item, captured text clipboard changes, opened Preferences and Snippet Editor, and rendered long clipboard titles truncated in the menu. The biggest blocker in that specific run was support/defaults isolation: launching under `lldb` with only a temporary `HOME` was not enough to prove a clean profile.
 
 ## Environment and Setup
 
@@ -44,7 +44,7 @@ lldb --batch \
 | Build | Pass | `xcodebuild ... build` completed successfully. |
 | Launch | Pass | System Events saw process `ClipMenu` with unix id `62696`, `background only = true`, `visible = false`, no windows, and two menu bars. |
 | Status item | Pass | Status item found at `menu bar 2`, item 1, with help text `ClipMenu 0.4.4a13`. |
-| First-run data isolation | Fail | Even with temporary `HOME=/tmp/clipmenu-rerun-home.b1l9Xj`, the app loaded the existing large ClipMenu history, including hundreds of prior items. |
+| First-run data isolation | Fail in this run | Even with temporary `HOME=/tmp/clipmenu-rerun-home.b1l9Xj`, the app loaded the existing large ClipMenu history, including hundreds of prior items. This specific launch shape did not prove clean CoreFoundation-home isolation. |
 | Clipboard capture | Pass | After dismissing the menu and waiting, `codex-unique-20260617-rerun` appeared as the newest history item. |
 | Duplicate handling | Partial pass | Copy sequence `alpha`, `beta`, `gamma`, `alpha` resulted in `alpha`, `gamma`, `beta` near the top, with only one visible `alpha` among the new samples. Existing persisted history prevents a clean count across the full store. |
 | Long title truncation | Pass | A 60-character numeric string appeared as `01234567890123456...`, consistent with the configured 20-character menu limit. |
@@ -67,7 +67,7 @@ Runtime logs also included:
 | ID | Status | Notes |
 | --- | --- | --- |
 | CM-LAUNCH-001 | Pass | App runs as background-only `LSUIElement` style process, no main window, status item visible through accessibility. |
-| CM-LAUNCH-002 | Blocked | Clean defaults could not be validated because the app still loaded existing ClipMenu state under temporary `HOME`. |
+| CM-LAUNCH-002 | Blocked in this run | Clean defaults could not be validated because this debugger launch still loaded existing ClipMenu state under temporary `HOME`. |
 | CM-LAUNCH-003 | Fail / needs non-debug rerun | `Quit ClipMenu` menu item did not terminate the debug-run process after two attempts. |
 | CM-LAUNCH-004 | Blocked | Persistence cannot be cleanly tested without isolated Application Support/defaults. |
 | CM-HIST-001 | Pass | Unique plain text copied with `pbcopy` appeared in History. |
@@ -100,7 +100,7 @@ Runtime logs also included:
 
 ## Blockers Remaining
 
-1. **Application Support/defaults isolation is still unresolved.** The temporary `HOME` did not prevent the migrated process from loading existing ClipMenu history.
+1. **This run's temporary-`HOME` launch shape was insufficient for isolation.** A later dedicated Debug verifier (`debugWriteHomeIsolationReportAfterLaunchDelay`) using `CFFIXED_USER_HOME` plus `__CFPREFERENCES_AVOID_DAEMON=1` confirmed the current Swift app does isolate cleanly into `/tmp/.../Library/Application Support/ClipMenu` with `clipsCountAfterLaunch = 0` and no preexisting support files.
 2. **Running under `lldb` may affect quit behavior.** Direct sandbox launch aborts, while approved debugger launch runs; `Quit ClipMenu` should be retested using a normal GUI launch in a controlled account.
 3. **Stateful feature cases remain risky in this user account.** Tests that clear history, edit snippets/actions, change hotkeys, toggle login items, or alter update settings should be run only in a clean macOS test account or VM snapshot.
 
