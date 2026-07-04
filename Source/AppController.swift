@@ -7938,7 +7938,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 )
                 let expectedPreviewHistoryRowKeyEquivalent = CMMenuPreviewKeyEquivalent(
                     index: 0,
-                    numericKeyEquivalents: menuItemStates["numericKeyEquivalents"] as? Bool ?? false,
+                    markWithNumbers: markWithNumbers,
                     startsFromZero: menuItemStates["titleStartsWithZero"] as? Bool ?? false
                 )
                 let expectedPreviewTooltip = CMMenuPreviewTooltip(
@@ -10651,46 +10651,141 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         snippetStore.save()
         snippetStore.reload()
 
+        defaults.set(false, forKey: CMPrefMenuItemsAreMarkedWithNumbersKey)
+        defaults.set(true, forKey: CMPrefAddNumericKeyEquivalentsKey)
+        let unnumberedHistoryMenu = makeHistoryMenu()
+        let unnumberedHistoryTitles = unnumberedHistoryMenu.items.map(\.title)
+        let unnumberedHistoryKeyEquivalents = unnumberedHistoryMenu.items.map(\.keyEquivalent)
+        let unnumberedHistoryModifierMasks = unnumberedHistoryMenu.items.map {
+            Int($0.keyEquivalentModifierMask.rawValue)
+        }
+
+        defaults.set(true, forKey: CMPrefMenuItemsAreMarkedWithNumbersKey)
+        defaults.set(false, forKey: CMPrefAddNumericKeyEquivalentsKey)
+        let numberedHistoryMenu = makeHistoryMenu()
+        let numberedHistoryKeyEquivalents = numberedHistoryMenu.items.map(\.keyEquivalent)
+        let numberedHistoryModifierMasks = numberedHistoryMenu.items.map {
+            Int($0.keyEquivalentModifierMask.rawValue)
+        }
+
+        defaults.set(0, forKey: CMPrefNumberOfItemsPlaceInlineKey)
+        let folderedNumberedHistoryMenu = makeHistoryMenu()
+        let folderedNumberedKeyEquivalents = folderedNumberedHistoryMenu.items
+            .first?
+            .submenu?
+            .items
+            .map(\.keyEquivalent) ?? []
+        let folderedNumberedModifierMasks = folderedNumberedHistoryMenu.items
+            .first?
+            .submenu?
+            .items
+            .map { Int($0.keyEquivalentModifierMask.rawValue) } ?? []
+
+        defaults.set(11, forKey: CMPrefNumberOfItemsPlaceInlineKey)
+        defaults.set(true, forKey: CMPrefAddNumericKeyEquivalentsKey)
         let oneBasedHistoryMenu = makeHistoryMenu()
         let oneBasedHistoryTitles = oneBasedHistoryMenu.items.map(\.title)
         let oneBasedHistoryKeyEquivalents = oneBasedHistoryMenu.items.map(\.keyEquivalent)
+        let oneBasedHistoryModifierMasks = oneBasedHistoryMenu.items.map {
+            Int($0.keyEquivalentModifierMask.rawValue)
+        }
 
         defaults.set(true, forKey: CMPrefMenuItemsTitleStartWithZeroKey)
         let zeroBasedHistoryMenu = makeHistoryMenu()
         let zeroBasedHistoryTitles = zeroBasedHistoryMenu.items.map(\.title)
         let zeroBasedHistoryKeyEquivalents = zeroBasedHistoryMenu.items.map(\.keyEquivalent)
+        let zeroBasedHistoryModifierMasks = zeroBasedHistoryMenu.items.map {
+            Int($0.keyEquivalentModifierMask.rawValue)
+        }
 
         let numericSnippetsMenu = makeSnippetsMenu()
         let numericSnippetSubmenuTitles = numericSnippetsMenu.items.first?.submenu?.items.map(\.title) ?? []
         let numericSnippetSubmenuKeyEquivalents = numericSnippetsMenu.items.first?.submenu?.items.map(\.keyEquivalent) ?? []
 
+        let commandModifierMask = Int(NSEvent.ModifierFlags.command.rawValue)
+        let unnumberedExpectedTitles = (0..<11).map { offset in
+            let clipNumber = 11 - offset
+            return "num-\(clipNumber)"
+        }
+        let unnumberedExpectedKeyEquivalents = Array(repeating: "", count: 11)
+        let unnumberedExpectedModifierMasks = Array(repeating: 0, count: 11)
+        let numberedExpectedKeyEquivalents = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ""]
+        let numberedExpectedModifierMasks = [
+            commandModifierMask,
+            commandModifierMask,
+            commandModifierMask,
+            commandModifierMask,
+            commandModifierMask,
+            commandModifierMask,
+            commandModifierMask,
+            commandModifierMask,
+            commandModifierMask,
+            commandModifierMask,
+            0
+        ]
+        let folderedNumberedExpectedKeyEquivalents = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
+        let folderedNumberedExpectedModifierMasks = [
+            commandModifierMask,
+            commandModifierMask,
+            commandModifierMask,
+            commandModifierMask,
+            commandModifierMask,
+            commandModifierMask,
+            commandModifierMask,
+            commandModifierMask,
+            commandModifierMask,
+            commandModifierMask
+        ]
         let oneBasedHistoryExpectedTitles = (0..<11).map { offset in
             let visibleNumber = offset + 1
             let clipNumber = 11 - offset
             return "\(visibleNumber). num-\(clipNumber)"
         }
-        let oneBasedHistoryExpectedKeyEquivalents = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "11"]
+        let oneBasedHistoryExpectedKeyEquivalents = numberedExpectedKeyEquivalents
+        let oneBasedHistoryExpectedModifierMasks = numberedExpectedModifierMasks
         let zeroBasedHistoryExpectedTitles = (0..<11).map { offset in
             let clipNumber = 11 - offset
             return "\(offset). num-\(clipNumber)"
         }
-        let zeroBasedHistoryExpectedKeyEquivalents = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
+        let zeroBasedHistoryExpectedKeyEquivalents = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ""]
+        let zeroBasedHistoryExpectedModifierMasks = numberedExpectedModifierMasks
         let numericSnippetExpectedTitles = ["0. Greeting"]
         let numericSnippetExpectedKeyEquivalents = [""]
 
+        report["unnumberedHistoryTitles"] = unnumberedHistoryTitles
+        report["unnumberedHistoryKeyEquivalents"] = unnumberedHistoryKeyEquivalents
+        report["unnumberedHistoryModifierMasks"] = unnumberedHistoryModifierMasks
+        report["unnumberedHistoryMatchesExpected"] = unnumberedHistoryTitles == unnumberedExpectedTitles
+            && unnumberedHistoryKeyEquivalents == unnumberedExpectedKeyEquivalents
+            && unnumberedHistoryModifierMasks == unnumberedExpectedModifierMasks
+        report["numberedHistoryKeyEquivalents"] = numberedHistoryKeyEquivalents
+        report["numberedHistoryModifierMasks"] = numberedHistoryModifierMasks
+        report["numberedHistoryMatchesExpected"] = numberedHistoryKeyEquivalents == numberedExpectedKeyEquivalents
+            && numberedHistoryModifierMasks == numberedExpectedModifierMasks
+        report["folderedNumberedHistoryKeyEquivalents"] = folderedNumberedKeyEquivalents
+        report["folderedNumberedHistoryModifierMasks"] = folderedNumberedModifierMasks
+        report["folderedNumberedHistoryMatchesExpected"] = folderedNumberedKeyEquivalents == folderedNumberedExpectedKeyEquivalents
+            && folderedNumberedModifierMasks == folderedNumberedExpectedModifierMasks
         report["oneBasedHistoryTitles"] = oneBasedHistoryTitles
         report["oneBasedHistoryKeyEquivalents"] = oneBasedHistoryKeyEquivalents
+        report["oneBasedHistoryModifierMasks"] = oneBasedHistoryModifierMasks
         report["oneBasedHistoryMatchesExpected"] = oneBasedHistoryTitles == oneBasedHistoryExpectedTitles
             && oneBasedHistoryKeyEquivalents == oneBasedHistoryExpectedKeyEquivalents
+            && oneBasedHistoryModifierMasks == oneBasedHistoryExpectedModifierMasks
         report["zeroBasedHistoryTitles"] = zeroBasedHistoryTitles
         report["zeroBasedHistoryKeyEquivalents"] = zeroBasedHistoryKeyEquivalents
+        report["zeroBasedHistoryModifierMasks"] = zeroBasedHistoryModifierMasks
         report["zeroBasedHistoryMatchesExpected"] = zeroBasedHistoryTitles == zeroBasedHistoryExpectedTitles
             && zeroBasedHistoryKeyEquivalents == zeroBasedHistoryExpectedKeyEquivalents
+            && zeroBasedHistoryModifierMasks == zeroBasedHistoryExpectedModifierMasks
         report["numericSnippetSubmenuTitles"] = numericSnippetSubmenuTitles
         report["numericSnippetSubmenuKeyEquivalents"] = numericSnippetSubmenuKeyEquivalents
         report["numericSnippetMatchesExpected"] = numericSnippetSubmenuTitles == numericSnippetExpectedTitles
             && numericSnippetSubmenuKeyEquivalents == numericSnippetExpectedKeyEquivalents
-        report["matchesExpected"] = (report["oneBasedHistoryMatchesExpected"] as? Bool == true)
+        report["matchesExpected"] = (report["unnumberedHistoryMatchesExpected"] as? Bool == true)
+            && (report["numberedHistoryMatchesExpected"] as? Bool == true)
+            && (report["folderedNumberedHistoryMatchesExpected"] as? Bool == true)
+            && (report["oneBasedHistoryMatchesExpected"] as? Bool == true)
             && (report["zeroBasedHistoryMatchesExpected"] as? Bool == true)
             && (report["numericSnippetMatchesExpected"] as? Bool == true)
 
@@ -23123,6 +23218,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             action: #selector(selectClip(_:)),
             keyEquivalent: keyEquivalent(for: globalIndex)
         )
+        item.keyEquivalentModifierMask = keyEquivalentModifierMask(for: globalIndex)
         item.target = statusMenuCommandRouter
         item.tag = globalIndex
         item.representedObject = clip.id.uuidString
@@ -23371,12 +23467,18 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
     private func keyEquivalent(for index: Int) -> String {
-        guard UserDefaults.standard.bool(forKey: CMPrefAddNumericKeyEquivalentsKey), index <= 10 else {
+        guard index >= 0 else { return "" }
+        guard UserDefaults.standard.bool(forKey: CMPrefMenuItemsAreMarkedWithNumbersKey),
+              index < 10 else {
             return ""
         }
         let startsFromZero = UserDefaults.standard.bool(forKey: CMPrefMenuItemsTitleStartWithZeroKey)
         let shortcut = startsFromZero ? index : index + 1
         return shortcut == 10 ? "0" : "\(shortcut)"
+    }
+
+    private func keyEquivalentModifierMask(for index: Int) -> NSEvent.ModifierFlags {
+        keyEquivalent(for: index).isEmpty ? [] : [.command]
     }
 
     private func tooltip(for text: String) -> String {

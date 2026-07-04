@@ -2365,7 +2365,7 @@ func CMMenuPreferencesSnapshotForDebug() -> [String: Any] {
     )
     let previewHistoryKeyEquivalent = CMMenuPreviewKeyEquivalent(
         index: 0,
-        numericKeyEquivalents: numericKeyEquivalents,
+        markWithNumbers: markWithNumbers,
         startsFromZero: titleStartsWithZero
     )
     let previewTooltip = CMMenuPreviewTooltip(
@@ -2647,8 +2647,8 @@ func CMMenuPreviewNumberedTitle(_ title: String, listNumber: Int, markWithNumber
     return "\(listNumber). \(title)"
 }
 
-func CMMenuPreviewKeyEquivalent(index: Int, numericKeyEquivalents: Bool, startsFromZero: Bool) -> String {
-    guard numericKeyEquivalents, index <= 10 else { return "" }
+func CMMenuPreviewKeyEquivalent(index: Int, markWithNumbers: Bool, startsFromZero: Bool) -> String {
+    guard markWithNumbers, index >= 0, index < 10 else { return "" }
     let shortcut = startsFromZero ? index : index + 1
     return shortcut == 10 ? "0" : "\(shortcut)"
 }
@@ -5275,7 +5275,7 @@ private struct MenuPreferencesView: View {
     private var previewHistoryKeyEquivalent: String {
         CMMenuPreviewKeyEquivalent(
             index: 0,
-            numericKeyEquivalents: numericKeyEquivalents,
+            markWithNumbers: markWithNumbers,
             startsFromZero: titleStartsWithZero
         )
     }
