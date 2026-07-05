@@ -116,7 +116,7 @@ private struct PasteAutomationAccessState {
     let postEventGranted: Bool
 
     var isFullyGranted: Bool {
-        accessibilityGranted && postEventGranted
+        accessibilityGranted
     }
 }
 
@@ -17848,53 +17848,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         return nil
     }
 
-    private func visiblePreferencesMenuTitle() -> String {
-        NSLocalizedString("Preferences...", comment: "")
-    }
-
-    private func storedPreferencesMenuTitle() -> String {
-        visiblePreferencesMenuTitle() + "\u{200B}"
-    }
-
-    private func normalizedMenuItemTitle(_ title: String) -> String {
-        title.replacingOccurrences(of: "\u{200B}", with: "")
-    }
-
-    private func visibleMenuItemTitle(_ item: NSMenuItem) -> String {
-        if let attributedTitle = item.attributedTitle,
-           !attributedTitle.string.isEmpty {
-            return attributedTitle.string
-        }
-        return normalizedMenuItemTitle(item.title)
-    }
-
-    private func menuItem(withAction action: Selector, in menu: NSMenu) -> NSMenuItem? {
-        for item in menu.items {
-            if item.action == action {
-                return item
-            }
-            if let submenu = item.submenu,
-               let child = menuItem(withAction: action, in: submenu) {
-                return child
-            }
-        }
-        return nil
-    }
-
-    private func enforceLegacyMainMenuTitles() {
-        guard let mainMenu = NSApp.mainMenu,
-              let preferencesItem = menuItem(withAction: #selector(showPreferencePanel(_:)), in: mainMenu) else {
-            return
-        }
-
-        let visibleTitle = visiblePreferencesMenuTitle()
-        let storedTitle = storedPreferencesMenuTitle()
-        if preferencesItem.title != storedTitle {
-            preferencesItem.title = storedTitle
-        }
-        preferencesItem.attributedTitle = NSAttributedString(string: visibleTitle)
-    }
-
     private func scheduleDebugPasteboardRoundTripIfNeeded() {
         let delay = UserDefaults.standard.double(forKey: "debugRunPasteboardRoundTripAfterLaunchDelay")
         guard delay > 0 else { return }
@@ -21623,6 +21576,53 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 #endif
 
+    private func visiblePreferencesMenuTitle() -> String {
+        NSLocalizedString("Preferences...", comment: "")
+    }
+
+    private func storedPreferencesMenuTitle() -> String {
+        visiblePreferencesMenuTitle() + "\u{200B}"
+    }
+
+    private func normalizedMenuItemTitle(_ title: String) -> String {
+        title.replacingOccurrences(of: "\u{200B}", with: "")
+    }
+
+    private func visibleMenuItemTitle(_ item: NSMenuItem) -> String {
+        if let attributedTitle = item.attributedTitle,
+           !attributedTitle.string.isEmpty {
+            return attributedTitle.string
+        }
+        return normalizedMenuItemTitle(item.title)
+    }
+
+    private func menuItem(withAction action: Selector, in menu: NSMenu) -> NSMenuItem? {
+        for item in menu.items {
+            if item.action == action {
+                return item
+            }
+            if let submenu = item.submenu,
+               let child = menuItem(withAction: action, in: submenu) {
+                return child
+            }
+        }
+        return nil
+    }
+
+    private func enforceLegacyMainMenuTitles() {
+        guard let mainMenu = NSApp.mainMenu,
+              let preferencesItem = menuItem(withAction: #selector(showPreferencePanel(_:)), in: mainMenu) else {
+            return
+        }
+
+        let visibleTitle = visiblePreferencesMenuTitle()
+        let storedTitle = storedPreferencesMenuTitle()
+        if preferencesItem.title != storedTitle {
+            preferencesItem.title = storedTitle
+        }
+        preferencesItem.attributedTitle = NSAttributedString(string: visibleTitle)
+    }
+
     @discardableResult
     private func persistCapturedHistoryIfPreferred() -> Bool {
         guard UserDefaults.standard.bool(forKey: CMPrefSaveHistoryOnQuitKey) else {
@@ -22129,7 +22129,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             rebuildOpenRecentMenu(menu)
         }
         enforceLegacyMainMenuTitles()
-        rememberPasteTargetApplication()
+        rememberPasteTargetApplicationForMenuOpen()
     }
 
     func menuDidClose(_ menu: NSMenu) {
@@ -25093,6 +25093,18 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     private func synthesizePaste() {
         let keyCode = pasteKeyCode()
         debugPasteFlow("synthesizePaste keyCode=\(keyCode)")
+        let shouldUseAccessibilityFallback: Bool
+#if DEBUG
+        shouldUseAccessibilityFallback = debugBoolArgumentValue(forKey: "debugForceAccessibilityPasteFallback") == true
+            || UserDefaults.standard.bool(forKey: "debugForceAccessibilityPasteFallback")
+#else
+        shouldUseAccessibilityFallback = !CGPreflightPostEventAccess() && AXIsProcessTrusted()
+#endif
+        if shouldUseAccessibilityFallback,
+           synthesizePasteUsingAccessibility(keyCode: keyCode) {
+            debugPasteFlow("synthesizePaste accessibilityPost")
+            return
+        }
         guard ensurePasteEventAccess() else {
             debugPasteFlow("synthesizePaste directPostDenied")
             return
@@ -25117,6 +25129,31 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             }
         }
 #endif
+    }
+
+    private func synthesizePasteUsingAccessibility(keyCode: CGKeyCode) -> Bool {
+        guard AXIsProcessTrusted() else {
+            debugPasteFlow("synthesizePasteUsingAccessibility denied")
+            return false
+        }
+        typealias AXPostKeyboardEventFunction = @convention(c) (AXUIElement, CGCharCode, CGKeyCode, DarwinBoolean) -> AXError
+        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "AXUIElementPostKeyboardEvent") else {
+            debugPasteFlow("synthesizePasteUsingAccessibility missingSymbol")
+            return false
+        }
+        let postKeyboardEvent = unsafeBitCast(symbol, to: AXPostKeyboardEventFunction.self)
+
+        let systemWideElement = AXUIElementCreateSystemWide()
+        let commandKey = CGKeyCode(kVK_Command)
+        let results = [
+            postKeyboardEvent(systemWideElement, 0, commandKey, true),
+            postKeyboardEvent(systemWideElement, 0, keyCode, true),
+            postKeyboardEvent(systemWideElement, 0, keyCode, false),
+            postKeyboardEvent(systemWideElement, 0, commandKey, false)
+        ]
+        let succeeded = results.allSatisfy { $0 == .success }
+        debugPasteFlow("synthesizePasteUsingAccessibility results=\(results.map { String($0.rawValue) }.joined(separator: ",")) succeeded=\(succeeded)")
+        return succeeded
     }
 
 #if DEBUG
@@ -25222,14 +25259,46 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         debugPasteFlow("rememberPasteTargetApplication stored=\(storedBundleIdentifier)")
     }
 
+    private func rememberPasteTargetApplicationForMenuOpen() {
+        rememberPasteTargetApplication()
+        rememberPasteTargetFrontProcessIfNeeded()
+    }
+
+    private func rememberPasteTargetFrontProcessIfNeeded() {
+        guard previousPasteTargetApplication == nil,
+              !hasStoredPreviousFrontProcessSerialNumber() else { return }
+
+        var serialNumber = ProcessSerialNumber()
+        guard carbonGetFrontProcess(&serialNumber) == noErr,
+              let pid = carbonProcessIdentifier(for: &serialNumber),
+              pid != NSRunningApplication.current.processIdentifier else {
+            debugPasteFlow("rememberPasteTargetFrontProcess skipped")
+            return
+        }
+
+        previousFrontProcessSerialNumber = serialNumber
+        let application = NSRunningApplication(processIdentifier: pid)
+        let bundleIdentifier = application?.bundleIdentifier ?? "nil"
+        debugPasteFlow("rememberPasteTargetFrontProcess stored=\(bundleIdentifier)")
+    }
+
     private func restorePasteTargetApplication() -> String? {
-        guard let application = previousPasteTargetApplication else { return nil }
-        previousPasteTargetApplication = nil
-        guard !application.isTerminated else { return nil }
-        let bundleIdentifier = application.bundleIdentifier ?? "nil"
-        debugPasteFlow("restorePasteTargetApplication activating=\(bundleIdentifier)")
-        bringApplicationToFront(application)
-        return application.bundleIdentifier
+        if let application = previousPasteTargetApplication {
+            previousPasteTargetApplication = nil
+            guard !application.isTerminated else { return nil }
+            let bundleIdentifier = application.bundleIdentifier ?? "nil"
+            debugPasteFlow("restorePasteTargetApplication activating=\(bundleIdentifier)")
+            bringApplicationToFront(application)
+            return application.bundleIdentifier
+        }
+
+        guard hasStoredPreviousFrontProcessSerialNumber() else { return nil }
+        var serialNumber = previousFrontProcessSerialNumber
+        let bundleIdentifier = carbonProcessIdentifier(for: &serialNumber)
+            .flatMap { NSRunningApplication(processIdentifier: $0)?.bundleIdentifier }
+        let restored = restorePreviousFrontProcess()
+        debugPasteFlow("restorePasteTargetApplication frontProcessFallback restored=\(restored) bundle=\(bundleIdentifier ?? "nil")")
+        return bundleIdentifier
     }
 
     private func bringApplicationToFront(_ application: NSRunningApplication) {
@@ -25268,6 +25337,23 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         }
         let function = unsafeBitCast(symbol, to: Function.self)
         return function(serialNumber)
+    }
+
+    private func carbonGetProcessPID(_ serialNumber: UnsafeMutablePointer<ProcessSerialNumber>, _ pid: UnsafeMutablePointer<pid_t>) -> OSStatus {
+        typealias Function = @convention(c) (UnsafeMutablePointer<ProcessSerialNumber>, UnsafeMutablePointer<pid_t>) -> OSStatus
+        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "GetProcessPID") else {
+            return OSStatus(paramErr)
+        }
+        let function = unsafeBitCast(symbol, to: Function.self)
+        return function(serialNumber, pid)
+    }
+
+    private func carbonProcessIdentifier(for serialNumber: UnsafeMutablePointer<ProcessSerialNumber>) -> pid_t? {
+        var pid: pid_t = 0
+        guard carbonGetProcessPID(serialNumber, &pid) == noErr, pid > 0 else {
+            return nil
+        }
+        return pid
     }
 
     private func resetPreviousFrontProcessSerialNumber() {
@@ -25336,7 +25422,13 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         debugPasteFlow("ensurePasteEventAccess requesting")
         let granted = CGRequestPostEventAccess()
         debugPasteFlow("ensurePasteEventAccess result=\(granted)")
-        return granted
+        if granted {
+            return true
+        }
+
+        let accessibilityGranted = AXIsProcessTrusted()
+        debugPasteFlow("ensurePasteEventAccess accessibilityFallback=\(accessibilityGranted)")
+        return accessibilityGranted
     }
 
     private func ensureAccessibilityAccess(requestIfMissing: Bool = true) -> Bool {
@@ -25367,7 +25459,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         let accessState = currentPasteAutomationAccessState()
         debugPasteFlow("ensurePasteAutomationAccess accessibility=\(accessState.accessibilityGranted) postEvent=\(accessState.postEventGranted)")
 
-        if !accessState.isFullyGranted {
+        if !accessState.accessibilityGranted {
             presentPastePermissionAlertIfNeeded(accessState: accessState)
         }
 
@@ -25417,6 +25509,12 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
     private func pasteKeyCode() -> CGKeyCode {
+        runOnMainThread {
+            self.resolvedPasteKeyCode()
+        }
+    }
+
+    private func resolvedPasteKeyCode() -> CGKeyCode {
         if let cachedPasteKeyCode {
             return cachedPasteKeyCode
         }

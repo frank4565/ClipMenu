@@ -798,7 +798,6 @@ final class SwiftUISnippetEditorWindowController: NSWindowController, NSWindowDe
     }
 }
 
-#if DEBUG
 private func CMCenteredWindowOriginForDebug(frameSize: NSSize, screen: NSScreen?) -> CGPoint {
     let targetScreen = screen ?? NSScreen.main
     let initialFrame = NSRect(origin: targetScreen?.frame.origin ?? .zero, size: frameSize)
@@ -814,6 +813,7 @@ private func CMCenteredWindowOriginForDebug(frameSize: NSSize, screen: NSScreen?
     return probeWindow.frame.origin
 }
 
+#if DEBUG
 extension SwiftUISnippetEditorWindowController {
     static func debugFrameRestoreReport() -> [String: Any] {
         let defaults = UserDefaults.standard
@@ -1499,8 +1499,8 @@ private struct PreferenceRow<Control: View>: View {
 func CMPasteAutomationPreferencesSnapshotForDebug(inputPasteCommand: Bool) -> [String: Any] {
     let accessibilityGranted = AXIsProcessTrusted()
     let postEventGranted = CGPreflightPostEventAccess()
-    let grantedCount = [accessibilityGranted, postEventGranted].filter { $0 }.count
-    let isReady = accessibilityGranted && postEventGranted
+    let grantedCount = accessibilityGranted ? 1 : 0
+    let isReady = accessibilityGranted
 
     let detail: String = {
         if !inputPasteCommand {
@@ -1521,7 +1521,7 @@ func CMPasteAutomationPreferencesSnapshotForDebug(inputPasteCommand: Bool) -> [S
             isReady
                 ? NSLocalizedString("Ready to Paste", comment: "")
                 : NSLocalizedString("Setup Needed", comment: ""),
-            String(format: NSLocalizedString("%d of %d granted", comment: ""), grantedCount, 2)
+            String(format: NSLocalizedString("%d of %d granted", comment: ""), grantedCount, 1)
         ],
         "states": [
             "inputPasteCommand": inputPasteCommand,
@@ -1683,7 +1683,11 @@ private final class PasteAutomationStatusModel: ObservableObject {
     }
 
     var isFullyGranted: Bool {
-        accessibilityGranted && postEventGranted
+        accessibilityGranted
+    }
+
+    var canPostEvents: Bool {
+        accessibilityGranted || postEventGranted
     }
 
     func refresh() {
@@ -1887,8 +1891,8 @@ private struct PasteAutomationPreferencesView: View {
                 )
                 PermissionStatusBadge(
                     title: NSLocalizedString("Post Events", comment: ""),
-                    detail: NSLocalizedString("Allows synthetic keyboard events after a menu selection.", comment: ""),
-                    isGranted: status.postEventGranted
+                    detail: NSLocalizedString("Uses paste automation access for synthetic keyboard events after a menu selection.", comment: ""),
+                    isGranted: status.canPostEvents
                 )
             }
 
@@ -9765,6 +9769,7 @@ private struct SnippetEditorView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear(perform: reconcileVisibleSnippetSelection)
         .onAppear {
+#if DEBUG
             CMSnippetEditorActionDebugRegistry.register(action: .addFolder, handler: performAddFolderAndBeginEditing)
             CMSnippetEditorActionDebugRegistry.register(action: .addSnippet, handler: performAddSnippetAndBeginEditing)
             CMSnippetEditorActionDebugRegistry.register(action: .importSnippets, handler: performSnippetImport)
@@ -9777,20 +9782,27 @@ private struct SnippetEditorView: View {
                 searchText = value
             }
             CMSnippetEditorSearchTextDebugRegistry.updateCurrentText(searchText)
+#endif
         }
         .onDisappear {
+#if DEBUG
             CMSnippetEditorActionDebugRegistry.unregisterAll()
             CMSnippetEditorSearchScopeDebugRegistry.unregisterAll()
             CMSnippetEditorSearchTextDebugRegistry.unregisterAll()
             CMSnippetEditorSearchFieldDebugRegistry.unregister()
             CMSnippetEditorContentTextViewDebugRegistry.unregister()
+#endif
         }
         .onChange(of: searchText) { newValue in
+#if DEBUG
             CMSnippetEditorSearchTextDebugRegistry.updateCurrentText(newValue)
+#endif
             reconcileVisibleSnippetSelection()
         }
         .onChange(of: searchScope) { newValue in
+#if DEBUG
             CMSnippetEditorSearchScopeDebugRegistry.updateCurrentScope(newValue.rawValue)
+#endif
             reconcileVisibleSnippetSelection()
         }
         .onChange(of: store.selectedFolderIDs) { _ in
@@ -12451,7 +12463,9 @@ private struct NativeSearchField: NSViewRepresentable {
         searchField.sendsWholeSearchString = true
         searchField.recentsAutosaveName = nil
         searchField.font = CMSnippetEditorLegacySearchFont()
+#if DEBUG
         CMSnippetEditorSearchFieldDebugRegistry.register(searchField: searchField)
+#endif
         searchField.delegate = context.coordinator
         if let cell = searchField.cell as? NSSearchFieldCell {
             cell.searchMenuTemplate = context.coordinator.makeSearchMenu()
@@ -12467,7 +12481,9 @@ private struct NativeSearchField: NSViewRepresentable {
         }
         searchField.isEnabled = isEnabled
         searchField.font = CMSnippetEditorLegacySearchFont()
+#if DEBUG
         CMSnippetEditorSearchFieldDebugRegistry.register(searchField: searchField)
+#endif
         searchField.placeholderString = placeholder.isEmpty ? nil : placeholder
         if let cell = searchField.cell as? NSSearchFieldCell {
             cell.searchMenuTemplate = context.coordinator.makeSearchMenu()
@@ -12555,7 +12571,9 @@ private struct NativeSnippetTextView: NSViewRepresentable {
         textView.isSelectable = true
         textView.delegate = context.coordinator
         textView.string = text
+#if DEBUG
         CMSnippetEditorContentTextViewDebugRegistry.register(textView: textView)
+#endif
 
         if let textContainer = textView.textContainer {
             textContainer.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
@@ -12574,7 +12592,9 @@ private struct NativeSnippetTextView: NSViewRepresentable {
         }
         context.coordinator.textView = textView
         textView.font = CMSnippetEditorLegacyContentFont()
+#if DEBUG
         CMSnippetEditorContentTextViewDebugRegistry.register(textView: textView)
+#endif
         textView.backgroundColor = .textBackgroundColor
         textView.isEditable = isEditable
         textView.isSelectable = isEditable || !text.isEmpty
