@@ -111,6 +111,15 @@ private struct ClearHistoryAlertResolution {
     let suppressFutureAlerts: Bool
 }
 
+private struct PasteAutomationAccessState {
+    let accessibilityGranted: Bool
+    let postEventGranted: Bool
+
+    var isFullyGranted: Bool {
+        accessibilityGranted && postEventGranted
+    }
+}
+
 private final class StatusMenuCommandRouter: NSObject {
     weak var appController: AppController?
 
@@ -13010,9 +13019,12 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugPastePermissionPromptReportPath")
             ?? "/tmp/clipmenu-paste-permission-prompt-report.json")
         let appName = legacyApplicationName()
-        let alert = makePastePermissionPrompt(appName: appName)
+        let missingAllAccessState = PasteAutomationAccessState(accessibilityGranted: false, postEventGranted: false)
+        let postEventOnlyAccessState = PasteAutomationAccessState(accessibilityGranted: true, postEventGranted: false)
+        let alert = makePastePermissionPrompt(appName: appName, accessState: missingAllAccessState)
+        let postEventOnlyAlert = makePastePermissionPrompt(appName: appName, accessState: postEventOnlyAccessState)
         let alertButtonTitles = alert.buttons.map(\.title)
-        let accessoryTextValues: [String] = {
+        func accessoryTextValues(for alert: NSAlert) -> [String] {
             guard let accessoryView = alert.accessoryView else { return [] }
             var values: [String] = []
             func collect(from view: NSView) {
@@ -13028,13 +13040,15 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             }
             collect(from: accessoryView)
             return Array(NSOrderedSet(array: values)) as? [String] ?? values
-        }()
+        }
+        let alertAccessoryTextValues = accessoryTextValues(for: alert)
+        let postEventOnlyAccessoryTextValues = accessoryTextValues(for: postEventOnlyAlert)
         let actualAlertState: [String: Any] = [
             "messageText": alert.messageText,
             "informativeText": alert.informativeText,
             "buttonTitles": alertButtonTitles,
             "hasAccessoryView": alert.accessoryView != nil,
-            "accessoryTextValues": accessoryTextValues
+            "accessoryTextValues": alertAccessoryTextValues
         ]
         let expectedAlertState: [String: Any] = [
             "messageText": NSLocalizedString("Allow Paste Automation", comment: ""),
@@ -13050,7 +13064,30 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             "hasAccessoryView": true,
             "accessoryTextValues": [
                 localizedPastePermissionPromptAccessoryTitle(),
-                localizedPastePermissionPromptAccessoryDetail(appName: appName)
+                localizedPastePermissionPromptAccessoryDetail(appName: appName, accessState: missingAllAccessState)
+            ]
+        ]
+        let postEventOnlyAlertState: [String: Any] = [
+            "messageText": postEventOnlyAlert.messageText,
+            "informativeText": postEventOnlyAlert.informativeText,
+            "buttonTitles": postEventOnlyAlert.buttons.map(\.title),
+            "hasAccessoryView": postEventOnlyAlert.accessoryView != nil,
+            "accessoryTextValues": postEventOnlyAccessoryTextValues
+        ]
+        let expectedPostEventOnlyAlertState: [String: Any] = [
+            "messageText": NSLocalizedString("Allow Paste Automation", comment: ""),
+            "informativeText": localizedPastePermissionPromptInformativeText(
+                appName: appName,
+                accessState: postEventOnlyAccessState
+            ),
+            "buttonTitles": [
+                NSLocalizedString("Open Settings", comment: ""),
+                NSLocalizedString("Later", comment: "")
+            ],
+            "hasAccessoryView": true,
+            "accessoryTextValues": [
+                localizedPastePermissionPromptAccessoryTitle(),
+                localizedPastePermissionPromptAccessoryDetail(appName: appName, accessState: postEventOnlyAccessState)
             ]
         ]
         let openSettingsState: [String: Any] = [
@@ -13072,11 +13109,14 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             "url": ""
         ]
         let matchesExpected = (actualAlertState as NSDictionary).isEqual(to: expectedAlertState)
+            && (postEventOnlyAlertState as NSDictionary).isEqual(to: expectedPostEventOnlyAlertState)
             && (openSettingsState as NSDictionary).isEqual(to: expectedOpenSettingsState)
             && (laterState as NSDictionary).isEqual(to: expectedLaterState)
         let report: [String: Any] = [
             "alertState": actualAlertState,
             "expectedAlertState": expectedAlertState,
+            "postEventOnlyAlertState": postEventOnlyAlertState,
+            "expectedPostEventOnlyAlertState": expectedPostEventOnlyAlertState,
             "openSettingsState": openSettingsState,
             "expectedOpenSettingsState": expectedOpenSettingsState,
             "laterState": laterState,
@@ -22485,14 +22525,45 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         )
     }
 
-    private func localizedPastePermissionPromptAccessoryDetail(appName: String) -> String {
-        CMLocalizedModernString(
-            "\(appName) can open the right System Settings pane so you can allow Accessibility access and finish paste automation setup.",
-            japanese: "\(appName) から適切なシステム設定パネルを開き、アクセシビリティアクセスを許可してペースト自動化の設定を完了できます。"
+    private func localizedPastePermissionPromptInformativeText(
+        appName: String,
+        accessState: PasteAutomationAccessState
+    ) -> String {
+        if !accessState.accessibilityGranted {
+            return String(
+                format: NSLocalizedString("%@ needs Accessibility access to paste into the frontmost app. Allow access in System Settings, then relaunch %@.", comment: ""),
+                appName,
+                appName
+            )
+        }
+
+        return CMLocalizedModernString(
+            "\(appName) has Accessibility access, but macOS is still not allowing Command-V automation. Open Settings, remove and re-add \(appName) if it already appears enabled, then relaunch \(appName).",
+            japanese: "\(appName) にはアクセシビリティの許可がありますが、macOS が Command-V の自動操作をまだ許可していません。設定を開き、\(appName) がすでに有効に見える場合は削除して追加し直してから、\(appName) を再起動してください。"
         )
     }
 
-    private func makePastePermissionPromptAccessory(appName: String) -> NSView {
+    private func localizedPastePermissionPromptAccessoryDetail(
+        appName: String,
+        accessState: PasteAutomationAccessState
+    ) -> String {
+        if !accessState.accessibilityGranted {
+            return CMLocalizedModernString(
+                "\(appName) can open the right System Settings pane so you can allow Accessibility access and finish paste automation setup.",
+                japanese: "\(appName) から適切なシステム設定パネルを開き、アクセシビリティアクセスを許可してペースト自動化の設定を完了できます。"
+            )
+        }
+
+        return CMLocalizedModernString(
+            "Accessibility is enabled, but the keyboard automation check is still failing.",
+            japanese: "アクセシビリティは有効ですが、キーボード自動操作の確認がまだ失敗しています。"
+        )
+    }
+
+    private func makePastePermissionPromptAccessory(
+        appName: String,
+        accessState: PasteAutomationAccessState
+    ) -> NSView {
         let width: CGFloat = 420
         let container = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: width, height: 72))
         container.material = .menu
@@ -22526,7 +22597,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         titleLabel.frame = NSRect(x: 70, y: 38, width: textWidth, height: 18)
         container.addSubview(titleLabel)
 
-        let detailLabel = NSTextField(labelWithString: localizedPastePermissionPromptAccessoryDetail(appName: appName))
+        let detailLabel = NSTextField(labelWithString: localizedPastePermissionPromptAccessoryDetail(appName: appName, accessState: accessState))
         detailLabel.font = .systemFont(ofSize: 12)
         detailLabel.textColor = .secondaryLabelColor
         detailLabel.lineBreakMode = .byTruncatingTail
@@ -22536,15 +22607,14 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         return container
     }
 
-    private func makePastePermissionPrompt(appName: String) -> NSAlert {
+    private func makePastePermissionPrompt(
+        appName: String,
+        accessState: PasteAutomationAccessState = PasteAutomationAccessState(accessibilityGranted: false, postEventGranted: false)
+    ) -> NSAlert {
         let alert = NSAlert()
         alert.messageText = NSLocalizedString("Allow Paste Automation", comment: "")
-        alert.informativeText = String(
-            format: NSLocalizedString("%@ needs Accessibility access to paste into the frontmost app. Allow access in System Settings, then relaunch %@.", comment: ""),
-            appName,
-            appName
-        )
-        alert.accessoryView = makePastePermissionPromptAccessory(appName: appName)
+        alert.informativeText = localizedPastePermissionPromptInformativeText(appName: appName, accessState: accessState)
+        alert.accessoryView = makePastePermissionPromptAccessory(appName: appName, accessState: accessState)
         alert.addButton(withTitle: NSLocalizedString("Open Settings", comment: ""))
         alert.addButton(withTitle: NSLocalizedString("Later", comment: ""))
         return alert
@@ -25254,10 +25324,14 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         return modifierKeyCodes.allSatisfy { !CGEventSource.keyState(.combinedSessionState, key: $0) }
     }
 
-    private func ensurePasteEventAccess() -> Bool {
+    private func ensurePasteEventAccess(requestIfMissing: Bool = true) -> Bool {
         if CGPreflightPostEventAccess() {
             debugPasteFlow("ensurePasteEventAccess granted")
             return true
+        }
+        guard requestIfMissing else {
+            debugPasteFlow("ensurePasteEventAccess denied")
+            return false
         }
         debugPasteFlow("ensurePasteEventAccess requesting")
         let granted = CGRequestPostEventAccess()
@@ -25265,10 +25339,14 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         return granted
     }
 
-    private func ensureAccessibilityAccess() -> Bool {
+    private func ensureAccessibilityAccess(requestIfMissing: Bool = true) -> Bool {
         if AXIsProcessTrusted() {
             debugPasteFlow("ensureAccessibilityAccess granted")
             return true
+        }
+        guard requestIfMissing else {
+            debugPasteFlow("ensureAccessibilityAccess denied")
+            return false
         }
 
         debugPasteFlow("ensureAccessibilityAccess requesting")
@@ -25278,26 +25356,31 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         return granted
     }
 
-    private func ensurePasteAutomationAccess() -> Bool {
-        let accessibilityGranted = ensureAccessibilityAccess()
-        let postEventGranted = ensurePasteEventAccess()
-        let granted = accessibilityGranted && postEventGranted
-        debugPasteFlow("ensurePasteAutomationAccess accessibility=\(accessibilityGranted) postEvent=\(postEventGranted)")
-
-        if !granted {
-            presentPastePermissionAlertIfNeeded()
-        }
-
-        return granted
+    private func currentPasteAutomationAccessState() -> PasteAutomationAccessState {
+        PasteAutomationAccessState(
+            accessibilityGranted: AXIsProcessTrusted(),
+            postEventGranted: CGPreflightPostEventAccess()
+        )
     }
 
-    private func presentPastePermissionAlertIfNeeded() {
+    private func ensurePasteAutomationAccess() -> Bool {
+        let accessState = currentPasteAutomationAccessState()
+        debugPasteFlow("ensurePasteAutomationAccess accessibility=\(accessState.accessibilityGranted) postEvent=\(accessState.postEventGranted)")
+
+        if !accessState.isFullyGranted {
+            presentPastePermissionAlertIfNeeded(accessState: accessState)
+        }
+
+        return accessState.isFullyGranted
+    }
+
+    private func presentPastePermissionAlertIfNeeded(accessState: PasteAutomationAccessState) {
         guard !hasShownPastePermissionAlert else { return }
         hasShownPastePermissionAlert = true
 
         runOnMainThread {
             let appName = legacyApplicationName()
-            let alert = self.makePastePermissionPrompt(appName: appName)
+            let alert = self.makePastePermissionPrompt(appName: appName, accessState: accessState)
 
             NSApp.activate(ignoringOtherApps: true)
             let response = alert.runModal()
