@@ -156,6 +156,9 @@ final class AppControllerMenuSurfaceTests: XCTestCase {
         let report = appController.debugPasteAutomationCoverageReportForTesting()
         XCTAssertEqual(report["matchesExpected"] as? Bool, true)
         let state = try XCTUnwrap(report["state"] as? [String: Any])
+        XCTAssertEqual(state["deniedStateCanSynthesizePaste"] as? Bool, false)
+        XCTAssertEqual(state["accessibilityOnlyCanSynthesizePaste"] as? Bool, true)
+        XCTAssertEqual(state["postEventOnlyCanSynthesizePaste"] as? Bool, true)
         XCTAssertGreaterThanOrEqual(state["directPasteBypassCount"] as? Int ?? 0, 2)
     }
 

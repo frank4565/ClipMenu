@@ -35,6 +35,20 @@
                ReferencedContainer = "container:ClipMenu.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "7A3000200000000000000001"
+               BuildableName = "ClipMenuUITests.xctest"
+               BlueprintName = "ClipMenuUITests"
+               ReferencedContainer = "container:ClipMenu.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction

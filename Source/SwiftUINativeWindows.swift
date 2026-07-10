@@ -1729,7 +1729,6 @@ private struct PreferenceRow<Control: View>: View {
 
 func CMPasteAutomationPreferencesSnapshotForDebug(inputPasteCommand: Bool) -> [String: Any] {
     let accessibilityGranted = AXIsProcessTrusted()
-    let postEventGranted = CGPreflightPostEventAccess()
     let grantedCount = accessibilityGranted ? 1 : 0
     let isReady = accessibilityGranted
 
@@ -1757,7 +1756,6 @@ func CMPasteAutomationPreferencesSnapshotForDebug(inputPasteCommand: Bool) -> [S
         "states": [
             "inputPasteCommand": inputPasteCommand,
             "accessibilityGranted": accessibilityGranted,
-            "postEventGranted": postEventGranted,
             "grantedCount": grantedCount,
             "isReady": isReady
         ]
@@ -1907,7 +1905,6 @@ func CMCaptureRulesPreferencesSnapshotForDebug(
 
 private final class PasteAutomationStatusModel: ObservableObject {
     @Published var accessibilityGranted = false
-    @Published var postEventGranted = false
 
     init() {
         refresh()
@@ -1917,19 +1914,13 @@ private final class PasteAutomationStatusModel: ObservableObject {
         accessibilityGranted
     }
 
-    var canPostEvents: Bool {
-        accessibilityGranted || postEventGranted
-    }
-
     func refresh() {
         accessibilityGranted = AXIsProcessTrusted()
-        postEventGranted = CGPreflightPostEventAccess()
     }
 
     func requestAccess() {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(options)
-        _ = CGRequestPostEventAccess()
         refresh()
     }
 
@@ -2106,26 +2097,23 @@ private func CMUpdatesWorkflowStages(
 
 private struct PasteAutomationPreferencesView: View {
     @StateObject private var status = PasteAutomationStatusModel()
+    var inputPasteCommand = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            Text(NSLocalizedString("Automatic Paste Permissions", comment: ""))
+                .font(.subheadline.weight(.semibold))
+
             Text(statusSummaryText)
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            VStack(spacing: 8) {
-                PermissionStatusBadge(
-                    title: NSLocalizedString("Accessibility", comment: ""),
-                    detail: NSLocalizedString("Lets ClipMenu control Command-V in the frontmost app.", comment: ""),
-                    isGranted: status.accessibilityGranted
-                )
-                PermissionStatusBadge(
-                    title: NSLocalizedString("Post Events", comment: ""),
-                    detail: NSLocalizedString("Uses paste automation access for synthetic keyboard events after a menu selection.", comment: ""),
-                    isGranted: status.canPostEvents
-                )
-            }
+            PermissionStatusBadge(
+                title: NSLocalizedString("Accessibility", comment: ""),
+                detail: NSLocalizedString("Lets ClipMenu control Command-V in the frontmost app.", comment: ""),
+                isGranted: status.accessibilityGranted
+            )
 
             HStack(spacing: 8) {
                 automationSecondaryButton(
@@ -2152,7 +2140,10 @@ private struct PasteAutomationPreferencesView: View {
     }
 
     private var statusSummaryText: String {
-        status.isFullyGranted
+        if !inputPasteCommand {
+            return NSLocalizedString("Automatic paste is currently off, but permission readiness is still shown here.", comment: "")
+        }
+        return status.isFullyGranted
             ? NSLocalizedString("ClipMenu can send Command-V automatically after menu item selection.", comment: "")
             : NSLocalizedString("macOS still needs permission before automatic paste can drive the keyboard on your behalf.", comment: "")
     }
@@ -3522,6 +3513,9 @@ func CMGeneralPreferencesSnapshotForDebug() -> [String: Any] {
             ]
         ],
         "clipboardHistory": [
+            "pasteAutomationSurface": CMPasteAutomationPreferencesSnapshotForDebug(
+                inputPasteCommand: inputPasteCommand
+            ),
             "excludedAppsSurface": [
                 "title": NSLocalizedString("1451.title", tableName: "Preferences", bundle: .main, value: "Exclude Apps", comment: ""),
                 "summaryText": excludedAppsSurfaceSummaryText,
@@ -4939,10 +4933,8 @@ private struct GeneralPreferencesView: View {
             }
             PreferenceSection(legacyClipboardHistorySectionTitle) {
                 PreferenceToggle(title: legacyInputPasteCommandLabel, isOn: $inputPasteCommand)
-                if inputPasteCommand {
-                    PasteAutomationPreferencesView()
-                        .padding(.leading, 26)
-                }
+                PasteAutomationPreferencesView(inputPasteCommand: inputPasteCommand)
+                    .padding(.leading, 26)
                 PreferenceRow(legacySortHistoryLabel) {
                     PreferencePicker(selection: reorderClipsAfterPastingSelection, width: 170) {
                         Text(legacyLastUsedLabel).tag(true)

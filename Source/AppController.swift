@@ -115,8 +115,8 @@ private struct PasteAutomationAccessState {
     let accessibilityGranted: Bool
     let postEventGranted: Bool
 
-    var isFullyGranted: Bool {
-        accessibilityGranted
+    var canSynthesizePaste: Bool {
+        accessibilityGranted || postEventGranted
     }
 }
 
@@ -5434,6 +5434,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     )
     private var previousJavaScriptFrontmostApplication: NSRunningApplication?
     private var previousPasteTargetApplication: NSRunningApplication?
+    private var lastExternalFrontmostApplication: NSRunningApplication?
     private var popupWindow: NSWindow?
     private var popupInteractionMonitor: Any?
     private var popupInteractionEventTap: CFMachPort?
@@ -5494,6 +5495,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         configureStatusItem()
 #if DEBUG
         applyDebugPreferenceOverridesIfNeeded()
+        writeDebugPasteAutomationReadinessForUITestingIfNeeded()
 #endif
 #if TESTING
         if ProcessInfo.processInfo.environment["CLIPMENU_EXERCISE_SWIFTUI_BODIES"] == "1" {
@@ -5533,6 +5535,12 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             self,
             selector: #selector(userDefaultsDidChange(_:)),
             name: UserDefaults.didChangeNotification,
+            object: nil
+        )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(workspaceDidActivateApplication(_:)),
+            name: NSWorkspace.didActivateApplicationNotification,
             object: nil
         )
 
@@ -5717,6 +5725,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         }
 #endif
         unregisterHotKey()
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
         pollingTimer?.invalidate()
         autosaveTimer?.invalidate()
         if let hotKeyEventHandler {
@@ -5740,6 +5749,19 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
 #if DEBUG
+    private func writeDebugPasteAutomationReadinessForUITestingIfNeeded() {
+        guard let path = debugStringValue(forKey: "debugPasteAutomationReadinessPath"),
+              !path.isEmpty else { return }
+        let accessState = currentPasteAutomationAccessState()
+        let report: [String: Any] = [
+            "accessibilityGranted": accessState.accessibilityGranted,
+            "postEventGranted": accessState.postEventGranted,
+            "canSynthesizePaste": accessState.canSynthesizePaste
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: report, options: [.sortedKeys]) else { return }
+        try? data.write(to: URL(fileURLWithPath: path), options: .atomic)
+    }
+
     private func scheduleDebugAutoSelectFirstClipIfNeeded() {
         let delay = debugDoubleValue(forKey: "debugAutoSelectFirstClipAfterLaunchDelay")
         guard delay > 0 else { return }
@@ -13502,9 +13524,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             ?? "/tmp/clipmenu-paste-permission-prompt-report.json")
         let appName = legacyApplicationName()
         let missingAllAccessState = PasteAutomationAccessState(accessibilityGranted: false, postEventGranted: false)
-        let postEventOnlyAccessState = PasteAutomationAccessState(accessibilityGranted: true, postEventGranted: false)
+        let accessibilityOnlyAccessState = PasteAutomationAccessState(accessibilityGranted: true, postEventGranted: false)
         let alert = makePastePermissionPrompt(appName: appName, accessState: missingAllAccessState)
-        let postEventOnlyAlert = makePastePermissionPrompt(appName: appName, accessState: postEventOnlyAccessState)
+        let accessibilityOnlyAlert = makePastePermissionPrompt(appName: appName, accessState: accessibilityOnlyAccessState)
         let alertButtonTitles = alert.buttons.map(\.title)
         func accessoryTextValues(for alert: NSAlert) -> [String] {
             guard let accessoryView = alert.accessoryView else { return [] }
@@ -13524,7 +13546,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             return Array(NSOrderedSet(array: values)) as? [String] ?? values
         }
         let alertAccessoryTextValues = accessoryTextValues(for: alert)
-        let postEventOnlyAccessoryTextValues = accessoryTextValues(for: postEventOnlyAlert)
+        let accessibilityOnlyAccessoryTextValues = accessoryTextValues(for: accessibilityOnlyAlert)
         let actualAlertState: [String: Any] = [
             "messageText": alert.messageText,
             "informativeText": alert.informativeText,
@@ -13549,18 +13571,18 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 localizedPastePermissionPromptAccessoryDetail(appName: appName, accessState: missingAllAccessState)
             ]
         ]
-        let postEventOnlyAlertState: [String: Any] = [
-            "messageText": postEventOnlyAlert.messageText,
-            "informativeText": postEventOnlyAlert.informativeText,
-            "buttonTitles": postEventOnlyAlert.buttons.map(\.title),
-            "hasAccessoryView": postEventOnlyAlert.accessoryView != nil,
-            "accessoryTextValues": postEventOnlyAccessoryTextValues
+        let accessibilityOnlyAlertState: [String: Any] = [
+            "messageText": accessibilityOnlyAlert.messageText,
+            "informativeText": accessibilityOnlyAlert.informativeText,
+            "buttonTitles": accessibilityOnlyAlert.buttons.map(\.title),
+            "hasAccessoryView": accessibilityOnlyAlert.accessoryView != nil,
+            "accessoryTextValues": accessibilityOnlyAccessoryTextValues
         ]
-        let expectedPostEventOnlyAlertState: [String: Any] = [
+        let expectedAccessibilityOnlyAlertState: [String: Any] = [
             "messageText": NSLocalizedString("Allow Paste Automation", comment: ""),
             "informativeText": localizedPastePermissionPromptInformativeText(
                 appName: appName,
-                accessState: postEventOnlyAccessState
+                accessState: accessibilityOnlyAccessState
             ),
             "buttonTitles": [
                 NSLocalizedString("Open Settings", comment: ""),
@@ -13569,7 +13591,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             "hasAccessoryView": true,
             "accessoryTextValues": [
                 localizedPastePermissionPromptAccessoryTitle(),
-                localizedPastePermissionPromptAccessoryDetail(appName: appName, accessState: postEventOnlyAccessState)
+                localizedPastePermissionPromptAccessoryDetail(appName: appName, accessState: accessibilityOnlyAccessState)
             ]
         ]
         let openSettingsState: [String: Any] = [
@@ -13591,14 +13613,14 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             "url": ""
         ]
         let matchesExpected = (actualAlertState as NSDictionary).isEqual(to: expectedAlertState)
-            && (postEventOnlyAlertState as NSDictionary).isEqual(to: expectedPostEventOnlyAlertState)
+            && (accessibilityOnlyAlertState as NSDictionary).isEqual(to: expectedAccessibilityOnlyAlertState)
             && (openSettingsState as NSDictionary).isEqual(to: expectedOpenSettingsState)
             && (laterState as NSDictionary).isEqual(to: expectedLaterState)
         let report: [String: Any] = [
             "alertState": actualAlertState,
             "expectedAlertState": expectedAlertState,
-            "postEventOnlyAlertState": postEventOnlyAlertState,
-            "expectedPostEventOnlyAlertState": expectedPostEventOnlyAlertState,
+            "accessibilityOnlyAlertState": accessibilityOnlyAlertState,
+            "expectedAccessibilityOnlyAlertState": expectedAccessibilityOnlyAlertState,
             "openSettingsState": openSettingsState,
             "expectedOpenSettingsState": expectedOpenSettingsState,
             "laterState": laterState,
@@ -24883,6 +24905,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         let pasteEventAccessWithoutPrompt = ensurePasteEventAccess(requestIfMissing: false)
         let accessibilityAccessWithoutPrompt = ensureAccessibilityAccess(requestIfMissing: false)
         let accessState = currentPasteAutomationAccessState()
+        let deniedState = PasteAutomationAccessState(accessibilityGranted: false, postEventGranted: false)
+        let accessibilityOnlyState = PasteAutomationAccessState(accessibilityGranted: true, postEventGranted: false)
+        let postEventOnlyState = PasteAutomationAccessState(accessibilityGranted: false, postEventGranted: true)
         rememberPasteTargetApplication()
         let restoredBundleIdentifier = restorePasteTargetApplication()
         resetPreviousFrontProcessSerialNumber()
@@ -24902,6 +24927,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             "accessibilityAccessWithoutPrompt": accessibilityAccessWithoutPrompt,
             "accessStateMatchesChecks": accessState.postEventGranted == pasteEventAccessWithoutPrompt
                 && accessState.accessibilityGranted == accessibilityAccessWithoutPrompt,
+            "deniedStateCanSynthesizePaste": deniedState.canSynthesizePaste,
+            "accessibilityOnlyCanSynthesizePaste": accessibilityOnlyState.canSynthesizePaste,
+            "postEventOnlyCanSynthesizePaste": postEventOnlyState.canSynthesizePaste,
             "restoredBundleIdentifier": restoredBundleIdentifier ?? "",
             "hasStoredFrontProcessAfterReset": hasStoredFrontProcessAfterReset,
             "modifiersReleased": modifiersReleased,
@@ -24913,6 +24941,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             "expectedMinimumDirectPasteBypassCount": 2,
             "matchesExpected": actualState["pasteKeyCodeStable"] as? Bool == true
                 && actualState["accessStateMatchesChecks"] as? Bool == true
+                && actualState["deniedStateCanSynthesizePaste"] as? Bool == false
+                && actualState["accessibilityOnlyCanSynthesizePaste"] as? Bool == true
+                && actualState["postEventOnlyCanSynthesizePaste"] as? Bool == true
                 && actualState["hasStoredFrontProcessAfterReset"] as? Bool == false
                 && (actualState["directPasteBypassCount"] as? Int ?? 0) >= 2
         ]
@@ -26047,23 +26078,41 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
     private func rememberPasteTargetApplication() {
-        guard let frontmostApplication = NSWorkspace.shared.frontmostApplication,
-              frontmostApplication.processIdentifier != NSRunningApplication.current.processIdentifier else {
-            let currentBundleIdentifier = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "nil"
-            let previousBundleIdentifier = previousPasteTargetApplication?.bundleIdentifier ?? "nil"
-            debugPasteFlow("rememberPasteTargetApplication skipped current=\(currentBundleIdentifier) previous=\(previousBundleIdentifier)")
+        if let frontmostApplication = NSWorkspace.shared.frontmostApplication,
+           frontmostApplication.processIdentifier != NSRunningApplication.current.processIdentifier {
+            lastExternalFrontmostApplication = frontmostApplication
+            if let previousPasteTargetApplication,
+               !previousPasteTargetApplication.isTerminated,
+               previousPasteTargetApplication.processIdentifier == frontmostApplication.processIdentifier {
+                let currentBundleIdentifier = frontmostApplication.bundleIdentifier ?? "nil"
+                debugPasteFlow("rememberPasteTargetApplication unchanged current=\(currentBundleIdentifier)")
+                return
+            }
+            previousPasteTargetApplication = frontmostApplication
+            let storedBundleIdentifier = frontmostApplication.bundleIdentifier ?? "nil"
+            debugPasteFlow("rememberPasteTargetApplication stored=\(storedBundleIdentifier)")
             return
         }
-        if let previousPasteTargetApplication,
-           !previousPasteTargetApplication.isTerminated,
-           previousPasteTargetApplication.processIdentifier == frontmostApplication.processIdentifier {
-            let currentBundleIdentifier = frontmostApplication.bundleIdentifier ?? "nil"
-            debugPasteFlow("rememberPasteTargetApplication unchanged current=\(currentBundleIdentifier)")
+
+        if let lastExternalFrontmostApplication,
+           !lastExternalFrontmostApplication.isTerminated {
+            previousPasteTargetApplication = lastExternalFrontmostApplication
+            let storedBundleIdentifier = lastExternalFrontmostApplication.bundleIdentifier ?? "nil"
+            debugPasteFlow("rememberPasteTargetApplication restoredLastExternal=\(storedBundleIdentifier)")
             return
         }
-        previousPasteTargetApplication = frontmostApplication
-        let storedBundleIdentifier = frontmostApplication.bundleIdentifier ?? "nil"
-        debugPasteFlow("rememberPasteTargetApplication stored=\(storedBundleIdentifier)")
+
+        let currentBundleIdentifier = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "nil"
+        let previousBundleIdentifier = previousPasteTargetApplication?.bundleIdentifier ?? "nil"
+        debugPasteFlow("rememberPasteTargetApplication skipped current=\(currentBundleIdentifier) previous=\(previousBundleIdentifier)")
+    }
+
+    @objc private func workspaceDidActivateApplication(_ notification: Notification) {
+        guard let application = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+              application.processIdentifier != NSRunningApplication.current.processIdentifier,
+              !application.isTerminated else { return }
+        lastExternalFrontmostApplication = application
+        debugPasteFlow("workspaceDidActivateApplication stored=\(application.bundleIdentifier ?? "nil")")
     }
 
     private func rememberPasteTargetApplicationForMenuOpen() {
@@ -26256,7 +26305,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
     private func currentPasteAutomationAccessState() -> PasteAutomationAccessState {
-        PasteAutomationAccessState(
+        return PasteAutomationAccessState(
             accessibilityGranted: AXIsProcessTrusted(),
             postEventGranted: CGPreflightPostEventAccess()
         )
@@ -26266,11 +26315,11 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         let accessState = currentPasteAutomationAccessState()
         debugPasteFlow("ensurePasteAutomationAccess accessibility=\(accessState.accessibilityGranted) postEvent=\(accessState.postEventGranted)")
 
-        if !accessState.accessibilityGranted {
+        if !accessState.canSynthesizePaste {
             presentPastePermissionAlertIfNeeded(accessState: accessState)
         }
 
-        return accessState.isFullyGranted
+        return accessState.canSynthesizePaste
     }
 
     private func presentPastePermissionAlertIfNeeded(accessState: PasteAutomationAccessState) {

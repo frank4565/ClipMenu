@@ -36,6 +36,13 @@
         "identifier" : "7A2000200000000000000001",
         "name" : "ClipMenuTests"
       }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:ClipMenu.xcodeproj",
+        "identifier" : "7A3000200000000000000001",
+        "name" : "ClipMenuUITests"
+      }
     }
   ],
   "version" : 1
