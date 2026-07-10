@@ -95,6 +95,38 @@ final class AppControllerMenuSurfaceTests: XCTestCase {
         XCTAssertNotNil(report["menuSurfaceState"] as? [String: Any])
     }
 
+    func testAppControllerSurfaceExerciseRestoresMenuFontPreferences() throws {
+        let appController = try XCTUnwrap(NSApp.delegate as? AppController)
+        let defaults = UserDefaults.standard
+        let preferenceKeys = [
+            CMPrefChangeFontSizeKey,
+            CMPrefHowToChangeFontSizeKey,
+            CMPrefSelectedFontSizeKey
+        ]
+        let originalValues = Dictionary(
+            uniqueKeysWithValues: preferenceKeys.map { ($0, defaults.object(forKey: $0)) }
+        )
+        defer {
+            for (key, value) in originalValues {
+                if let value {
+                    defaults.set(value, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            }
+        }
+
+        defaults.set(false, forKey: CMPrefChangeFontSizeKey)
+        defaults.set(0, forKey: CMPrefHowToChangeFontSizeKey)
+        defaults.set(9, forKey: CMPrefSelectedFontSizeKey)
+
+        _ = appController.debugExerciseAppControllerSurfacesForTesting()
+
+        XCTAssertFalse(defaults.bool(forKey: CMPrefChangeFontSizeKey))
+        XCTAssertEqual(defaults.integer(forKey: CMPrefHowToChangeFontSizeKey), 0)
+        XCTAssertEqual(defaults.integer(forKey: CMPrefSelectedFontSizeKey), 9)
+    }
+
     func testPrivateHelperCoverageReportsNormalizeLegacyInputsAndEvents() throws {
         let appController = try XCTUnwrap(NSApp.delegate as? AppController)
         let legacyReport = CMDebugLegacyPrivateHelperReportForTesting()

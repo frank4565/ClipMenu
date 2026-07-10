@@ -26650,15 +26650,25 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
 
     @MainActor
     func debugExerciseAppControllerSurfacesForTesting() -> [String: Any] {
+        let defaults = UserDefaults.standard
+        let originalChangeFontSize = defaults.object(forKey: CMPrefChangeFontSizeKey)
+        let originalFontSizingMode = defaults.object(forKey: CMPrefHowToChangeFontSizeKey)
+        let originalSelectedFontSize = defaults.object(forKey: CMPrefSelectedFontSizeKey)
+        defer {
+            restoreDefault(originalChangeFontSize, forKey: CMPrefChangeFontSizeKey)
+            restoreDefault(originalFontSizingMode, forKey: CMPrefHowToChangeFontSizeKey)
+            restoreDefault(originalSelectedFontSize, forKey: CMPrefSelectedFontSizeKey)
+        }
+
         let accessDeniedState = PasteAutomationAccessState(accessibilityGranted: false, postEventGranted: false)
         let accessibilityOnlyState = PasteAutomationAccessState(accessibilityGranted: true, postEventGranted: false)
         let menuItem = NSMenuItem(title: "Sample", action: nil, keyEquivalent: "")
         let checkForUpdatesItem = NSMenuItem(title: "Check", action: #selector(checkForUpdates(_:)), keyEquivalent: "")
         let clearHistoryItem = NSMenuItem(title: "Clear", action: #selector(clearHistory(_:)), keyEquivalent: "")
 
-        UserDefaults.standard.set(true, forKey: CMPrefChangeFontSizeKey)
-        UserDefaults.standard.set(1, forKey: CMPrefHowToChangeFontSizeKey)
-        UserDefaults.standard.set(32, forKey: CMPrefSelectedFontSizeKey)
+        defaults.set(true, forKey: CMPrefChangeFontSizeKey)
+        defaults.set(1, forKey: CMPrefHowToChangeFontSizeKey)
+        defaults.set(32, forKey: CMPrefSelectedFontSizeKey)
         applyPreferredFont(to: menuItem)
 
         let views = [
