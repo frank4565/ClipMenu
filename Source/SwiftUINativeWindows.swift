@@ -29,7 +29,7 @@ private func CMSnippetEditorSnippetRowIcon() -> NSImage? {
 }
 
 func CMShowAlert(_ alert: NSAlert, sheetFor window: NSWindow?) {
-#if DEBUG
+#if DEBUG || TESTING
     CMRecordAlertForDebug(alert)
     if CMShouldBypassAlertPresentationForDebug() {
         return
@@ -41,6 +41,237 @@ func CMShowAlert(_ alert: NSAlert, sheetFor window: NSWindow?) {
         alert.runModal()
     }
 }
+
+#if TESTING
+@MainActor
+func CMExerciseSwiftUIViewBodiesForTesting() -> [String] {
+    _ = PreferencesView(state: PreferencesPresentationState()).body
+    _ = GeneralPreferencesView().body
+    _ = ShortcutsPreferencesView().body
+    _ = MenuPreferencesView().body
+    _ = TypePreferencesView().body
+    _ = PasteAutomationPreferencesView().body
+    _ = ActionPreferencesView().body
+    _ = UpdatePreferencesView().body
+    _ = SnippetEditorView(store: SnippetFileStore.shared).body
+    _ = CMPasteAutomationPreferencesSnapshotForDebug(inputPasteCommand: true)
+    _ = CMPasteAutomationPreferencesSnapshotForDebug(inputPasteCommand: false)
+    _ = CMSnippetEditorSnapshotForDebug()
+    _ = StoreTypePreferencesViewContent().body
+    _ = IconPreferencesViewContent().body
+    if let menuIconOption = MenuIconTypeOption.all.first {
+        _ = MenuIconTypeRow(option: menuIconOption).body
+    }
+    var excludedPresented = true
+    _ = ExcludedApplicationsEditorSheet(
+        store: RecordingPreferencesStore.shared,
+        isPresented: Binding(
+            get: { excludedPresented },
+            set: { excludedPresented = $0 }
+        )
+    ).body
+    let actionNode = ActionNode(
+        nodeTitle: "Folder",
+        children: [
+            ActionNode(
+                nodeTitle: "Action",
+                action: [CMActionTypeKey: CMBuiltinActionType, "name": "pasteAsPlainText:"]
+            )
+        ]
+    )
+    var actionSelection: UUID? = actionNode.id
+    var expandedActionNodeIDs: Set<UUID> = [actionNode.id]
+    _ = ActionTreePanel(
+        title: "Actions",
+        columnHeaderTitle: "Name",
+        nodes: [actionNode],
+        selection: Binding(
+            get: { actionSelection },
+            set: { actionSelection = $0 }
+        ),
+        editable: true,
+        expandedNodeIDs: Binding(
+            get: { expandedActionNodeIDs },
+            set: { expandedActionNodeIDs = $0 }
+        ),
+        inlineTitleEditing: true,
+        titleBinding: { _ in
+            Binding(get: { "Action" }, set: { _ in })
+        },
+        dragProvider: { node in
+            NSItemProvider(item: node.nodeTitle as NSString, typeIdentifier: UTType.plainText.identifier)
+        },
+        onSelectionChange: { actionSelection = $0 },
+        onDrop: { _ in true },
+        onNodeDrop: { _, _ in true },
+        emptyState: ActionTreePanel.EmptyState(
+            systemImage: "folder",
+            title: "No Actions",
+            message: "Add an action."
+        )
+    ).body
+    _ = ActionTreePanel(
+        title: "Empty",
+        columnHeaderTitle: nil,
+        nodes: [],
+        selection: Binding(
+            get: { actionSelection },
+            set: { actionSelection = $0 }
+        ),
+        editable: false,
+        emptyState: ActionTreePanel.EmptyState(
+            systemImage: "tray",
+            title: "Empty",
+            message: "No rows."
+        )
+    ).body
+    _ = ActionNodeRow(
+        node: actionNode,
+        parentID: nil,
+        siblingIndex: 0,
+        level: 0,
+        selection: Binding(
+            get: { actionSelection },
+            set: { actionSelection = $0 }
+        ),
+        editable: true,
+        expandedNodeIDs: Binding(
+            get: { expandedActionNodeIDs },
+            set: { expandedActionNodeIDs = $0 }
+        ),
+        inlineTitleEditing: true,
+        titleBinding: { _ in
+            Binding(get: { "Action" }, set: { _ in })
+        },
+        dragProvider: { node in
+            NSItemProvider(item: node.nodeTitle as NSString, typeIdentifier: UTType.plainText.identifier)
+        },
+        onSelectionChange: { actionSelection = $0 },
+        onNodeDrop: { _, _ in true }
+    ).body
+
+    let defaults = UserDefaults.standard
+    let hostedPreferenceKeys = [
+        CMPrefMaxMenuItemTitleLengthKey,
+        CMPrefNumberOfItemsPlaceInlineKey,
+        CMPrefNumberOfItemsPlaceInsideFolderKey,
+        CMPrefMaxLengthOfToolTipKey,
+        CMPrefHowToChangeFontSizeKey,
+        CMPrefSelectedFontSizeKey,
+        CMPrefThumbnailWidthKey,
+        CMPrefThumbnailHeightKey,
+        CMPrefMenuIconSizeKey
+    ]
+    let hostedPreferenceOriginals = Dictionary(uniqueKeysWithValues: hostedPreferenceKeys.map { ($0, defaults.object(forKey: $0)) })
+    defaults.set(0, forKey: CMPrefMaxMenuItemTitleLengthKey)
+    defaults.set(-8, forKey: CMPrefNumberOfItemsPlaceInlineKey)
+    defaults.set(0, forKey: CMPrefNumberOfItemsPlaceInsideFolderKey)
+    defaults.set(0, forKey: CMPrefMaxLengthOfToolTipKey)
+    defaults.set(99, forKey: CMPrefHowToChangeFontSizeKey)
+    defaults.set(47, forKey: CMPrefSelectedFontSizeKey)
+    defaults.set(0, forKey: CMPrefThumbnailWidthKey)
+    defaults.set(0, forKey: CMPrefThumbnailHeightKey)
+    defaults.set(47, forKey: CMPrefMenuIconSizeKey)
+
+    let hostedPreferenceViews: [AnyView] = [
+        AnyView(GeneralPreferencesView()),
+        AnyView(ShortcutsPreferencesView()),
+        AnyView(MenuPreferencesView()),
+        AnyView(TypePreferencesView()),
+        AnyView(PasteAutomationPreferencesView()),
+        AnyView(ActionPreferencesView()),
+        AnyView(UpdatePreferencesView())
+    ]
+    for view in hostedPreferenceViews {
+        let host = NSHostingView(rootView: view)
+        host.frame = NSRect(x: 0, y: 0, width: 780, height: 640)
+        host.layoutSubtreeIfNeeded()
+    }
+    for (key, value) in hostedPreferenceOriginals {
+        if let value {
+            defaults.set(value, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    var folder = SnippetFolder(
+        title: "Folder",
+        isEnabled: false,
+        snippets: []
+    )
+    var snippet = Snippet(
+        title: "Snippet",
+        content: "Body",
+        isEnabled: false
+    )
+    _ = FolderRow(
+        folder: Binding(get: { folder }, set: { folder = $0 }),
+        focusToken: UUID()
+    ).body
+    _ = SnippetRow(
+        snippet: Binding(get: { snippet }, set: { snippet = $0 }),
+        index: 0,
+        focusToken: UUID()
+    ).body
+    let snippetStore = SnippetFileStore.shared
+    let originalFolders = snippetStore.folders
+    let originalSelection = snippetStore.currentSelectionSnapshot()
+    let hostedSnippetID = UUID()
+    let hostedFolderID = UUID()
+    snippetStore.folders = [
+        SnippetFolder(
+            id: hostedFolderID,
+            title: "Hosted Folder",
+            isEnabled: true,
+            snippets: [
+                Snippet(
+                    id: hostedSnippetID,
+                    title: "Hosted Snippet",
+                    content: "Hosted body",
+                    isEnabled: true
+                )
+            ]
+        )
+    ]
+    snippetStore.restoreSelectionSnapshot(
+        SnippetFileStore.SelectionSnapshot(
+            selectedFolderIDs: [hostedFolderID],
+            selectedSnippetIDs: [hostedSnippetID],
+            primarySelectedFolderID: hostedFolderID,
+            primarySelectedSnippetID: hostedSnippetID
+        )
+    )
+    let snippetHost = NSHostingView(rootView: SnippetEditorView(store: snippetStore))
+    snippetHost.frame = NSRect(x: 0, y: 0, width: 640, height: 480)
+    snippetHost.layoutSubtreeIfNeeded()
+    snippetStore.folders = originalFolders
+    snippetStore.restoreSelectionSnapshot(originalSelection)
+
+    return [
+        "preferences",
+        "general",
+        "shortcuts",
+        "menu",
+        "type",
+        "pasteAutomation",
+        "action",
+        "updates",
+        "snippets",
+        "pasteAutomationSnapshot",
+        "snippetEditorSnapshot",
+        "storeTypeContent",
+        "iconContent",
+        "excludedApplications",
+        "actionTree",
+        "actionNode",
+        "hostedPreferences",
+        "folderRow",
+        "snippetRow",
+        "hostedSnippetEditor"
+    ]
+}
+#endif
 
 func localizedActionSaveFailureAccessoryTitle() -> String {
     NSLocalizedString("Action Library Save Failed", comment: "")
@@ -303,7 +534,7 @@ func CMEndEditingForWindow(_ window: NSWindow?, showFailureAlert: Bool) -> Bool 
     return false
 }
 
-#if DEBUG
+#if DEBUG || TESTING
 private var cmLastDebugAlertSnapshot: [String: Any]?
 private var cmBypassAlertPresentationForDebug = false
 private final class CMDebugInvalidEditingTextField: NSTextField {
@@ -2279,6 +2510,88 @@ func CMHotKeyDisplayStringForDebug(keyCode: Int, modifierFlags: Int) -> String {
     HotKeyRecorderDisplayString(keyCode: keyCode, modifierFlags: modifierFlags)
 }
 
+#if TESTING
+@MainActor
+func CMHotKeyRecorderExerciseForTesting() -> [String: Any] {
+    let view = HotKeyRecorderNSView(frame: NSRect(x: 0, y: 0, width: 210, height: 26))
+    var captures: [[String: Int]] = []
+    view.onCapture = { keyCode, modifierFlags in
+        captures.append(["keyCode": keyCode, "modifierFlags": modifierFlags])
+    }
+
+    let mouseDown = NSEvent.mouseEvent(
+        with: .leftMouseDown,
+        location: .zero,
+        modifierFlags: [],
+        timestamp: 0,
+        windowNumber: 0,
+        context: nil,
+        eventNumber: 1,
+        clickCount: 1,
+        pressure: 1
+    )
+    view.mouseDown(with: mouseDown!)
+
+    if let deleteEvent = NSEvent.keyEvent(
+        with: .keyDown,
+        location: .zero,
+        modifierFlags: [],
+        timestamp: 0,
+        windowNumber: 0,
+        context: nil,
+        characters: "\u{7f}",
+        charactersIgnoringModifiers: "\u{7f}",
+        isARepeat: false,
+        keyCode: UInt16(kVK_Delete)
+    ) {
+        view.keyDown(with: deleteEvent)
+    }
+
+    view.mouseDown(with: mouseDown!)
+    if let commandV = NSEvent.keyEvent(
+        with: .keyDown,
+        location: .zero,
+        modifierFlags: .command,
+        timestamp: 0,
+        windowNumber: 0,
+        context: nil,
+        characters: "v",
+        charactersIgnoringModifiers: "v",
+        isARepeat: false,
+        keyCode: UInt16(kVK_ANSI_V)
+    ) {
+        view.keyDown(with: commandV)
+    }
+
+    view.mouseDown(with: mouseDown!)
+    if let escape = NSEvent.keyEvent(
+        with: .keyDown,
+        location: .zero,
+        modifierFlags: [],
+        timestamp: 0,
+        windowNumber: 0,
+        context: nil,
+        characters: "\u{1b}",
+        charactersIgnoringModifiers: "\u{1b}",
+        isARepeat: false,
+        keyCode: UInt16(kVK_Escape)
+    ) {
+        view.keyDown(with: escape)
+    }
+    _ = view.resignFirstResponder()
+
+    return [
+        "captures": captures,
+        "noneDisplay": HotKeyRecorderDisplayString(keyCode: -1, modifierFlags: 0),
+        "commandDisplay": HotKeyRecorderDisplayString(
+            keyCode: kVK_ANSI_V,
+            modifierFlags: Int(NSEvent.ModifierFlags.command.rawValue)
+        ),
+        "fallbackKeyName": HotKeyRecorderNSView.keyName(for: 999)
+    ]
+}
+#endif
+
 func CMShortcutsPreferenceSnapshotForDebug() -> [String: Any] {
     let defaults = UserDefaults.standard
 
@@ -3414,6 +3727,16 @@ private struct AvailableRunningApp: Identifiable {
 private func CMAvailableRunningAppsForExclusion(
     excluding excludedApps: [ExcludedApp]
 ) -> [AvailableRunningApp] {
+#if TESTING
+    let testIcon = NSImage(size: NSSize(width: 16, height: 16))
+    return [
+        AvailableRunningApp(bundleIdentifier: "com.apple.finder", name: "Finder", icon: testIcon),
+        AvailableRunningApp(bundleIdentifier: "com.apple.TextEdit", name: "TextEdit", icon: testIcon),
+        AvailableRunningApp(bundleIdentifier: "com.naotaka.ClipMenu", name: "ClipMenu", icon: testIcon)
+    ].filter { app in
+        !excludedApps.contains(where: { $0.bundleIdentifier == app.bundleIdentifier })
+    }
+#else
     NSWorkspace.shared.runningApplications
         .filter { app in
             app.bundleIdentifier != nil
@@ -3429,6 +3752,7 @@ private func CMAvailableRunningAppsForExclusion(
             let icon = NSWorkspace.shared.icon(forFile: appURL.path)
             return AvailableRunningApp(bundleIdentifier: bundleIdentifier, name: name, icon: icon)
         }
+#endif
 }
 
 private final class RecordingPreferencesStore: ObservableObject {
@@ -4076,6 +4400,123 @@ func CMSetReservedActionKindForTesting(_ kind: String) -> Bool {
 func CMAddUserReservedActionForTesting(path: String) -> Bool {
     ActionFileStore.shared.addUserReservedAction(path: path)
 }
+
+#if TESTING
+@MainActor
+func CMActionDragDropExerciseForTesting() -> [String: Any] {
+    let store = ActionFileStore.shared
+    let originalNodes = store.actionNodes
+    let originalSelection = store.selectedActionNodeID
+    defer {
+        store.actionNodes = originalNodes
+        store.selectedActionNodeID = originalSelection
+        store.commitPendingChanges()
+    }
+
+    let first = ActionNode(
+        nodeTitle: "First",
+        action: [CMActionTypeKey: CMBuiltinActionType, "name": "pasteAsPlainText:"]
+    )
+    let second = ActionNode(
+        nodeTitle: "Second",
+        action: [CMActionTypeKey: CMBuiltinActionType, "name": "remove:"]
+    )
+    let folder = ActionNode(nodeTitle: "Folder", children: [first, second])
+    store.actionNodes = [folder]
+    store.selectedActionNodeID = first.id
+
+    let copiedProvider = store.actionDragProvider(for: second)
+    let copiedAccepted = store.acceptActionNodeDrop(
+        [copiedProvider],
+        destination: ActionDropDestination(parentID: folder.id, insertionIndex: 0)
+    )
+    RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
+    let afterCopy = store.currentActionNodePaths()
+
+    guard let firstID = store.actionNodeID(path: "Folder/First") else {
+        return [
+            "copiedAccepted": copiedAccepted,
+            "afterCopy": afterCopy,
+            "matchesExpected": false
+        ]
+    }
+    let movedProvider = store.actionMoveDragProvider(for: first)
+    let movedAccepted = store.acceptActionNodeDrop(
+        [movedProvider],
+        destination: ActionDropDestination(parentID: nil, insertionIndex: 0)
+    )
+    RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
+    let afterMove = store.currentActionNodePaths()
+    let invalidAccepted = store.acceptActionNodeDrop(
+        [NSItemProvider(item: "plain" as NSString, typeIdentifier: UTType.plainText.identifier)],
+        destination: ActionDropDestination(parentID: firstID, insertionIndex: 0)
+    )
+
+    return [
+        "copiedAccepted": copiedAccepted,
+        "movedAccepted": movedAccepted,
+        "invalidAccepted": invalidAccepted,
+        "afterCopy": afterCopy,
+        "afterMove": afterMove,
+        "matchesExpected": copiedAccepted
+            && movedAccepted
+            && !invalidAccepted
+            && afterCopy.contains("Folder/Second")
+            && afterMove.first == "First"
+    ]
+}
+
+@MainActor
+func CMSnippetDragDropExerciseForTesting() -> [String: Any] {
+    let store = SnippetFileStore.shared
+    let originalFolders = store.folders
+    let originalSelection = store.currentSelectionSnapshot()
+    defer {
+        store.folders = originalFolders
+        store.restoreSelectionSnapshot(originalSelection)
+        store.undoManager.removeAllActions()
+    }
+
+    let firstSnippet = Snippet(title: "First", content: "first", isEnabled: true)
+    let secondSnippet = Snippet(title: "Second", content: "second", isEnabled: true)
+    let sourceFolder = SnippetFolder(title: "Source", isEnabled: true, snippets: [firstSnippet, secondSnippet])
+    let targetFolder = SnippetFolder(title: "Target", isEnabled: true, snippets: [])
+    store.folders = [sourceFolder, targetFolder]
+    store.restoreSelectionSnapshot(
+        SnippetFileStore.SelectionSnapshot(
+            selectedFolderIDs: [sourceFolder.id],
+            selectedSnippetIDs: [firstSnippet.id, secondSnippet.id],
+            primarySelectedFolderID: sourceFolder.id,
+            primarySelectedSnippetID: firstSnippet.id
+        )
+    )
+
+    let provider = store.snippetDragProvider(folderID: sourceFolder.id, snippetID: secondSnippet.id)
+    let accepted = store.acceptSnippetDrop([provider], targetFolderID: targetFolder.id, destinationIndex: 0)
+    RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
+    let targetTitles = store.folders.first(where: { $0.id == targetFolder.id })?.snippets.map(\.title) ?? []
+    let sourceTitles = store.folders.first(where: { $0.id == sourceFolder.id })?.snippets.map(\.title) ?? []
+    let invalidAccepted = store.acceptSnippetDrop(
+        [NSItemProvider(item: "plain" as NSString, typeIdentifier: UTType.plainText.identifier)],
+        targetFolderID: targetFolder.id,
+        destinationIndex: nil
+    )
+    let payload = store.makeSnippetDragPayload(folderID: targetFolder.id, snippetIDs: [firstSnippet.id])
+
+    return [
+        "accepted": accepted,
+        "invalidAccepted": invalidAccepted,
+        "sourceTitles": sourceTitles,
+        "targetTitles": targetTitles,
+        "payloadContainsTargetFolder": payload.contains(targetFolder.id.uuidString),
+        "matchesExpected": accepted
+            && !invalidAccepted
+            && sourceTitles.isEmpty
+            && targetTitles == ["First", "Second"]
+            && payload.contains(targetFolder.id.uuidString)
+    ]
+}
+#endif
 
 private struct StoreTypePreferencesViewContent: View {
     @ObservedObject private var store = RecordingPreferencesStore.shared
@@ -6352,6 +6793,108 @@ private final class ActionFileStore: ObservableObject {
         loadActionMenu()
         hasPendingChanges = false
     }
+
+#if TESTING
+    func debugStorageLoadCoverageReportForTesting() -> [String: Any] {
+        let defaults = UserDefaults.standard
+        let originalSupportDirectory = defaults.object(forKey: "debugSupportDirectoryPath")
+        let originalActionNodes = actionNodes
+        let originalBuiltinNodes = builtinNodes
+        let originalBundledNodes = bundledNodes
+        let originalUsersNodes = usersNodes
+        let originalCommittedNodes = committedActionNodes
+        let originalSelectedActionNodeID = selectedActionNodeID
+        let originalSelectedReservedNodeID = selectedReservedNodeID
+        let originalReservedKind = reservedKind
+        let originalPendingChanges = hasPendingChanges
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ClipMenuActionStorage-\(UUID().uuidString)", isDirectory: true)
+
+        defer {
+            if let originalSupportDirectory {
+                defaults.set(originalSupportDirectory, forKey: "debugSupportDirectoryPath")
+            } else {
+                defaults.removeObject(forKey: "debugSupportDirectoryPath")
+            }
+            actionNodes = originalActionNodes
+            builtinNodes = originalBuiltinNodes
+            bundledNodes = originalBundledNodes
+            usersNodes = originalUsersNodes
+            committedActionNodes = originalCommittedNodes
+            selectedActionNodeID = originalSelectedActionNodeID
+            selectedReservedNodeID = originalSelectedReservedNodeID
+            reservedKind = originalReservedKind
+            hasPendingChanges = originalPendingChanges
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        defaults.set(directory.path, forKey: "debugSupportDirectoryPath")
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let actionsURL = directory.appendingPathComponent("actions.plist")
+
+        try? "not a plist".write(to: actionsURL, atomically: true, encoding: .utf8)
+        reload()
+        let invalidFileClearsActions = actionNodes.isEmpty && committedActionNodes.isEmpty && selectedActionNodeID == nil
+
+        let legacyDefault = [
+            builtinAction(title: "Paste", name: "pasteAsPlainText:"),
+            ActionNode(
+                nodeTitle: "Case",
+                children: [
+                    ActionNode(nodeTitle: "Capitalize", action: [CMActionTypeKey: CMJavaScriptActionType, "path": "script/action/Case/Capitalize.js"]),
+                    ActionNode(nodeTitle: "Title Case", action: [CMActionTypeKey: CMJavaScriptActionType, "path": "script/action/Case/Title Case.js"]),
+                    ActionNode(nodeTitle: "UPPERCASE", action: [CMActionTypeKey: CMJavaScriptActionType, "path": "script/action/Case/UPPERCASE.js"]),
+                    ActionNode(nodeTitle: "lowercase", action: [CMActionTypeKey: CMJavaScriptActionType, "path": "script/action/Case/lowercase.js"])
+                ]
+            ),
+            ActionNode(
+                nodeTitle: "Trim",
+                children: [
+                    ActionNode(nodeTitle: "LTrim", action: [CMActionTypeKey: CMJavaScriptActionType, "path": "script/action/Trim/LTrim.js"]),
+                    ActionNode(nodeTitle: "RTrim", action: [CMActionTypeKey: CMJavaScriptActionType, "path": "script/action/Trim/RTrim.js"]),
+                    ActionNode(nodeTitle: "Trim", action: [CMActionTypeKey: CMJavaScriptActionType, "path": "script/action/Trim/Trim.js"])
+                ]
+            ),
+            builtinAction(title: "Remove", name: "remove:")
+        ]
+        try? PropertyListEncoder().encode(legacyDefault).write(to: actionsURL, options: .atomic)
+        reload()
+        let legacyDefaultReplaced = actionNodes.count >= 2 && !isEarlierGeneratedDefault(actionNodes)
+
+        let userScriptDirectory = directory
+            .appendingPathComponent("script", isDirectory: true)
+            .appendingPathComponent("action", isDirectory: true)
+            .appendingPathComponent("Folder", isDirectory: true)
+        try? FileManager.default.createDirectory(at: userScriptDirectory, withIntermediateDirectories: true)
+        try? "return clipText;".write(
+            to: userScriptDirectory.appendingPathComponent("User Upper.js"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try? FileManager.default.removeItem(at: actionsURL)
+        reload()
+        let userTitles = flattenedNodePaths(in: usersNodes)
+
+        var builtinNames: [String] = []
+        var scriptPaths: [String] = []
+        for node in actionNodes {
+            collectActionSignatures(from: node, builtinNames: &builtinNames, scriptPaths: &scriptPaths)
+        }
+
+        return [
+            "invalidFileClearsActions": invalidFileClearsActions,
+            "legacyDefaultReplaced": legacyDefaultReplaced,
+            "defaultActionCount": actionNodes.count,
+            "userTitles": userTitles,
+            "builtinSignatureCount": builtinNames.count,
+            "scriptSignatureCount": scriptPaths.count,
+            "relativePath": bundledScriptRelativePath(from: "/tmp/script/action/Case/UPPERCASE.js") ?? "",
+            "shortPath": bundledScriptRelativePath(from: "script/action/Trim/Trim.js") ?? "",
+            "plainPath": bundledScriptRelativePath(from: "Case/lowercase.js") ?? "",
+            "absolutePathRejected": bundledScriptRelativePath(from: "/tmp/custom.js") as Any
+        ]
+    }
+#endif
 
     func save() {
         commitPendingChanges()
@@ -8706,6 +9249,98 @@ final class SnippetFileStore: ObservableObject {
         }
     }
 
+#if TESTING
+    func debugStorageLoadCoverageReportForTesting() -> [String: Any] {
+        let defaults = UserDefaults.standard
+        let originalSupportDirectory = defaults.object(forKey: "debugSupportDirectoryPath")
+        let originalFolders = folders
+        let originalPersistedFolders = persistedFolders
+        let originalSelection = currentSelectionSnapshot()
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ClipMenuSnippetStorage-\(UUID().uuidString)", isDirectory: true)
+
+        defer {
+            if let originalSupportDirectory {
+                defaults.set(originalSupportDirectory, forKey: "debugSupportDirectoryPath")
+            } else {
+                defaults.removeObject(forKey: "debugSupportDirectoryPath")
+            }
+            folders = originalFolders
+            persistedFolders = originalPersistedFolders
+            restoreSelectionSnapshot(originalSelection)
+            undoManager.removeAllActions()
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        defaults.set(directory.path, forKey: "debugSupportDirectoryPath")
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? FileManager.default.removeItem(at: fileURL)
+        try? FileManager.default.removeItem(at: jsonFileURL)
+
+        let jsonFolder = SnippetFolder(
+            title: "JSON Folder",
+            isEnabled: true,
+            snippets: [Snippet(title: "JSON Snippet", content: "json body", isEnabled: true)]
+        )
+        if let data = try? JSONEncoder().encode([jsonFolder]) {
+            try? data.write(to: jsonFileURL, options: .atomic)
+        }
+        let jsonOnly = load()
+
+        let referenceFolder = SnippetFolder(
+            title: "Reference Folder",
+            isEnabled: true,
+            snippets: [Snippet(title: "Reference Snippet", content: "reference body", isEnabled: true)]
+        )
+        persistedFolders = [referenceFolder]
+        folders = [referenceFolder]
+        let xmlFolder = SnippetFolder(
+            title: "XML Folder",
+            isEnabled: false,
+            snippets: [Snippet(title: "XML Snippet", content: "xml body", isEnabled: false)]
+        )
+        try? exportSnippets(to: fileURL, includeMetadata: true, sourceFolders: [xmlFolder])
+        try? FileManager.default.removeItem(at: jsonFileURL)
+        let xmlLoaded = load()
+        let reusedFolderID = xmlLoaded.first?.id == referenceFolder.id
+        let reusedSnippetID = xmlLoaded.first?.snippets.first?.id == referenceFolder.snippets.first?.id
+
+        try? "not xml".write(to: fileURL, atomically: true, encoding: .utf8)
+        let corruptLoaded = load()
+
+        let sampleXML = """
+        <folder>
+          <enabled>false</enabled>
+          <index>7</index>
+          <snippet enabled="true" index="3" />
+          <snippet enabled="0" />
+        </folder>
+        """
+        let element = (try? XMLDocument(xmlString: sampleXML, options: []))?.rootElement()
+        let childBoolFalse = element.flatMap { Self.childBool(named: "enabled", in: $0) } ?? true
+        let childInt = element.flatMap { Self.childInt(named: "index", in: $0) } ?? 0
+        let firstLegacyBool = element?.elements(forName: "snippet").first.flatMap {
+            Self.legacyAttributeBool(named: "enabled", in: $0)
+        } ?? false
+        let secondLegacyBool = element?.elements(forName: "snippet").dropFirst().first.flatMap {
+            Self.legacyAttributeBool(named: "enabled", in: $0)
+        } ?? true
+
+        return [
+            "jsonOnlyTitle": jsonOnly.first?.title ?? "",
+            "xmlLoadedTitle": xmlLoaded.first?.title ?? "",
+            "xmlLoadedSnippetTitle": xmlLoaded.first?.snippets.first?.title ?? "",
+            "reusedFolderID": reusedFolderID,
+            "reusedSnippetID": reusedSnippetID,
+            "corruptLoadedCount": corruptLoaded.count,
+            "childBoolFalse": childBoolFalse,
+            "childInt": childInt,
+            "firstLegacyBool": firstLegacyBool,
+            "secondLegacyBool": secondLegacyBool
+        ]
+    }
+#endif
+
     private func applyFolderSelection(_ ids: Set<UUID>, primary: UUID? = nil) {
         primarySelectedFolderID = primary
         selectedFolderIDs = ids
@@ -9230,7 +9865,7 @@ final class SnippetFileStore: ObservableObject {
         return document
     }
 
-#if DEBUG
+#if DEBUG || TESTING
     func debugEmptyExportReport() -> [String: Any] {
         let temporaryURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("clipmenu-empty-snippet-export.xml")
@@ -9386,6 +10021,160 @@ final class SnippetFileStore: ObservableObject {
 
         return report
     }
+
+#if TESTING
+    func debugLegacyCoreDataImportReport() -> [String: Any] {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <database>
+          <object type="SNIPPET" id="s2">
+            <attribute name="title" type="string">Second Snippet</attribute>
+            <attribute name="content" type="string">second body</attribute>
+            <attribute name="enabled" type="boolean">NO</attribute>
+            <attribute name="index" type="integer">2</attribute>
+          </object>
+          <object type="SNIPPET" id="s1">
+            <attribute name="title" type="string">First Snippet</attribute>
+            <attribute name="content" type="string">first body</attribute>
+            <attribute name="enabled" type="boolean">YES</attribute>
+            <attribute name="index" type="integer">1</attribute>
+          </object>
+          <object type="FOLDER" id="f2">
+            <attribute name="title" type="string">Later Folder</attribute>
+            <attribute name="enabled" type="boolean">YES</attribute>
+            <attribute name="index" type="integer">2</attribute>
+            <relationship name="snippets" idrefs="s2"/>
+          </object>
+          <object type="FOLDER" id="f1">
+            <attribute name="title" type="string">Earlier Folder</attribute>
+            <attribute name="enabled" type="boolean">NO</attribute>
+            <attribute name="index" type="integer">1</attribute>
+            <relationship name="snippets" idrefs="s2 s1 missing"/>
+          </object>
+        </database>
+        """
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ClipMenuLegacySnippetImport-\(UUID().uuidString).xml")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        do {
+            try xml.write(to: url, atomically: true, encoding: .utf8)
+            let folders = try importLegacyCoreDataSnippets(from: url)
+            let model = Self.makeLegacySnippetModel()
+            let actualState: [String: Any] = [
+                "folderTitles": folders.map(\.title),
+                "folderEnabledStates": folders.map(\.isEnabled),
+                "snippetTitlesByFolder": folders.map { $0.snippets.map(\.title) },
+                "snippetEnabledStatesByFolder": folders.map { $0.snippets.map(\.isEnabled) },
+                "entityNames": model.entities.compactMap(\.name).sorted()
+            ]
+            let expectedState: [String: Any] = [
+                "folderTitles": ["Earlier Folder", "Later Folder"],
+                "folderEnabledStates": [false, true],
+                "snippetTitlesByFolder": [
+                    ["First Snippet", "Second Snippet"],
+                    ["Second Snippet"]
+                ],
+                "snippetEnabledStatesByFolder": [
+                    [true, false],
+                    [false]
+                ],
+                "entityNames": ["Folder", "Snippet"]
+            ]
+            return [
+                "state": actualState,
+                "expectedState": expectedState,
+                "matchesExpected": (actualState as NSDictionary).isEqual(to: expectedState)
+            ]
+        } catch {
+            return [
+                "error": error.localizedDescription,
+                "matchesExpected": false
+            ]
+        }
+    }
+
+    func debugLegacySnippetLoadReport() -> [String: Any] {
+        let originalFolders = folders
+        let originalPersistedFolders = persistedFolders
+        let originalXMLData = try? Data(contentsOf: fileURL)
+        let originalJSONData = try? Data(contentsOf: jsonFileURL)
+        let fileManager = FileManager.default
+        defer {
+            folders = originalFolders
+            persistedFolders = originalPersistedFolders
+            if let originalXMLData {
+                try? originalXMLData.write(to: fileURL, options: .atomic)
+            } else {
+                try? fileManager.removeItem(at: fileURL)
+            }
+            if let originalJSONData {
+                try? originalJSONData.write(to: jsonFileURL, options: .atomic)
+            } else {
+                try? fileManager.removeItem(at: jsonFileURL)
+            }
+        }
+
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <database>
+          <object type="SNIPPET" id="s1">
+            <attribute name="title" type="string">First Snippet</attribute>
+            <attribute name="content" type="string">first body</attribute>
+            <attribute name="enabled" type="boolean">NO</attribute>
+            <attribute name="index" type="integer">2</attribute>
+          </object>
+          <object type="SNIPPET" id="s2">
+            <attribute name="title" type="string">Second Snippet</attribute>
+            <attribute name="content" type="string">second body</attribute>
+            <attribute name="enabled" type="boolean">YES</attribute>
+            <attribute name="index" type="integer">1</attribute>
+          </object>
+          <object type="FOLDER" id="f1">
+            <attribute name="title" type="string">Legacy Folder</attribute>
+            <attribute name="enabled" type="boolean">YES</attribute>
+            <attribute name="index" type="integer">1</attribute>
+            <relationship name="snippets" idrefs="s1 s2"/>
+          </object>
+        </database>
+        """
+
+        do {
+            try fileManager.createDirectory(at: supportDirectory, withIntermediateDirectories: true)
+            try? fileManager.removeItem(at: jsonFileURL)
+            try xml.write(to: fileURL, atomically: true, encoding: .utf8)
+            let loadedFolders = load()
+            let actualState: [String: Any] = [
+                "folderTitles": loadedFolders.map(\.title),
+                "folderEnabledStates": loadedFolders.map(\.isEnabled),
+                "snippetTitlesByFolder": loadedFolders.map { $0.snippets.map(\.title) },
+                "snippetContentsByFolder": loadedFolders.map { $0.snippets.map(\.content) },
+                "snippetEnabledStatesByFolder": loadedFolders.map { $0.snippets.map(\.isEnabled) },
+                "jsonSidecarExists": fileManager.fileExists(atPath: jsonFileURL.path),
+                "xmlExists": fileManager.fileExists(atPath: fileURL.path)
+            ]
+            let expectedState: [String: Any] = [
+                "folderTitles": ["Legacy Folder"],
+                "folderEnabledStates": [true],
+                "snippetTitlesByFolder": [["Second Snippet", "First Snippet"]],
+                "snippetContentsByFolder": [["second body", "first body"]],
+                "snippetEnabledStatesByFolder": [[true, false]],
+                "jsonSidecarExists": true,
+                "xmlExists": true
+            ]
+            return [
+                "state": actualState,
+                "expectedState": expectedState,
+                "matchesExpected": (actualState as NSDictionary).isEqual(to: expectedState)
+            ]
+        } catch {
+            return [
+                "error": error.localizedDescription,
+                "matchesExpected": false
+            ]
+        }
+    }
+#endif
 #endif
 
     private static func childText(named name: String, in element: XMLElement) -> String? {
@@ -11401,7 +12190,7 @@ private func CMSnippetEditorLegacyListFont() -> NSFont {
     NSFont(name: "LucidaGrande", size: 13) ?? NSFont.systemFont(ofSize: 13)
 }
 
-#if DEBUG
+#if DEBUG || TESTING
 enum CMSnippetEditorDebugAction: Hashable {
     case addFolder
     case addSnippet
@@ -12127,6 +12916,102 @@ func CMTestSnippetInlineTitleEditForTesting(folderValue: String, snippetValue: S
     ]
 }
 
+func CMUIPrivateHelperCoverageReportForTesting() -> [String: Any] {
+    let folderNode = ActionNode(
+        nodeTitle: "Folder",
+        children: [
+            ActionNode(nodeTitle: "One", action: [CMActionTypeKey: CMBuiltinActionType, "name": "pasteAsPlainText:"]),
+            ActionNode(nodeTitle: "Two", action: [CMActionTypeKey: CMJavaScriptActionType, "path": "/tmp/action.js"])
+        ]
+    )
+    let bundledScriptNode = ActionNode(
+        nodeTitle: "Bundled",
+        action: [CMActionTypeKey: CMJavaScriptActionType, "path": "/Applications/ClipMenu.app/Contents/Resources/script/action/Case/UPPERCASE.js"]
+    )
+    let userScriptNode = ActionNode(
+        nodeTitle: "User",
+        action: [CMActionTypeKey: CMJavaScriptActionType, "path": NSHomeDirectory() + "/Library/Application Support/ClipMenu/script/action/User.js"]
+    )
+    let builtinNode = ActionNode(
+        nodeTitle: "Builtin",
+        action: [CMActionTypeKey: CMBuiltinActionType, "name": "pasteAsPlainText:"]
+    )
+
+    let inlineTitleReport = CMTestSnippetInlineTitleEditForTesting(
+        folderValue: "Edited Folder",
+        snippetValue: "Edited Snippet"
+    )
+    let workflowStage = UpdateWorkflowStageView(
+        title: "Check",
+        value: "Ready",
+        detail: "Automatic update checks are configured."
+    )
+    _ = workflowStage.body
+
+    let tabDetails = PreferenceTab.allCases.map { tab in
+        [
+            "rawValue": tab.rawValue,
+            "title": tab.title,
+            "subtitle": tab.subtitle,
+            "summary": tab.sidebarShortSummary,
+            "systemImage": tab.systemImage,
+            "iconSource": tab.debugIconSourceName,
+            "usesTemplate": tab.legacyImageUsesTemplateRendering,
+            "hasLegacyImage": tab.legacySidebarImage != nil
+        ] as [String: Any]
+    }
+    let visibleSearches = [
+        "": CMVisiblePreferenceTabsForDebug(query: "").map(\.rawValue),
+        "history": CMVisiblePreferenceTabsForDebug(query: "history").map(\.rawValue),
+        "ACTION": CMVisiblePreferenceTabsForDebug(query: "ACTION").map(\.rawValue),
+        "missing": CMVisiblePreferenceTabsForDebug(query: "missing").map(\.rawValue)
+    ]
+    let fileIconMappingHighlights = CMTypeFileIconMappingHighlightsForDebug()
+
+    return [
+        "preferenceTabs": [
+            CMPreferenceTab(debugRawValue: " general ")?.rawValue ?? "",
+            CMPreferenceTab(debugRawValue: "types")?.rawValue ?? "",
+            CMPreferenceTab(debugRawValue: "actions")?.rawValue ?? "",
+            CMPreferenceTab(debugRawValue: "updates")?.rawValue ?? "",
+            CMPreferenceTab(debugRawValue: "missing")?.rawValue as Any
+        ],
+        "preferenceTabDetails": tabDetails,
+        "visibleSearches": visibleSearches,
+        "fileIconMappingHighlights": fileIconMappingHighlights,
+        "workflowStage": CMUpdateWorkflowStage(
+            title: "Download",
+            value: "Waiting",
+            detail: "The app is ready to download an update."
+        ).debugDictionary,
+        "startupSummaries": [
+            CMStartupLaunchSummaryText(loginItemEnabled: false, supportsLoginItem: false),
+            CMStartupLaunchSummaryText(loginItemEnabled: true, supportsLoginItem: true),
+            CMStartupLaunchSummaryText(loginItemEnabled: false, supportsLoginItem: true)
+        ],
+        "actionSubtitles": [
+            CMActionNodeRowSubtitle(for: folderNode),
+            CMActionNodeRowSubtitle(for: bundledScriptNode),
+            CMActionNodeRowSubtitle(for: userScriptNode),
+            CMActionNodeRowSubtitle(for: builtinNode)
+        ],
+        "overviewDetails": [
+            CMSnippetEditorOverviewDetail(folderTitle: nil, snippetTitle: nil, hasUnsavedChanges: true, folderCount: 1),
+            CMSnippetEditorOverviewDetail(folderTitle: "Folder", snippetTitle: "Snippet", hasUnsavedChanges: false, folderCount: 1),
+            CMSnippetEditorOverviewDetail(folderTitle: "Folder", snippetTitle: nil, hasUnsavedChanges: false, folderCount: 1),
+            CMSnippetEditorOverviewDetail(folderTitle: nil, snippetTitle: nil, hasUnsavedChanges: false, folderCount: 0),
+            CMSnippetEditorOverviewDetail(folderTitle: nil, snippetTitle: nil, hasUnsavedChanges: false, folderCount: 2)
+        ],
+        "footerSummaries": [
+            CMSnippetEditorFooterSummary(visibleSnippetCount: 0, folderTitle: nil, snippetTitle: nil, hasUnsavedChanges: true),
+            CMSnippetEditorFooterSummary(visibleSnippetCount: 1, folderTitle: "Folder", snippetTitle: "Snippet", hasUnsavedChanges: false),
+            CMSnippetEditorFooterSummary(visibleSnippetCount: 2, folderTitle: "Folder", snippetTitle: nil, hasUnsavedChanges: false),
+            CMSnippetEditorFooterSummary(visibleSnippetCount: 0, folderTitle: nil, snippetTitle: nil, hasUnsavedChanges: false)
+        ],
+        "inlineTitleReport": inlineTitleReport
+    ]
+}
+
 func CMDebugSnippetFolderDropValidationReport() -> [String: Any] {
     let validFolderReorderDrop = CMSnippetFolderAcceptsFolderReorderDrop(
         proposedChildIndex: 0,
@@ -12176,6 +13061,77 @@ func CMDebugSnippetFolderDropValidationReport() -> [String: Any] {
             && !invalidChildIndexDrop
             && !invalidTargetDrop
             && !invalidSourceDrop
+    ]
+}
+
+func CMActionStorageLoadCoverageReportForTesting() -> [String: Any] {
+    ActionFileStore.shared.debugStorageLoadCoverageReportForTesting()
+}
+
+func CMSnippetStorageLoadCoverageReportForTesting() -> [String: Any] {
+    SnippetFileStore.shared.debugStorageLoadCoverageReportForTesting()
+}
+
+@MainActor
+func CMNativeControlCoverageReportForTesting() -> [String: Any] {
+    var searchText = "needle"
+    var selectedScope = SnippetSearchScope.content
+    let searchView = NativeSearchField(
+        text: Binding(get: { searchText }, set: { searchText = $0 }),
+        placeholder: "Search",
+        selectedScope: Binding(get: { selectedScope }, set: { selectedScope = $0 }),
+        isEnabled: true
+    )
+    let searchCoordinator = searchView.makeCoordinator()
+    let searchMenu = searchCoordinator.makeSearchMenu()
+
+    let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 160, height: 120))
+    let labelView = CMSnippetFolderGroupLabelView(frame: NSRect(x: 0, y: 0, width: 120, height: 24))
+    labelView.title = "Group"
+    contentView.addSubview(labelView)
+    let classNames = CMCollectViewClassNames(in: contentView, limit: 4)
+    labelView.displayIfNeeded()
+
+    let window = ClipMenuUndoWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 160, height: 120),
+        styleMask: [.titled],
+        backing: .buffered,
+        defer: false
+    )
+    window.contentView = contentView
+    let undoManager = UndoManager()
+    window.providedUndoManager = { undoManager }
+    undoManager.registerUndo(withTarget: window) { _ in }
+    let undoEvent = NSEvent.keyEvent(
+        with: .keyDown,
+        location: .zero,
+        modifierFlags: [.command],
+        timestamp: 0,
+        windowNumber: window.windowNumber,
+        context: nil,
+        characters: "z",
+        charactersIgnoringModifiers: "z",
+        isARepeat: false,
+        keyCode: 6
+    )
+    let handledUndo = undoEvent.map { window.performKeyEquivalent(with: $0) } ?? false
+
+    let nilEndEditing = CMEndEditingForWindow(nil, showFailureAlert: false)
+    cmBypassAlertPresentationForDebug = true
+    let invalidEditingBegan = cmDebugInvalidEditingHarness.begin(in: window)
+    let invalidEditingEnded = CMEndEditingForWindow(window, showFailureAlert: true)
+    cmDebugInvalidEditingHarness.end()
+    cmBypassAlertPresentationForDebug = false
+
+    return [
+        "searchMenuItems": searchMenu.numberOfItems,
+        "selectedSearchScope": selectedScope.rawValue,
+        "classNames": classNames,
+        "handledUndo": handledUndo,
+        "nilEndEditing": nilEndEditing,
+        "invalidEditingBegan": invalidEditingBegan,
+        "invalidEditingEnded": invalidEditingEnded,
+        "alertMessage": cmLastDebugAlertSnapshot?["messageText"] as? String ?? ""
     ]
 }
 #endif

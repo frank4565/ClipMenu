@@ -1,0 +1,42 @@
+{
+  "configurations" : [
+    {
+      "id" : "6C6AC0B3-7D39-4C7E-B113-7263E02F9A75",
+      "name" : "Default",
+      "options" : {
+        "codeCoverage" : true,
+        "language" : "en",
+        "region" : "US",
+        "targetForVariableExpansion" : {
+          "containerPath" : "container:ClipMenu.xcodeproj",
+          "identifier" : "8D1107260486CEB800E47090",
+          "name" : "ClipMenu"
+        }
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "environmentVariableEntries" : [
+      {
+        "key" : "CLIPMENU_DEBUG_SUPPORT_DIRECTORY",
+        "value" : "$(TEMP_DIR)/ClipMenuTestSupport"
+      },
+      {
+        "key" : "CLIPMENU_EXERCISE_SWIFTUI_BODIES",
+        "value" : "1"
+      }
+    ],
+    "parallelizationEnabled" : false,
+    "testExecutionOrdering" : "lexical"
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:ClipMenu.xcodeproj",
+        "identifier" : "7A2000200000000000000001",
+        "name" : "ClipMenuTests"
+      }
+    }
+  ],
+  "version" : 1
+}

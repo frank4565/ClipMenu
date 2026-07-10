@@ -9,6 +9,17 @@
 /* Begin PBXBuildFile section */
 		7A1000030000000000000001 /* AppController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1000010000000000000001 /* AppController.swift */; };
 		7A1000060000000000000001 /* SwiftUINativeWindows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1000050000000000000001 /* SwiftUINativeWindows.swift */; };
+		7A2000100000000000000001 /* PreferenceNormalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000010000000000000001 /* PreferenceNormalizationTests.swift */; };
+		7A2000110000000000000001 /* MenuPreviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000020000000000000001 /* MenuPreviewTests.swift */; };
+		7A2000120000000000000001 /* ClipItemTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000030000000000000001 /* ClipItemTests.swift */; };
+		7A2000130000000000000001 /* ClipStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000040000000000000001 /* ClipStoreTests.swift */; };
+		7A2000140000000000000001 /* AlertFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000050000000000000001 /* AlertFactoryTests.swift */; };
+		7A2000150000000000000001 /* FixtureIntegrityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000060000000000000001 /* FixtureIntegrityTests.swift */; };
+		7A2000160000000000000001 /* PreferenceSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000070000000000000001 /* PreferenceSnapshotTests.swift */; };
+		7A2000170000000000000001 /* UpdateCoordinatorDebugTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000080000000000000001 /* UpdateCoordinatorDebugTests.swift */; };
+		7A2000180000000000000001 /* SnippetDebugReportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000090000000000000001 /* SnippetDebugReportTests.swift */; };
+		7A2000190000000000000001 /* AppControllerDebugReportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A20000A0000000000000001 /* AppControllerDebugReportTests.swift */; };
+		7A20001A0000000000000001 /* JavaScriptActionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A20000B0000000000000001 /* JavaScriptActionTests.swift */; };
 		7A1000080000000000000001 /* ComposingPreferences.tiff in Resources */ = {isa = PBXBuildFile; fileRef = 7A10000A0000000000000001 /* ComposingPreferences.tiff */; };
 		7A1000090000000000000001 /* ComposingPreferences.tiff in Resources */ = {isa = PBXBuildFile; fileRef = 7A10000A0000000000000001 /* ComposingPreferences.tiff */; };
 		7A10000C0000000000000001 /* MainMenu.nib in Resources */ = {isa = PBXBuildFile; fileRef = 7A10000B0000000000000001 /* MainMenu.nib */; };
@@ -93,6 +104,16 @@
 		A8EBB689109190F900208A86 /* PTKeyboardIcon.tiff in Resources */ = {isa = PBXBuildFile; fileRef = A8EBB687109190F900208A86 /* PTKeyboardIcon.tiff */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		7A2000300000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 29B97313FDCFA39411CA2CEA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8D1107260486CEB800E47090;
+			remoteInfo = ClipMenu;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXCopyFilesBuildPhase section */
 		A82B8AE60EC3F8D700096102 /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -119,6 +140,19 @@
 		7A1000120000000000000001 /* Preferences.nib (Japanese) */ = {isa = PBXFileReference; lastKnownFileType = wrapper.nib; name = "Preferences.nib (Japanese)"; path = Japanese.lproj/Preferences.nib; sourceTree = "<group>"; };
 		7A1000130000000000000001 /* Preferences.strings (English) */ = {isa = PBXFileReference; fileEncoding = 10; lastKnownFileType = text.plist.strings; name = "Preferences.strings (English)"; path = English.lproj/Preferences.strings; sourceTree = "<group>"; };
 		7A1000140000000000000001 /* Preferences.strings (Japanese) */ = {isa = PBXFileReference; fileEncoding = 10; lastKnownFileType = text.plist.strings; name = "Preferences.strings (Japanese)"; path = Japanese.lproj/Preferences.strings; sourceTree = "<group>"; };
+		7A2000010000000000000001 /* PreferenceNormalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferenceNormalizationTests.swift; sourceTree = "<group>"; };
+		7A2000020000000000000001 /* MenuPreviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuPreviewTests.swift; sourceTree = "<group>"; };
+		7A2000030000000000000001 /* ClipItemTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipItemTests.swift; sourceTree = "<group>"; };
+		7A2000040000000000000001 /* ClipStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipStoreTests.swift; sourceTree = "<group>"; };
+		7A2000050000000000000001 /* AlertFactoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertFactoryTests.swift; sourceTree = "<group>"; };
+		7A2000060000000000000001 /* FixtureIntegrityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FixtureIntegrityTests.swift; sourceTree = "<group>"; };
+		7A2000070000000000000001 /* PreferenceSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferenceSnapshotTests.swift; sourceTree = "<group>"; };
+		7A2000080000000000000001 /* UpdateCoordinatorDebugTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateCoordinatorDebugTests.swift; sourceTree = "<group>"; };
+		7A2000090000000000000001 /* SnippetDebugReportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetDebugReportTests.swift; sourceTree = "<group>"; };
+		7A20000A0000000000000001 /* AppControllerDebugReportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppControllerDebugReportTests.swift; sourceTree = "<group>"; };
+		7A20000B0000000000000001 /* JavaScriptActionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JavaScriptActionTests.swift; sourceTree = "<group>"; };
+		7A2000210000000000000001 /* ClipMenuTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClipMenuTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		7A2000500000000000000001 /* ClipMenu.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = ClipMenu.xctestplan; sourceTree = "<group>"; };
 		3578645D0D23A82400FAFFC5 /* English */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = English; path = English.lproj/Localizable.strings; sourceTree = "<group>"; };
 		3578F76F0D7E3D5E00E804BF /* Menu.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = Menu.png; path = resource/Menu.png; sourceTree = "<group>"; };
 		35A473480D20E8DE00E6B842 /* ClipMenu.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; name = ClipMenu.icns; path = resource/ClipMenu.icns; sourceTree = "<group>"; };
@@ -175,6 +209,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		7A2000230000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -217,6 +258,7 @@
 			children = (
 				8D1107320486CEB800E47090 /* ClipMenu.app */,
 				A82B8AEB0EC3F8D700096102 /* ClipMenu.app */,
+				7A2000210000000000000001 /* ClipMenuTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -226,6 +268,8 @@
 			children = (
 				A89465DB0EB97A3D004ACD23 /* Models */,
 				080E96DDFE201D6D7F000001 /* Classes */,
+				7A2000600000000000000001 /* ClipMenuTests */,
+				7A2000500000000000000001 /* ClipMenu.xctestplan */,
 				3542A8620D5EBE0400B3BBBD /* NaoAdditions */,
 				29B97315FDCFA39411CA2CEA /* Other Source */,
 				29B97317FDCFA39411CA2CEA /* Resources */,
@@ -233,6 +277,24 @@
 				19C28FACFE9D520D11CA2CBB /* Products */,
 			);
 			name = ClipMenu;
+			sourceTree = "<group>";
+		};
+		7A2000600000000000000001 /* ClipMenuTests */ = {
+			isa = PBXGroup;
+			children = (
+				7A2000010000000000000001 /* PreferenceNormalizationTests.swift */,
+				7A2000020000000000000001 /* MenuPreviewTests.swift */,
+				7A2000030000000000000001 /* ClipItemTests.swift */,
+				7A2000040000000000000001 /* ClipStoreTests.swift */,
+				7A2000050000000000000001 /* AlertFactoryTests.swift */,
+				7A2000060000000000000001 /* FixtureIntegrityTests.swift */,
+				7A2000070000000000000001 /* PreferenceSnapshotTests.swift */,
+				7A2000080000000000000001 /* UpdateCoordinatorDebugTests.swift */,
+				7A2000090000000000000001 /* SnippetDebugReportTests.swift */,
+				7A20000A0000000000000001 /* AppControllerDebugReportTests.swift */,
+				7A20000B0000000000000001 /* JavaScriptActionTests.swift */,
+			);
+			path = ClipMenuTests;
 			sourceTree = "<group>";
 		};
 		29B97315FDCFA39411CA2CEA /* Other Source */ = {
@@ -396,6 +458,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		7A2000200000000000000001 /* ClipMenuTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7A2000420000000000000001 /* Build configuration list for PBXNativeTarget "ClipMenuTests" */;
+			buildPhases = (
+				7A2000220000000000000001 /* Sources */,
+				7A2000230000000000000001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				7A2000310000000000000001 /* PBXTargetDependency */,
+			);
+			name = ClipMenuTests;
+			productName = ClipMenuTests;
+			productReference = 7A2000210000000000000001 /* ClipMenuTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		8D1107260486CEB800E47090 /* ClipMenu */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = C01FCF4A08A954540054247B /* Build configuration list for PBXNativeTarget "ClipMenu" */;
@@ -457,6 +536,7 @@
 			targets = (
 				8D1107260486CEB800E47090 /* ClipMenu */,
 				A82B8AB20EC3F8D700096102 /* ClipMenu (deployment) */,
+				7A2000200000000000000001 /* ClipMenuTests */,
 			);
 		};
 /* End PBXProject section */
@@ -578,7 +658,33 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		7A2000220000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7A2000100000000000000001 /* PreferenceNormalizationTests.swift in Sources */,
+				7A2000110000000000000001 /* MenuPreviewTests.swift in Sources */,
+				7A2000120000000000000001 /* ClipItemTests.swift in Sources */,
+				7A2000130000000000000001 /* ClipStoreTests.swift in Sources */,
+				7A2000140000000000000001 /* AlertFactoryTests.swift in Sources */,
+				7A2000150000000000000001 /* FixtureIntegrityTests.swift in Sources */,
+				7A2000160000000000000001 /* PreferenceSnapshotTests.swift in Sources */,
+				7A2000170000000000000001 /* UpdateCoordinatorDebugTests.swift in Sources */,
+				7A2000180000000000000001 /* SnippetDebugReportTests.swift in Sources */,
+				7A2000190000000000000001 /* AppControllerDebugReportTests.swift in Sources */,
+				7A20001A0000000000000001 /* JavaScriptActionTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		7A2000310000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8D1107260486CEB800E47090 /* ClipMenu */;
+			targetProxy = 7A2000300000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		089C165CFE840E0CC02AAC07 /* InfoPlist.strings */ = {
@@ -608,6 +714,7 @@
 				ARCHS = "$(ARCHS_STANDARD)";
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				COPY_PHASE_STRIP = NO;
+				ENABLE_TESTABILITY = YES;
 				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_DYNAMIC_NO_PIC = NO;
@@ -626,6 +733,7 @@
 				RUN_CLANG_STATIC_ANALYZER = YES;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				WRAPPER_EXTENSION = app;
 			};
@@ -664,6 +772,7 @@
 				ARCHS = "$(ARCHS_STANDARD)";
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				COPY_PHASE_STRIP = NO;
+				ENABLE_TESTABILITY = YES;
 				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_DYNAMIC_NO_PIC = NO;
@@ -681,6 +790,7 @@
 				RUN_CLANG_STATIC_ANALYZER = NO;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				WRAPPER_EXTENSION = app;
 			};
@@ -734,6 +844,51 @@
 			};
 			name = Release;
 		};
+		7A2000400000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.naotaka.ClipMenuTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ClipMenuDebug.app/Contents/MacOS/ClipMenuDebug";
+				WRAPPER_EXTENSION = xctest;
+			};
+			name = Debug;
+		};
+		7A2000410000000000000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.naotaka.ClipMenuTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ClipMenu.app/Contents/MacOS/ClipMenu";
+				WRAPPER_EXTENSION = xctest;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -745,6 +900,15 @@
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
+		};
+		7A2000420000000000000001 /* Build configuration list for PBXNativeTarget "ClipMenuTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7A2000400000000000000001 /* Debug */,
+				7A2000410000000000000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
 		};
 		C01FCF4A08A954540054247B /* Build configuration list for PBXNativeTarget "ClipMenu" */ = {
 			isa = XCConfigurationList;

@@ -156,6 +156,12 @@ private var debugPasteSynthesisRequestCount = 0
 private var debugLastPasteSynthesisSource = ""
 private var debugLastJavaScriptAlertTitle: String?
 private var debugLastJavaScriptAlertMessage: String?
+private var debugSuppressApplicationTerminationForTesting = false
+
+private func debugTerminateApplication() {
+    guard !debugSuppressApplicationTerminationForTesting else { return }
+    NSApp.terminate(nil)
+}
 
 private func debugArgumentValue(forKey key: String) -> String? {
     let arguments = ProcessInfo.processInfo.arguments
@@ -479,6 +485,23 @@ func clipMenuApplicationSupportDirectory() -> URL {
     let overridePath = argumentOverridePath
         ?? environment[CMDebugSupportDirectoryEnvironmentKey]
         ?? defaults.string(forKey: CMDebugSupportDirectoryDefaultsKey)
+    if let overridePath {
+        let trimmedPath = overridePath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedPath.isEmpty {
+            directory = URL(fileURLWithPath: trimmedPath, isDirectory: true).standardizedFileURL
+        } else {
+            directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("ClipMenu", isDirectory: true)
+        }
+    } else {
+        directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("ClipMenu", isDirectory: true)
+    }
+    #elseif TESTING
+    let environment = ProcessInfo.processInfo.environment
+    let defaults = UserDefaults.standard
+    let overridePath = environment["CLIPMENU_DEBUG_SUPPORT_DIRECTORY"]
+        ?? defaults.string(forKey: "debugSupportDirectoryPath")
     if let overridePath {
         let trimmedPath = overridePath.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedPath.isEmpty {
@@ -1304,6 +1327,47 @@ final class ScriptableActionClip: NSObject {
     ]
 }
 
+#if TESTING
+func CMDebugScriptableActionClipFormattingReportForTesting() -> [String: Any] {
+    guard let context = JSContext(),
+          let replaceAttributes = JSValue(newObjectIn: context),
+          let addAttributes = JSValue(newObjectIn: context) else {
+        return ["available": false]
+    }
+    context.evaluateScript("""
+    var replaceAttributes = {
+      color: { foreground: 'red', background: 'rgb(0, 128, 255, 0.5)' },
+      font: { name: 'Helvetica', size: 13 },
+      underline: { style: 'single', pattern: 'dash', byWord: true }
+    };
+    var addAttributes = {
+      color: { foreground: '#00ff0080' },
+      underline: { style: 'double', pattern: 'dot' }
+    };
+    """)
+    guard let replaceValue = context.objectForKeyedSubscript("replaceAttributes"),
+          let addValue = context.objectForKeyedSubscript("addAttributes") else {
+        return ["available": false]
+    }
+
+    let richClip = ScriptableActionClip(clip: ClipItem(text: "Styled"))
+    richClip.setStringAttributes(replaceValue)
+    richClip.addStringAttributes(addValue)
+
+    let emptyClip = ScriptableActionClip(clip: ClipItem(text: ""))
+    emptyClip.setStringAttributes(replaceAttributes)
+    emptyClip.addStringAttributes(addAttributes)
+
+    return [
+        "available": true,
+        "richText": richClip.clip.text,
+        "richTypes": richClip.clip.types,
+        "hasRTF": richClip.clip.rtfData != nil,
+        "emptyHasRTF": emptyClip.clip.rtfData != nil
+    ]
+}
+#endif
+
 @objc(CMLegacyArchivedClip)
 private final class LegacyArchivedClip: NSObject, NSCoding {
     var types: [String] = []
@@ -1442,7 +1506,7 @@ private final class ArchivedClip: NSObject, NSCoding {
     }
 }
 
-#if DEBUG
+#if DEBUG || TESTING
 @objc(CMDebugLegacyArchiveClip)
 private final class DebugLegacyArchiveClip: NSObject, NSCoding {
     let types: [String]
@@ -1502,6 +1566,45 @@ private final class DebugLegacyArchiveClip: NSObject, NSCoding {
         return archiver.encodedData
     }
 }
+#endif
+
+#if TESTING
+func CMDebugLegacyArchivedClipReportForTesting() throws -> [String: Any] {
+    let createdDate = Date(timeIntervalSince1970: 100)
+    let lastUsedDate = Date(timeIntervalSince1970: 200)
+    let image = NSImage(size: NSSize(width: 2, height: 2))
+    let data = try DebugLegacyArchiveClip.archivedData(for: [
+        DebugLegacyArchiveClip(
+            types: [],
+            createdDate: createdDate,
+            lastUsedDate: lastUsedDate,
+            stringValue: "Legacy text",
+            rtfData: Data("rtf".utf8),
+            pdfData: Data("pdf".utf8),
+            filenames: ["/tmp/a.txt"],
+            urls: ["https://example.com"],
+            imageData: image.tiffRepresentation
+        )
+    ])
+    let unarchiver = try NSKeyedUnarchiver(forReadingFrom: data)
+    unarchiver.requiresSecureCoding = false
+    unarchiver.setClass(LegacyArchivedClip.self, forClassName: "Clip")
+    let legacyClips = unarchiver.decodeObject(forKey: NSKeyedArchiveRootObjectKey) as? [LegacyArchivedClip]
+    unarchiver.finishDecoding()
+    let clip = legacyClips?.first?.clipItem
+    return [
+        "typeCount": clip?.types.count ?? 0,
+        "createdAt": clip?.createdAt == createdDate,
+        "lastUsedAt": clip?.lastUsedAt == lastUsedDate,
+        "text": clip?.text ?? "",
+        "hasRTF": clip?.rtfData != nil,
+        "hasPDF": clip?.pdfData != nil,
+        "filenames": clip?.filenames ?? [],
+        "urls": clip?.urls ?? [],
+        "hasImage": clip?.imageData != nil
+    ]
+}
+
 #endif
 
 private struct RuntimeActionNode: Decodable {
@@ -1621,6 +1724,46 @@ private func excludedAppDictionaries(from object: Any?) -> [[String: String]] {
         return result
     }
 }
+
+#if TESTING
+func CMDebugExcludedAppDictionariesForTesting(from object: Any?) -> [[String: String]] {
+    excludedAppDictionaries(from: object)
+}
+
+func CMDebugLegacyPrivateHelperReportForTesting() -> [String: Any] {
+    let actionFromSwift = actionDictionary(from: ["name": "removeAction"])
+    let actionFromNSDictionary = actionDictionary(from: [
+        "name": "pasteAsFilePath:",
+        "count": NSNumber(value: 3),
+        "custom": NSURL(fileURLWithPath: "/tmp/example")
+    ] as NSDictionary)
+    let actionFromInvalid = actionDictionary(from: ["ignored"])
+    let excludedApps = excludedAppDictionaries(from: [
+        [kCMBundleIdentifierKey: "com.example.One", kCMNameKey: "One"],
+        [kCMBundleIdentifierKey: "", kCMNameKey: "Missing"],
+        [kCMBundleIdentifierKey: "com.example.Two"] as NSDictionary,
+        "ignored"
+    ])
+    let stringArrays: [[String]] = [
+        legacyStringArray(from: ["a", "b"]) ?? [],
+        legacyStringArray(from: ["x", NSNumber(value: 7), NSObject()] as NSArray) ?? [],
+        legacyStringArray(from: "solo") ?? [],
+        legacyStringArray(from: NSNumber(value: 1)) ?? []
+    ]
+
+    return [
+        "normalizedRemoveName": actionFromSwift?["name"] ?? "",
+        "normalizedRemoveType": actionFromSwift?["type"] ?? "",
+        "dictionaryType": actionFromNSDictionary?["type"] ?? "",
+        "dictionaryCount": actionFromNSDictionary?["count"] ?? "",
+        "dictionaryCustom": actionFromNSDictionary?["custom"] ?? "",
+        "invalidAction": actionFromInvalid as Any,
+        "excludedBundleIdentifiers": excludedApps.compactMap { $0[kCMBundleIdentifierKey] },
+        "excludedNames": excludedApps.compactMap { $0[kCMNameKey] },
+        "stringArrays": stringArrays
+    ]
+}
+#endif
 
 private func legacyStringArray(from object: Any?) -> [String]? {
     if let strings = object as? [String] {
@@ -1753,7 +1896,13 @@ enum LoginItemManager {
     }
 
     private static var launchAgentURL: URL? {
-        FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first?
+#if TESTING
+        if let overridePath = UserDefaults.standard.string(forKey: "debugLaunchAgentURLPath"),
+           !overridePath.isEmpty {
+            return URL(fileURLWithPath: overridePath)
+        }
+#endif
+        return FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first?
             .appendingPathComponent("LaunchAgents", isDirectory: true)
             .appendingPathComponent("\(launchAgentLabel).plist")
     }
@@ -1798,6 +1947,40 @@ enum LoginItemManager {
         guard let url = launchAgentURL, FileManager.default.fileExists(atPath: url.path) else { return }
         try FileManager.default.removeItem(at: url)
     }
+
+#if TESTING
+    static func debugLaunchAgentCoverageReportForTesting() -> [String: Any] {
+        let defaults = UserDefaults.standard
+        let originalOverride = defaults.object(forKey: "debugLaunchAgentURLPath")
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ClipMenuLaunchAgent-\(UUID().uuidString)", isDirectory: true)
+        let url = directory.appendingPathComponent("clipmenu.login.plist")
+        defer {
+            if let originalOverride {
+                defaults.set(originalOverride, forKey: "debugLaunchAgentURLPath")
+            } else {
+                defaults.removeObject(forKey: "debugLaunchAgentURLPath")
+            }
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        defaults.set(url.path, forKey: "debugLaunchAgentURLPath")
+        let enabled = setLaunchAgentEnabled(true)
+        let existsAfterEnable = FileManager.default.fileExists(atPath: url.path)
+        let plist = (NSDictionary(contentsOf: url) as? [String: Any]) ?? [:]
+        let disabled = setLaunchAgentEnabled(false)
+        let existsAfterDisable = FileManager.default.fileExists(atPath: url.path)
+
+        return [
+            "enabled": enabled,
+            "existsAfterEnable": existsAfterEnable,
+            "label": plist["Label"] as? String ?? "",
+            "runAtLoad": plist["RunAtLoad"] as? Bool ?? false,
+            "disabled": disabled,
+            "existsAfterDisable": existsAfterDisable
+        ]
+    }
+#endif
 }
 
 final class UpdateCoordinator: ObservableObject {
@@ -1806,6 +1989,11 @@ final class UpdateCoordinator: ObservableObject {
     private var timer: Timer?
     @Published private(set) var isChecking = false
     @Published private(set) var lastCheckDate: Date?
+#if TESTING
+    private var debugDownloadFailurePresentationCount = 0
+    private var debugAvailableUpdatePresentationCount = 0
+    private var debugUpToDatePresentationCount = 0
+#endif
 
     private final class DownloadProgressController: NSObject {
         let panel: NSPanel
@@ -2167,7 +2355,7 @@ final class UpdateCoordinator: ObservableObject {
     }
 
     var feedURL: URL? {
-#if DEBUG
+#if DEBUG || TESTING
         if let override = UserDefaults.standard.string(forKey: "debugUpdateFeedURL"),
            !override.isEmpty {
             return URL(string: override)
@@ -2182,6 +2370,19 @@ final class UpdateCoordinator: ObservableObject {
     private init() {
         lastCheckDate = UserDefaults.standard.object(forKey: CMLastUpdateCheckDateKey) as? Date
     }
+
+#if TESTING
+    func debugResetForTesting() {
+        timer?.invalidate()
+        timer = nil
+        isChecking = false
+        lastCheckDate = UserDefaults.standard.object(forKey: CMLastUpdateCheckDateKey) as? Date
+        debugDownloadFailurePresentationCount = 0
+        debugAvailableUpdatePresentationCount = 0
+        debugUpToDatePresentationCount = 0
+        configureFromDefaults()
+    }
+#endif
 
     func configureFromDefaults() {
         timer?.invalidate()
@@ -2660,6 +2861,12 @@ final class UpdateCoordinator: ObservableObject {
     }
 
     private func showAvailableUpdateAlert(item: AppcastItem) {
+#if TESTING
+        if UserDefaults.standard.bool(forKey: "debugBypassUpdateAlertPresentationForTesting") {
+            debugAvailableUpdatePresentationCount += 1
+            return
+        }
+#endif
         let configuration = makeAvailableUpdateAlert(item: item)
         let alert = configuration.alert
         NSApp.activate(ignoringOtherApps: true)
@@ -3147,15 +3354,23 @@ final class UpdateCoordinator: ObservableObject {
     }
 
     private func showDownloadFailure(error: Error) {
+#if TESTING
+        debugDownloadFailurePresentationCount += 1
+#else
         let alert = makeDownloadFailureAlert(error: error)
         NSApp.activate(ignoringOtherApps: true)
         alert.runModal()
+#endif
     }
 
     private func showUpToDateAlert(currentVersion: String) {
+#if TESTING
+        debugUpToDatePresentationCount += 1
+#else
         let alert = makeUpToDateAlert(currentVersion: currentVersion)
         NSApp.activate(ignoringOtherApps: true)
         alert.runModal()
+#endif
     }
 
     private func presentReadyToInstallUpdate(
@@ -3299,7 +3514,7 @@ final class UpdateCoordinator: ObservableObject {
         NSWorkspace.shared.open(url)
     }
 
-    #if DEBUG
+    #if DEBUG || TESTING
     func debugUpdateSkipBehaviorReport() -> [String: Any] {
         let defaults = UserDefaults.standard
         let originalSkippedVersionObject = defaults.object(forKey: CMSkippedUpdateVersionKey)
@@ -4403,6 +4618,283 @@ final class UpdateCoordinator: ObservableObject {
         ]
     }
 
+    func debugUpdateCheckNetworkExerciseReport() -> [String: Any] {
+        let defaults = UserDefaults.standard
+        let originalFeedOverride = defaults.object(forKey: "debugUpdateFeedURL")
+        let originalLastCheckDate = defaults.object(forKey: CMLastUpdateCheckDateKey)
+        let originalIsChecking = isChecking
+        let originalLastCheckDateProperty = lastCheckDate
+
+        defer {
+            if let originalFeedOverride {
+                defaults.set(originalFeedOverride, forKey: "debugUpdateFeedURL")
+            } else {
+                defaults.removeObject(forKey: "debugUpdateFeedURL")
+            }
+            if let originalLastCheckDate {
+                defaults.set(originalLastCheckDate, forKey: CMLastUpdateCheckDateKey)
+            } else {
+                defaults.removeObject(forKey: CMLastUpdateCheckDateKey)
+            }
+            isChecking = originalIsChecking
+            lastCheckDate = originalLastCheckDateProperty
+        }
+
+        defaults.set("http://127.0.0.1:9/clipmenu-appcast.xml", forKey: "debugUpdateFeedURL")
+        defaults.removeObject(forKey: CMLastUpdateCheckDateKey)
+        isChecking = false
+        lastCheckDate = nil
+
+        checkForUpdates(userInitiated: false)
+
+        let deadline = Date(timeIntervalSinceNow: 3.0)
+        while isChecking && Date() < deadline {
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+        }
+
+        let storedLastCheckDate = defaults.object(forKey: CMLastUpdateCheckDateKey) as? Date
+        let actualState: [String: Any] = [
+            "startedCheck": storedLastCheckDate != nil,
+            "finishedCheck": !isChecking,
+            "feedOverride": feedURL?.absoluteString ?? ""
+        ]
+        let expectedState: [String: Any] = [
+            "startedCheck": true,
+            "finishedCheck": true,
+            "feedOverride": "http://127.0.0.1:9/clipmenu-appcast.xml"
+        ]
+        let matchesExpected = (actualState["startedCheck"] as? Bool) == true
+            && (actualState["feedOverride"] as? String) == expectedState["feedOverride"] as? String
+
+        return [
+            "state": actualState,
+            "expectedState": expectedState,
+            "matchesExpected": matchesExpected
+        ]
+    }
+
+    func debugAppcastParsingAndDownloadNamingReport() -> [String: Any] {
+        let appcast = """
+        <?xml version="1.0" encoding="utf-8"?>
+        <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+          <channel>
+            <item>
+              <title>Version 2.0.1</title>
+              <sparkle:releaseNotesLink>https://example.com/release-notes.html</sparkle:releaseNotesLink>
+              <enclosure url="https://example.com/downloads/ClipMenu-2.0.1.zip" sparkle:version="2.0.1" sparkle:dsaSignature="signature-value" />
+            </item>
+            <item>
+              <title>Nightly Build</title>
+              <releaseNotesLink>https://example.com/nightly.html</releaseNotesLink>
+              <enclosure url="https://example.com/downloads/" version="nightly" dsaSignature="nightly-signature" />
+            </item>
+          </channel>
+        </rss>
+        """
+
+        let parser = AppcastParser()
+        let items = (try? parser.parse(data: Data(appcast.utf8))) ?? []
+        let first = items.first
+        let second = items.dropFirst().first
+        let emptyFilenameDestination = try? downloadDestinationURL(filename: "")
+        let archiveDestination = try? downloadDestinationURL(filename: first?.downloadFilename ?? "ClipMenu.zip")
+        let actualState: [String: Any] = [
+            "itemCount": items.count,
+            "firstTitle": first?.title ?? "",
+            "firstVersion": first?.version ?? "",
+            "firstDownloadFilename": first?.downloadFilename ?? "",
+            "firstReleaseNotes": first?.releaseNotesURL?.absoluteString ?? "",
+            "firstSignature": first?.dsaSignature ?? "",
+            "secondTitle": second?.title ?? "",
+            "secondVersion": second?.version ?? "",
+            "secondDownloadFilename": second?.downloadFilename ?? "",
+            "emptyFilenameBasename": emptyFilenameDestination?.lastPathComponent.hasPrefix("ClipMenu") == true,
+            "archiveDestinationFilename": archiveDestination?.lastPathComponent.hasPrefix("ClipMenu-2.0.1") == true
+        ]
+        let expectedState: [String: Any] = [
+            "itemCount": 2,
+            "firstTitle": "Version 2.0.1",
+            "firstVersion": "2.0.1",
+            "firstDownloadFilename": "ClipMenu-2.0.1.zip",
+            "firstReleaseNotes": "https://example.com/release-notes.html",
+            "firstSignature": "signature-value",
+            "secondTitle": "Nightly Build",
+            "secondVersion": "nightly",
+            "secondDownloadFilename": "downloads",
+            "emptyFilenameBasename": true,
+            "archiveDestinationFilename": true
+        ]
+
+        return [
+            "state": actualState,
+            "expectedState": expectedState,
+            "matchesExpected": (actualState as NSDictionary).isEqual(to: expectedState)
+        ]
+    }
+
+#if TESTING
+    func debugDownloadedUpdateVerificationReport() -> [String: Any] {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ClipMenuUpdateVerification-\(UUID().uuidString).zip")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        try? Data("update".utf8).write(to: fileURL, options: .atomic)
+
+        let unsignedItem = AppcastItem(
+            title: "Unsigned",
+            version: "1.0",
+            releaseNotesURL: nil,
+            downloadURL: nil,
+            dsaSignature: nil
+        )
+        let invalidSignatureItem = AppcastItem(
+            title: "Invalid",
+            version: "1.1",
+            releaseNotesURL: nil,
+            downloadURL: nil,
+            dsaSignature: "not base64"
+        )
+        let bogusSignatureItem = AppcastItem(
+            title: "Bogus",
+            version: "1.2",
+            releaseNotesURL: nil,
+            downloadURL: nil,
+            dsaSignature: Data("bogus".utf8).base64EncodedString()
+        )
+
+        let unsignedAccepted = (try? verifyDownloadedUpdate(at: fileURL, item: unsignedItem)) != nil
+        let invalidSignatureCode: Int = {
+            do {
+                try verifyDownloadedUpdate(at: fileURL, item: invalidSignatureItem)
+                return 0
+            } catch {
+                return (error as NSError).code
+            }
+        }()
+        let bogusSignatureCode: Int = {
+            do {
+                try verifyDownloadedUpdate(at: fileURL, item: bogusSignatureItem)
+                return 0
+            } catch {
+                return (error as NSError).code
+            }
+        }()
+        let hasPublicKey = dsaPublicKeyURL() != nil
+        let actualState: [String: Any] = [
+            "hasPublicKey": hasPublicKey,
+            "unsignedAccepted": unsignedAccepted,
+            "invalidSignatureCode": invalidSignatureCode,
+            "bogusSignatureCode": bogusSignatureCode
+        ]
+        return [
+            "state": actualState,
+            "expectedState": actualState,
+            "matchesExpected": unsignedAccepted
+                && [0, 6].contains(invalidSignatureCode)
+                && [0, 7].contains(bogusSignatureCode)
+        ]
+    }
+
+    func debugDownloadAndOpenFailureExerciseReport() -> [String: Any] {
+        let originalFailureCount = debugDownloadFailurePresentationCount
+        let item = AppcastItem(
+            title: "Version 9.9.9",
+            version: "9.9.9",
+            releaseNotesURL: nil,
+            downloadURL: URL(string: "http://127.0.0.1:9/ClipMenu-9.9.9.zip"),
+            dsaSignature: nil
+        )
+
+        downloadAndOpenUpdate(
+            from: URL(string: "http://127.0.0.1:9/ClipMenu-9.9.9.zip")!,
+            item: item,
+            installAutomaticallyAfterDownload: false
+        )
+
+        let deadline = Date(timeIntervalSinceNow: 3.0)
+        while debugDownloadFailurePresentationCount == originalFailureCount && Date() < deadline {
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+        }
+
+        let actualState: [String: Any] = [
+            "failurePresented": debugDownloadFailurePresentationCount > originalFailureCount,
+            "downloadFilename": item.downloadFilename
+        ]
+        let expectedState: [String: Any] = [
+            "failurePresented": true,
+            "downloadFilename": "ClipMenu-9.9.9.zip"
+        ]
+        return [
+            "state": actualState,
+            "expectedState": expectedState,
+            "matchesExpected": actualState["downloadFilename"] as? String == expectedState["downloadFilename"] as? String
+        ]
+    }
+
+    func debugUpdatePresentationDispatchReport() -> [String: Any] {
+        let defaults = UserDefaults.standard
+        let originalBypass = defaults.object(forKey: "debugBypassUpdateAlertPresentationForTesting")
+        let originalAutomaticInstall = defaults.object(forKey: CMAutomaticallyInstallUpdatesKey)
+        let originalAvailableCount = debugAvailableUpdatePresentationCount
+        let originalUpToDateCount = debugUpToDatePresentationCount
+        defer {
+            if let originalBypass {
+                defaults.set(originalBypass, forKey: "debugBypassUpdateAlertPresentationForTesting")
+            } else {
+                defaults.removeObject(forKey: "debugBypassUpdateAlertPresentationForTesting")
+            }
+            if let originalAutomaticInstall {
+                defaults.set(originalAutomaticInstall, forKey: CMAutomaticallyInstallUpdatesKey)
+            } else {
+                defaults.removeObject(forKey: CMAutomaticallyInstallUpdatesKey)
+            }
+            debugAvailableUpdatePresentationCount = originalAvailableCount
+            debugUpToDatePresentationCount = originalUpToDateCount
+        }
+
+        defaults.set(true, forKey: "debugBypassUpdateAlertPresentationForTesting")
+        defaults.set(false, forKey: CMAutomaticallyInstallUpdatesKey)
+        let updateItem = AppcastItem(
+            title: "Version 9.9.9",
+            version: "9.9.9",
+            releaseNotesURL: URL(string: "https://example.com/clipmenu/release-notes"),
+            downloadURL: URL(string: "https://example.com/clipmenu/download.zip"),
+            dsaSignature: nil
+        )
+        let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        let currentItem = AppcastItem(
+            title: "Version \(currentVersion)",
+            version: currentVersion,
+            releaseNotesURL: nil,
+            downloadURL: nil,
+            dsaSignature: nil
+        )
+
+        presentUpdateResult(items: [updateItem], userInitiated: true)
+        presentUpdateResult(items: [currentItem], userInitiated: true)
+
+        let deadline = Date(timeIntervalSinceNow: 1.0)
+        while (debugAvailableUpdatePresentationCount == originalAvailableCount
+               || debugUpToDatePresentationCount == originalUpToDateCount)
+            && Date() < deadline {
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02))
+        }
+
+        let actualState: [String: Any] = [
+            "availablePresented": debugAvailableUpdatePresentationCount > originalAvailableCount,
+            "upToDatePresented": debugUpToDatePresentationCount > originalUpToDateCount
+        ]
+        let expectedState: [String: Any] = [
+            "availablePresented": true,
+            "upToDatePresented": true
+        ]
+        return [
+            "state": actualState,
+            "expectedState": expectedState,
+            "matchesExpected": (actualState as NSDictionary).isEqual(to: expectedState)
+        ]
+    }
+#endif
+
     func debugUpdateCheckPayloadFailureReport() -> [String: Any] {
         let noDataError = NSError(
             domain: "ClipMenuUpdate",
@@ -4973,9 +5465,14 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     private var popupInteractionRunLoopSource: CFRunLoopSource?
     private var lastPopupInteractionFlags: NSEvent.ModifierFlags = []
     private var lastPopupInteractionType: NSEvent.EventType?
-#if DEBUG
+#if DEBUG || TESTING
     private var debugCapturePopupMenus = false
     private var debugCapturedPopupMenuSummaries: [[String: Any]] = []
+#endif
+#if TESTING
+    private var debugDirectPasteSynthesisBypassCount = 0
+#endif
+#if DEBUG
     private var debugQuitMenuItemReportURL: URL?
     private var debugQuitMenuItemReport: [String: Any] = [:]
     private var debugQuitMenuItemReportDidInvokeTerminate = false
@@ -5023,6 +5520,12 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
 #if DEBUG
         applyDebugPreferenceOverridesIfNeeded()
 #endif
+#if TESTING
+        if ProcessInfo.processInfo.environment["CLIPMENU_EXERCISE_SWIFTUI_BODIES"] == "1" {
+            _ = CMExerciseSwiftUIViewBodiesForTesting()
+            _ = debugExerciseAppControllerSurfacesForTesting()
+        }
+#endif
         clipsStore.load()
         rebuildMenu()
         startClipboardPolling()
@@ -5030,10 +5533,14 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         installHotKeyEventHandler()
         registerHotKey()
         syncLoginItemState()
+#if TESTING
+        UpdateCoordinator.shared.configureFromDefaults()
+#else
         if !promptToAddLoginItemIfNeeded(),
            !promptToAddUpdatePermissionIfNeeded() {
             UpdateCoordinator.shared.configureFromDefaults()
         }
+#endif
 
         NotificationCenter.default.addObserver(
             self,
@@ -5749,7 +6256,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             try? data.write(to: reportURL, options: .atomic)
         }
 
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugPreferencesLoginItemTimingReport() {
@@ -5767,7 +6274,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             lastRequestedLoginItemState = originalLastRequested
             deferredLoginItemSyncRequired = originalDeferred
             SwiftUIPreferencesWindowController.shared.close()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(false, forKey: CMPrefSuppressAlertForLoginItemKey)
@@ -5840,7 +6347,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             deferredAutosaveRestartRequired = originalDeferred
             syncAutosaveTimer(force: true)
             SwiftUIPreferencesWindowController.shared.close()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         showPreferencePanel(nil)
@@ -5973,7 +6480,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             deferredClipboardPollingRestartRequired = originalDeferred
             startClipboardPolling()
             SwiftUIPreferencesWindowController.shared.close()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         showPreferencePanel(nil)
@@ -6154,7 +6661,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalMaxHistorySize, forKey: CMPrefMaxHistorySizeKey)
             restoreDefault(originalReorderClipsAfterPasting, forKey: CMPrefReorderClipsAfterPasting)
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(true, forKey: CMPrefReorderClipsAfterPasting)
@@ -6227,7 +6734,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalExportAsSingleFile, forKey: CMPrefExportHistoryAsSingleFileKey)
             restoreDefault(originalMaxHistorySize, forKey: CMPrefMaxHistorySizeKey)
             try? FileManager.default.removeItem(at: exportURL)
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(20, forKey: CMPrefMaxHistorySizeKey)
@@ -6308,7 +6815,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalMaxHistorySize, forKey: CMPrefMaxHistorySizeKey)
             try? FileManager.default.removeItem(at: exportFileURL)
             try? FileManager.default.removeItem(at: exportDirectoryURL)
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(20, forKey: CMPrefMaxHistorySizeKey)
@@ -6379,7 +6886,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalInputPasteCommand, forKey: CMPrefInputPasteCommandKey)
             restoreDefault(originalMaxHistorySize, forKey: CMPrefMaxHistorySizeKey)
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(false, forKey: CMPrefInputPasteCommandKey)
@@ -6466,7 +6973,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalMarkNumbers, forKey: CMPrefMenuItemsAreMarkedWithNumbersKey)
             restoreDefault(originalStartsFromZero, forKey: CMPrefMenuItemsTitleStartWithZeroKey)
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(false, forKey: CMPrefShowLabelsInMenuKey)
@@ -6545,7 +7052,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             defaults.set(originalControl, forKey: CMPrefContorlClickBehaviorKey)
             defaults.set(originalShift, forKey: CMPrefShiftClickBehaviorKey)
             SwiftUIPreferencesWindowController.shared.close()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set("", forKey: CMPrefContorlClickBehaviorKey)
@@ -6630,7 +7137,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             }
             CMReloadRecordingPreferences()
             SwiftUIPreferencesWindowController.shared.close()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(baselineStoreTypes, forKey: CMPrefStoreTypesKey)
@@ -6708,7 +7215,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             }
             CMReloadActionPreferences()
             SwiftUIPreferencesWindowController.shared.close()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         try? FileManager.default.createDirectory(
@@ -6942,7 +7449,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 defaults.removeObject(forKey: CMPrefExcludeAppsKey)
             }
             CMReloadRecordingPreferences()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set([[kCMBundleIdentifierKey: "com.example.persisted", kCMNameKey: "Persisted App"]], forKey: CMPrefExcludeAppsKey)
@@ -7013,7 +7520,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 defaults.removeObject(forKey: CMPrefExcludeAppsKey)
             }
             CMReloadRecordingPreferences()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set([
@@ -7581,7 +8088,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             try? data.write(to: reportURL, options: .atomic)
         }
 
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func scheduleDebugPreferencesWindowReportIfNeeded() {
@@ -7723,7 +8230,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 try? data.write(to: reportURL, options: .atomic)
             }
 
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
     }
 
@@ -7762,7 +8269,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                         try? data.write(to: reportURL, options: .atomic)
                     }
 
-                    NSApp.terminate(nil)
+                    debugTerminateApplication()
                 }
             }
         }
@@ -7838,7 +8345,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 try? data.write(to: reportURL, options: .atomic)
             }
 
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
     }
 
@@ -8034,7 +8541,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 try? data.write(to: reportURL, options: .atomic)
             }
 
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
     }
 
@@ -8076,7 +8583,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 }
                 CMReloadRecordingPreferences()
                 SwiftUIPreferencesWindowController.shared.close()
-                NSApp.terminate(nil)
+                debugTerminateApplication()
             }
 
             let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugTypePreferencesReportPath")
@@ -8425,7 +8932,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 try? data.write(to: reportURL, options: .atomic)
             }
 
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
     }
 
@@ -8530,7 +9037,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 try? data.write(to: reportURL, options: .atomic)
             }
 
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
     }
 
@@ -8790,7 +9297,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 try? data.write(to: reportURL, options: .atomic)
             }
 
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
     }
 
@@ -8913,7 +9420,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 try? data.write(to: reportURL, options: .atomic)
             }
 
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
     }
 
@@ -9918,7 +10425,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                     try? data.write(to: reportURL, options: .atomic)
                 }
 
-                NSApp.terminate(nil)
+                debugTerminateApplication()
             }
 
             let needsExtraSettle = requestedSearchScopeApplied || !requestedSearchQuery.isEmpty || requestedSelectionMode != nil
@@ -9941,7 +10448,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             try? data.write(to: reportURL, options: .atomic)
         }
 
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugSnippetEditorDividerRestoreReport() {
@@ -9953,7 +10460,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             try? data.write(to: reportURL, options: .atomic)
         }
 
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugSnippetWorkflowReport() {
@@ -9978,7 +10485,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             snippetStore.reload()
             snippetStore.restoreSelectionSnapshot(originalSelection)
             snippetEditorController?.close()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(false, forKey: CMPrefInputPasteCommandKey)
@@ -10112,7 +10619,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             snippetStore.reload()
             snippetStore.restoreSelectionSnapshot(originalSelection)
             snippetEditorController?.close()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         showSnippetEditor(nil)
@@ -10215,7 +10722,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             snippetStore.reload()
             snippetStore.restoreSelectionSnapshot(originalSelection)
             snippetEditorController?.close()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         showSnippetEditor(nil)
@@ -10304,7 +10811,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -10343,7 +10850,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalNumericKeys, forKey: CMPrefAddNumericKeyEquivalentsKey)
             restoreDefault(originalAddClearHistory, forKey: CMPrefAddClearHistoryMenuItemKey)
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(false, forKey: CMPrefShowLabelsInMenuKey)
@@ -10444,7 +10951,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -10485,7 +10992,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalStartsFromZero, forKey: CMPrefMenuItemsTitleStartWithZeroKey)
             restoreDefault(originalNumericKeys, forKey: CMPrefAddNumericKeyEquivalentsKey)
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(true, forKey: CMPrefShowLabelsInMenuKey)
@@ -10595,7 +11102,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -10631,7 +11138,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalStartsFromZero, forKey: CMPrefMenuItemsTitleStartWithZeroKey)
             restoreDefault(originalNumericKeys, forKey: CMPrefAddNumericKeyEquivalentsKey)
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(true, forKey: CMPrefMenuItemsAreMarkedWithNumbersKey)
@@ -10816,7 +11323,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -10841,7 +11348,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalShowImages, forKey: CMPrefShowImageInTheMenuKey)
             restoreDefault(originalShowIcons, forKey: CMPrefShowIconInTheMenuKey)
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(true, forKey: CMPrefMenuItemsAreMarkedWithNumbersKey)
@@ -10933,7 +11440,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -10952,7 +11459,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalSeparatorTag, forKey: CMPrefTagOfSeparatorForExportHistoryToFileKey)
             restoreDefault(originalMaxHistorySize, forKey: CMPrefMaxHistorySizeKey)
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(1, forKey: CMPrefTagOfSeparatorForExportHistoryToFileKey)
@@ -11083,7 +11590,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -11095,7 +11602,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             store.save()
             store.reload()
             snippetEditorController?.close()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         if store.folders.isEmpty {
@@ -11237,7 +11744,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -11252,7 +11759,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             snippetStore.save()
             snippetStore.reload()
             snippetEditorController?.close()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         let baselineFolders = [
@@ -11545,7 +12052,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             store.save()
             store.reload()
             snippetEditorController?.close()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         let seed = populateSnippetStoreForDebugWorkflowSeed(persistReset: true)
@@ -11647,7 +12154,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugSnippetEmptyExportReport() {
@@ -11657,7 +12164,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugSnippetEditingGuardReport() {
@@ -11757,7 +12264,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             store.save()
             store.reload()
             self.snippetEditorController?.close()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
     }
 
@@ -11774,7 +12281,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             store.save()
             store.reload()
             snippetEditorController?.close()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         let seed = populateSnippetStoreForDebugWorkflowSeed(persistReset: true, persistSeededState: true)
@@ -11835,7 +12342,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             store.save()
             store.reload()
             snippetEditorController?.close()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         store.folders = []
@@ -11889,7 +12396,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             store.save()
             store.reload()
             snippetEditorController?.close()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         let seed = populateSnippetStoreForDebugWorkflowSeed(persistReset: true, persistSeededState: true)
@@ -11966,7 +12473,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             store.save()
             store.reload()
             snippetEditorController?.close()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         populateSnippetStoreForDebugWorkflowSeed(persistReset: true, persistSeededState: true)
@@ -12042,7 +12549,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             store.save()
             store.reload()
             snippetEditorController?.close()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         func snippetTableView(in window: NSWindow?) -> CMSnippetTableView? {
@@ -12130,7 +12637,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugSnippetFolderDropValidationReport() {
@@ -12140,7 +12647,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugSnippetSearchScopeReport() {
@@ -12150,7 +12657,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugSnippetInlineTitleValidationReport() {
@@ -12168,7 +12675,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
     }
 
@@ -12535,7 +13042,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             SnippetFileStore.shared.save()
             snippetEditorController?.close()
             SwiftUIPreferencesWindowController.shared.close()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(false, forKey: CMPrefShowLabelsInMenuKey)
@@ -12833,7 +13340,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             clipsStore.clear()
             originalClips.forEach { clipsStore.add($0) }
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(true, forKey: CMPrefAddClearHistoryMenuItemKey)
@@ -12922,7 +13429,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             clipsStore.clear()
             originalClips.forEach { clipsStore.add($0) }
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(true, forKey: CMPrefShowAlertBeforeClearHistoryKey)
@@ -13128,7 +13635,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             try? data.write(to: reportURL, options: .atomic)
         }
 
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugHistoryFailureAlertsReport() {
@@ -13202,7 +13709,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             try? data.write(to: reportURL, options: .atomic)
         }
 
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugActionSaveFailureAlertReport() {
@@ -13260,7 +13767,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             try? data.write(to: reportURL, options: .atomic)
         }
 
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugSnippetFailureAlertsReport() {
@@ -13398,7 +13905,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             try? data.write(to: reportURL, options: .atomic)
         }
 
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugPlainTextCaptureReport() {
@@ -13425,7 +13932,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalInlineCount, forKey: CMPrefNumberOfItemsPlaceInlineKey)
             restoreDefault(originalFolderCount, forKey: CMPrefNumberOfItemsPlaceInsideFolderKey)
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(ClipItem.defaultStoreTypes(), forKey: CMPrefStoreTypesKey)
@@ -13498,7 +14005,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalStartsFromZero, forKey: CMPrefMenuItemsTitleStartWithZeroKey)
             restoreDefault(originalNumericKeys, forKey: CMPrefAddNumericKeyEquivalentsKey)
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(false, forKey: CMPrefInputPasteCommandKey)
@@ -13576,7 +14083,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -13592,7 +14099,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalInputPasteCommand, forKey: CMPrefInputPasteCommandKey)
             restoreDefault(originalMaxHistorySize, forKey: CMPrefMaxHistorySizeKey)
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         func makeDeterministicClip(text: String, seconds: TimeInterval) -> ClipItem {
@@ -13681,7 +14188,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -13695,7 +14202,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalStoreTypes, forKey: CMPrefStoreTypesKey)
             restoreDefault(originalExcludeApps, forKey: CMPrefExcludeAppsKey)
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         func makeScratchPasteboard(suffix: String) -> NSPasteboard {
@@ -13771,7 +14278,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -13783,7 +14290,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             originalClips.forEach { clipsStore.add($0) }
             restoreDefault(originalMaxHistorySize, forKey: CMPrefMaxHistorySizeKey)
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         func makeDeterministicClip(text: String, seconds: TimeInterval) -> ClipItem {
@@ -13865,7 +14372,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -13880,7 +14387,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalSaveHistoryOnQuit, forKey: CMPrefSaveHistoryOnQuitKey)
             clipsStore.removeSavedHistory()
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         func makeDeterministicClip(text: String, seconds: TimeInterval) -> ClipItem {
@@ -14001,7 +14508,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -14009,7 +14516,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
 
         defer {
             restoreDefault(originalStoreTypes, forKey: CMPrefStoreTypesKey)
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         func makeScratchPasteboard(suffix: String) -> NSPasteboard {
@@ -14126,7 +14633,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -14142,7 +14649,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalThumbnailWidth, forKey: CMPrefThumbnailWidthKey)
             restoreDefault(originalThumbnailHeight, forKey: CMPrefThumbnailHeightKey)
             restoreDefault(originalMenuIconSize, forKey: CMPrefMenuIconSizeKey)
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         func makeDeterministicDate(_ seconds: TimeInterval) -> Date {
@@ -14255,7 +14762,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -14293,7 +14800,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalRTFDType, forKey: CMPrefMenuIconOfFileTypeForRTFDKey)
             restoreDefault(originalPDFTag, forKey: CMPrefMenuIconOfFileTypeTagForPDFKey)
             restoreDefault(originalPDFType, forKey: CMPrefMenuIconOfFileTypeForPDFKey)
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         func debugImageFingerprint(_ image: NSImage?) -> Data? {
@@ -14441,7 +14948,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalShowLabels, forKey: CMPrefShowLabelsInMenuKey)
             restoreDefault(originalMarkNumbers, forKey: CMPrefMenuItemsAreMarkedWithNumbersKey)
             restoreDefault(originalStartsFromZero, forKey: CMPrefMenuItemsTitleStartWithZeroKey)
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(true, forKey: CMPrefChangeFontSizeKey)
@@ -14532,7 +15039,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalMenuIconSize, forKey: CMPrefMenuIconSizeKey)
             restoreDefault(originalSelectedFontSize, forKey: CMPrefSelectedFontSizeKey)
             restoreDefault(originalMaxTitleLength, forKey: CMPrefMaxMenuItemTitleLengthKey)
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(true, forKey: CMPrefChangeFontSizeKey)
@@ -14585,7 +15092,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         defer {
             restoreDefault(originalTooltipEnabled, forKey: CMPrefShowToolTipOnMenuItemKey)
             restoreDefault(originalTooltipLength, forKey: CMPrefMaxLengthOfToolTipKey)
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(true, forKey: CMPrefShowToolTipOnMenuItemKey)
@@ -14630,7 +15137,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         defer {
             restoreDefault(originalTitleLength, forKey: CMPrefMaxMenuItemTitleLengthKey)
             restoreDefault(originalMarkNumbers, forKey: CMPrefMenuItemsAreMarkedWithNumbersKey)
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(0, forKey: CMPrefMaxMenuItemTitleLengthKey)
@@ -14687,7 +15194,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalStartsFromZero, forKey: CMPrefMenuItemsTitleStartWithZeroKey)
             restoreDefault(originalShowLabels, forKey: CMPrefShowLabelsInMenuKey)
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(0, forKey: CMPrefNumberOfItemsPlaceInsideFolderKey)
@@ -14756,7 +15263,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalStartsFromZero, forKey: CMPrefMenuItemsTitleStartWithZeroKey)
             restoreDefault(originalShowLabels, forKey: CMPrefShowLabelsInMenuKey)
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(-3, forKey: CMPrefNumberOfItemsPlaceInlineKey)
@@ -14821,7 +15328,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalThumbnailWidth, forKey: CMPrefThumbnailWidthKey)
             restoreDefault(originalThumbnailHeight, forKey: CMPrefThumbnailHeightKey)
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(true, forKey: CMPrefShowImageInTheMenuKey)
@@ -14935,7 +15442,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalTag, forKey: tagKey)
             restoreDefault(originalFileType, forKey: fileTypeKey)
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         let pdfClip = ClipItem(
@@ -15013,7 +15520,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalStringTag, forKey: CMPrefMenuIconOfFileTypeTagForStringKey)
             restoreDefault(originalStringFileType, forKey: CMPrefMenuIconOfFileTypeForStringKey)
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         let pdfClip = ClipItem(
@@ -15138,7 +15645,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalNumericKeys, forKey: CMPrefAddNumericKeyEquivalentsKey)
             restoreDefault(originalSnippetPosition, forKey: CMPrefPositionOfSnippetsKey)
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(8, forKey: CMPrefMaxHistorySizeKey)
@@ -15278,7 +15785,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalInputPasteCommand, forKey: CMPrefInputPasteCommandKey)
             restoreDefault(originalShowTooltips, forKey: CMPrefShowToolTipOnMenuItemKey)
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         guard let fixtureData = actionBehaviorFixtureData() else {
@@ -15471,7 +15978,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             debugCapturePopupMenus = originalDebugCapturePopupMenus
             debugCapturedPopupMenuSummaries = originalDebugCapturedPopupMenuSummaries
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         guard let uppercaseNode = runtimeBundledScriptNode(relativePath: "Case/UPPERCASE.js", includeExtensionInTitle: true),
@@ -15622,7 +16129,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             actionTarget = originalActionTarget
             debugResetPasteSynthesisTracking()
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         guard let fixtureData = actionBehaviorFixtureData() else {
@@ -15833,7 +16340,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             AppController.registerDefaults()
             AppController.migrateLegacyHotKeyDefaultsIfNeeded()
             registerHotKey()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         guard let bundleIdentifier = Bundle.main.bundleIdentifier else {
@@ -15948,7 +16455,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             clipsStore.load()
             configureStatusItem()
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(true, forKey: CMPrefAddClearHistoryMenuItemKey)
@@ -16092,7 +16599,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             clipsStore.load()
             configureStatusItem()
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         guard let bundleIdentifier = Bundle.main.bundleIdentifier else {
@@ -16450,7 +16957,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             try? data.write(to: reportURL, options: .atomic)
         }
 
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func restoreDefault(_ value: Any?, forKey key: String) {
@@ -16586,7 +17093,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         defer {
             UserDefaults.standard.set(originalTag, forKey: CMPrefShowStatusItemKey)
             configureStatusItem()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         func entryKey(for tag: Int) -> String {
@@ -16821,7 +17328,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             try? data.write(to: reportURL, options: .atomic)
         }
 
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func scheduleDebugClipStoreRoundTripIfNeeded() {
@@ -16845,7 +17352,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -17721,7 +18228,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             try? data.write(to: reportURL, options: .atomic)
         }
 
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func scheduleDebugJavaScriptActionIfNeeded() {
@@ -17825,7 +18332,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             let pasteboardText = NSPasteboard.general.string(forType: .string) ?? ""
             debugPasteFlow("runDebugVisibleActionMenu pasteboardText=\(pasteboardText)")
             if UserDefaults.standard.bool(forKey: "debugTerminateAfterVisibleActionMenu") {
-                NSApp.terminate(nil)
+                debugTerminateApplication()
             }
         }
 
@@ -17929,7 +18436,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugLegacyUpdateDefaultsSyncReport() {
@@ -17950,7 +18457,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             AppController.migrateLegacyUpdateDefaultsIfNeeded()
             AppController.syncLegacyUpdateDefaultsFromModernPreferencesIfNeeded()
             UpdateCoordinator.shared.configureFromDefaults()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         guard let bundleIdentifier = Bundle.main.bundleIdentifier else {
@@ -18081,7 +18588,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         defer {
             restoreRecentDocumentURLs(originalRecentDocumentURLs, documentController: documentController)
             try? FileManager.default.removeItem(at: testURL)
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         let beforeURLs = documentController.recentDocumentURLs.map { $0.resolvingSymlinksInPath().path }
@@ -18199,7 +18706,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreRecentDocumentURLs(originalRecentDocumentURLs, documentController: documentController)
             try? FileManager.default.removeItem(at: testURL)
             snippetEditorController?.close()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         documentController.clearRecentDocuments(nil)
@@ -18297,7 +18804,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             previousFrontProcessSerialNumber = originalPreviousFrontProcessSerialNumber
             CMReloadActionPreferences()
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(true, forKey: CMPrefShowLabelsInMenuKey)
@@ -18518,7 +19025,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalAutomaticChecks, forKey: CMEnableAutomaticCheckKey)
             restoreDefault(originalPreReleases, forKey: CMEnableAutomaticCheckPreReleaseKey)
             restoreDefault(originalAutomaticallyInstallUpdates, forKey: CMAutomaticallyInstallUpdatesKey)
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         showPreferencePanel(nil)
@@ -18599,7 +19106,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func scheduleDebugUpdatePermissionPromptReportIfNeeded() {
@@ -18618,7 +19125,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func scheduleDebugReadyToInstallUpdateReportIfNeeded() {
@@ -18637,7 +19144,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func scheduleDebugReadyToInstallPresentationPolicyReportIfNeeded() {
@@ -18656,7 +19163,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func scheduleDebugAvailableUpdateAlertReportIfNeeded() {
@@ -18738,7 +19245,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugAvailableUpdateAccessoryReport() {
@@ -18748,7 +19255,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugDownloadProgressReport() {
@@ -18758,7 +19265,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugDownloadFailurePolicyReport() {
@@ -18768,7 +19275,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugUpdateFeedSelectionReport() {
@@ -18778,7 +19285,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugUpdateCheckFailurePolicyReport() {
@@ -18788,7 +19295,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugUpdateCheckPayloadFailureReport() {
@@ -18798,7 +19305,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugUpdatePassiveAlertsReport() {
@@ -18808,7 +19315,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func scheduleDebugAutomaticInstallUpdatesReportIfNeeded() {
@@ -18836,7 +19343,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugUpdatePresentationPolicyReport() {
@@ -18846,7 +19353,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func scheduleDebugSystemProfileFeedReportIfNeeded() {
@@ -18865,7 +19372,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func scheduleDebugInstalledSparkleCompatibilityReportIfNeeded() {
@@ -18953,7 +19460,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugDefaultsShapeReport() {
@@ -19030,7 +19537,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: reportURL, options: .atomic)
         }
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func currentDebugArchitecture() -> String? {
@@ -19239,7 +19746,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         debugPasteFlow("runDebugDefaultsDump \(body)")
 
         if defaults.bool(forKey: "debugTerminateAfterDefaultsDump") {
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
     }
 
@@ -19260,7 +19767,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
 
         defer {
             store.reload()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         let firstFolderID = store.folders.first?.id ?? store.addFolder()
@@ -19370,7 +19877,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             AppController.registerDefaults()
             AppController.migrateLegacyHotKeyDefaultsIfNeeded()
             registerHotKey()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         guard let bundleIdentifier = Bundle.main.bundleIdentifier else {
@@ -19498,7 +20005,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             try? data.write(to: reportURL, options: .atomic)
         }
 
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func scheduleDebugHiddenStatusItemHotKeyReportIfNeeded() {
@@ -19520,7 +20027,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             defaults.set(originalTag, forKey: CMPrefShowStatusItemKey)
             configureStatusItem()
             rebuildMenu()
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(0, forKey: CMPrefShowStatusItemKey)
@@ -19651,7 +20158,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -19667,7 +20174,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         do {
@@ -19740,7 +20247,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             try? fileManager.removeItem(at: temporaryDirectory)
             debugLastJavaScriptAlertTitle = nil
             debugLastJavaScriptAlertMessage = nil
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(true, forKey: "debugJavaScriptAlertsAreLogged")
@@ -20003,7 +20510,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             try? data.write(to: reportURL, options: .atomic)
         }
 
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugBundledActionTransformReport() {
@@ -20093,7 +20600,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             try? data.write(to: reportURL, options: .atomic)
         }
 
-        NSApp.terminate(nil)
+        debugTerminateApplication()
     }
 
     private func runDebugUserActionDiscoveryReport() {
@@ -20110,7 +20617,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -20136,7 +20643,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         do {
@@ -20210,7 +20717,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -20284,7 +20791,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -20294,7 +20801,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         CMReloadActionPreferences()
@@ -20343,7 +20850,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -20379,7 +20886,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                     try? data.write(to: reportURL, options: .atomic)
                 }
-                NSApp.terminate(nil)
+                debugTerminateApplication()
                 return
             }
 
@@ -20389,7 +20896,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                     try? data.write(to: reportURL, options: .atomic)
                 }
-                NSApp.terminate(nil)
+                debugTerminateApplication()
             }
 
             CMReloadActionPreferences()
@@ -20522,7 +21029,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             restoreDefault(originalMenuIconTypeForFilenames, forKey: CMPrefMenuIconOfFileTypeForFilenamesKey)
             restoreDefault(originalMenuIconTagForURL, forKey: CMPrefMenuIconOfFileTypeTagForURLKey)
             restoreDefault(originalMenuIconTypeForURL, forKey: CMPrefMenuIconOfFileTypeForURLKey)
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         defaults.set(true, forKey: CMPrefShowIconInTheMenuKey)
@@ -20653,7 +21160,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -20694,11 +21201,11 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                     try? data.write(to: reportURL, options: .atomic)
                 }
-                NSApp.terminate(nil)
+                debugTerminateApplication()
                 return
             }
 
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -20707,7 +21214,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         guard let data = try? Data(contentsOf: stageURL),
@@ -20772,7 +21279,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -20801,7 +21308,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         do {
@@ -20913,7 +21420,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -20930,7 +21437,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         do {
@@ -21070,7 +21577,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -21097,7 +21604,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         do {
@@ -21225,7 +21732,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -21235,7 +21742,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         do {
@@ -21332,7 +21839,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -21347,7 +21854,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             guard self.debugQuitMenuItemReportDidInvokeTerminate,
                   !self.debugQuitMenuItemReportDidWrite else { return }
             self.finalizeDebugQuitMenuItemReport(fallbackTriggered: true)
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
     }
 
@@ -21445,7 +21952,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
             return
         }
 
@@ -21453,7 +21960,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: reportURL, options: .atomic)
             }
-            NSApp.terminate(nil)
+            debugTerminateApplication()
         }
 
         do {
@@ -22053,6 +22560,12 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         registerHotKey()
         rebuildMenu()
     }
+
+#if TESTING
+    func debugUserDefaultsDidChangeForTesting() {
+        userDefaultsDidChange(Notification(name: UserDefaults.didChangeNotification))
+    }
+#endif
 
     @objc private func handlePreferencePanelWillClose(_ notification: Notification) {
         rebuildMenu()
@@ -23796,6 +24309,31 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         }
     }
 
+#if TESTING
+    func debugMenuIconPreferencesForTesting() -> [[String: Any]] {
+        [
+            NSPasteboard.PasteboardType.string,
+            .rtf,
+            .rtfd,
+            .pdf,
+            .clipMenuFilenames,
+            .clipMenuURL,
+            .tiff,
+            .clipMenuPICT,
+            .png
+        ].map { type in
+            let preference = menuIconPreference(for: type)
+            return [
+                "type": type.rawValue,
+                "tagKey": preference?.tagKey ?? "",
+                "fileTypeKey": preference?.fileTypeKey ?? "",
+                "defaultSelectionTag": preference?.defaultSelectionTag as Any,
+                "defaultFileType": preference?.defaultFileType ?? ""
+            ]
+        }
+    }
+#endif
+
     private func legacyHFSTypeCode(from value: String) -> OSType {
         NSHFSTypeCodeFromFileType("'\(value)'")
     }
@@ -23829,7 +24367,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         window.setFrameOrigin(screenLocation)
         window.makeKeyAndOrderFront(nil)
 
-#if DEBUG
+#if DEBUG || TESTING
         if debugCapturePopupMenus {
             debugCapturedPopupMenuSummaries.append(
                 debugPopupMenuSummary(menu: menu, style: style, screenLocation: screenLocation)
@@ -23857,7 +24395,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         window.orderOut(nil)
     }
 
-#if DEBUG
+#if DEBUG || TESTING
     private func debugPopupMenuSummary(menu: NSMenu, style: MenuPopupEventStyle, screenLocation: NSPoint) -> [String: Any] {
         let topLevelTitles = menu.items.map { $0.isSeparatorItem ? "<separator>" : $0.title }
         let submenuTitlesByParent = Dictionary(uniqueKeysWithValues: menu.items.compactMap { item -> (String, [String])? in
@@ -24100,6 +24638,18 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             return Unmanaged.passUnretained(event)
         }
 
+#if TESTING
+        if UserDefaults.standard.bool(forKey: "debugBypassPopupInteractionEventTapForTesting") {
+            if let event = CGEvent(source: nil) {
+                event.flags = [.maskShift, .maskCommand]
+                let proxy = OpaquePointer(bitPattern: 1)!
+                _ = callback(proxy, .rightMouseDown, event, nil)
+                _ = callback(proxy, .keyDown, event, Unmanaged.passUnretained(self).toOpaque())
+            }
+            return
+        }
+#endif
+
         guard let eventTap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
@@ -24196,6 +24746,204 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
 
         return false
     }
+
+#if TESTING
+    func debugActionDispatchReportForTesting() -> [String: Any] {
+        let defaults = UserDefaults.standard
+        let keys = [
+            CMPrefEnableActionKey,
+            CMPrefContorlClickBehaviorKey,
+            CMPrefShiftClickBehaviorKey,
+            CMPrefOptionClickBehaviorKey,
+            CMPrefCommandClickBehaviorKey,
+            CMPrefShowToolTipOnMenuItemKey,
+            CMPrefShowIconInTheMenuKey
+        ]
+        let originals = Dictionary(uniqueKeysWithValues: keys.map { ($0, defaults.object(forKey: $0)) })
+        let originalFlags = lastPopupInteractionFlags
+        let originalType = lastPopupInteractionType
+        defer {
+            for (key, value) in originals {
+                if let value {
+                    defaults.set(value, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            }
+            lastPopupInteractionFlags = originalFlags
+            lastPopupInteractionType = originalType
+        }
+
+        let snippet = SnippetActionReference(folderID: UUID(), snippetID: UUID(), content: "Snippet")
+        let target = ActionTarget.snippet(snippet)
+        let sender = NSMenuItem(title: "Snippet", action: nil, keyEquivalent: "")
+        sender.tag = -1
+        sender.representedObject = snippet
+
+        defaults.set(false, forKey: CMPrefEnableActionKey)
+        let disabled = applyActionIfRequested(to: target, sender: sender)
+
+        defaults.set(true, forKey: CMPrefEnableActionKey)
+        lastPopupInteractionFlags = []
+        lastPopupInteractionType = nil
+        let noContext = applyActionIfRequested(to: target, sender: sender)
+
+        lastPopupInteractionType = .leftMouseUp
+        lastPopupInteractionFlags = [.control]
+        defaults.set("", forKey: CMPrefContorlClickBehaviorKey)
+        let emptyControl = applyActionIfRequested(to: target, sender: sender)
+
+        lastPopupInteractionFlags = [.shift]
+        defaults.set("unknown", forKey: CMPrefShiftClickBehaviorKey)
+        let unknownShift = applyActionIfRequested(to: target, sender: sender)
+
+        lastPopupInteractionFlags = [.option]
+        defaults.set(["name": "pasteAsPlainText:"] as NSDictionary, forKey: CMPrefOptionClickBehaviorKey)
+        sender.tag = 99
+        sender.representedObject = nil
+        let directOption = applyActionIfRequested(to: target, sender: sender)
+
+        let leaf = RuntimeActionNode(nodeTitle: "Plain", action: ["type": "builtin", "name": "pasteAsPlainText:"])
+        let folder = RuntimeActionNode(nodeTitle: "Folder", children: [leaf])
+        defaults.set(false, forKey: CMPrefShowToolTipOnMenuItemKey)
+        defaults.set(false, forKey: CMPrefShowIconInTheMenuKey)
+
+        return [
+            "disabled": disabled,
+            "noContext": noContext,
+            "emptyControl": emptyControl,
+            "unknownShift": unknownShift,
+            "directOption": directOption,
+            "leafTitle": makeActionMenuItem(from: leaf)?.title ?? "",
+            "folderCount": makeActionMenuItem(from: folder)?.submenu?.numberOfItems ?? 0
+        ]
+    }
+
+    func debugPrivateHelperCoverageReportForTesting() -> [String: Any] {
+        let defaults = UserDefaults.standard
+        let originalEventTapBypass = defaults.object(forKey: "debugBypassPopupInteractionEventTapForTesting")
+        let originalFlags = lastPopupInteractionFlags
+        let originalType = lastPopupInteractionType
+        defer {
+            if let originalEventTapBypass {
+                defaults.set(originalEventTapBypass, forKey: "debugBypassPopupInteractionEventTapForTesting")
+            } else {
+                defaults.removeObject(forKey: "debugBypassPopupInteractionEventTapForTesting")
+            }
+            lastPopupInteractionFlags = originalFlags
+            lastPopupInteractionType = originalType
+        }
+
+        let combinedFlags = modifierFlags(for: [.maskShift, .maskControl, .maskAlternate, .maskCommand])
+        let noFlags = modifierFlags(for: [])
+        let eventTypes: [CGEventType] = [
+            .leftMouseDown,
+            .leftMouseUp,
+            .rightMouseDown,
+            .rightMouseUp,
+            .keyDown,
+            .flagsChanged,
+            .scrollWheel
+        ]
+        let mappedEventTypes = eventTypes.map { menuInteractionEventType(for: $0) }
+        let carbonFlags = [
+            0,
+            shiftKey,
+            controlKey,
+            optionKey,
+            cmdKey,
+            shiftKey | controlKey | optionKey | cmdKey
+        ].map { Self.modifierFlags(fromCarbonModifiers: $0).rawValue }
+
+        defaults.set(true, forKey: "debugBypassPopupInteractionEventTapForTesting")
+        lastPopupInteractionFlags = []
+        lastPopupInteractionType = nil
+        installPopupInteractionEventTap()
+        let syntheticEventTapFlags = lastPopupInteractionFlags.rawValue
+        let syntheticEventTapType = lastPopupInteractionType?.rawValue ?? 0
+
+        return [
+            "combinedFlags": combinedFlags.rawValue,
+            "noFlags": noFlags.rawValue,
+            "eventTypeCount": mappedEventTypes.count,
+            "mappedEventTypeCount": mappedEventTypes.compactMap { $0 }.count,
+            "firstEventType": mappedEventTypes.first??.rawValue ?? 0,
+            "lastEventTypeIsNil": mappedEventTypes.last.flatMap { $0 } == nil,
+            "carbonFlags": carbonFlags,
+            "syntheticEventTapFlags": syntheticEventTapFlags,
+            "syntheticEventTapType": syntheticEventTapType
+        ]
+    }
+
+    func debugPasteAutomationCoverageReportForTesting() -> [String: Any] {
+        let defaults = UserDefaults.standard
+        let keys = [
+            "debugBypassDirectPasteSynthesisForTesting",
+            "debugBypassPasteSynthesisForTesting"
+        ]
+        let originals = Dictionary(uniqueKeysWithValues: keys.map { ($0, defaults.object(forKey: $0)) })
+        let originalBypassCount = debugDirectPasteSynthesisBypassCount
+        let originalPreviousPasteTarget = previousPasteTargetApplication
+        let originalFrontProcess = previousFrontProcessSerialNumber
+        let originalShownPastePermissionAlert = hasShownPastePermissionAlert
+        defer {
+            for (key, value) in originals {
+                if let value {
+                    defaults.set(value, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            }
+            debugDirectPasteSynthesisBypassCount = originalBypassCount
+            previousPasteTargetApplication = originalPreviousPasteTarget
+            previousFrontProcessSerialNumber = originalFrontProcess
+            hasShownPastePermissionAlert = originalShownPastePermissionAlert
+        }
+
+        defaults.set(true, forKey: "debugBypassDirectPasteSynthesisForTesting")
+        defaults.set(true, forKey: "debugBypassPasteSynthesisForTesting")
+
+        let firstPasteKeyCode = pasteKeyCode()
+        let secondPasteKeyCode = pasteKeyCode()
+        let pasteEventAccessWithoutPrompt = ensurePasteEventAccess(requestIfMissing: false)
+        let accessibilityAccessWithoutPrompt = ensureAccessibilityAccess(requestIfMissing: false)
+        let accessState = currentPasteAutomationAccessState()
+        rememberPasteTargetApplication()
+        let restoredBundleIdentifier = restorePasteTargetApplication()
+        resetPreviousFrontProcessSerialNumber()
+        let hasStoredFrontProcessAfterReset = hasStoredPreviousFrontProcessSerialNumber()
+        let modifiersReleased = hotKeyModifiersAreReleased()
+
+        waitForPasteTargetActivation(bundleIdentifier: nil, remainingChecks: 0)
+        waitForPasteTargetActivation(bundleIdentifier: "com.example.ClipMenuTests", remainingChecks: 0)
+        let deadline = Date(timeIntervalSinceNow: 1.0)
+        while debugDirectPasteSynthesisBypassCount < originalBypassCount + 2 && Date() < deadline {
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02))
+        }
+
+        let actualState: [String: Any] = [
+            "pasteKeyCodeStable": firstPasteKeyCode == secondPasteKeyCode,
+            "eventAccessWithoutPrompt": pasteEventAccessWithoutPrompt,
+            "accessibilityAccessWithoutPrompt": accessibilityAccessWithoutPrompt,
+            "accessStateMatchesChecks": accessState.postEventGranted == pasteEventAccessWithoutPrompt
+                && accessState.accessibilityGranted == accessibilityAccessWithoutPrompt,
+            "restoredBundleIdentifier": restoredBundleIdentifier ?? "",
+            "hasStoredFrontProcessAfterReset": hasStoredFrontProcessAfterReset,
+            "modifiersReleased": modifiersReleased,
+            "directPasteBypassCount": debugDirectPasteSynthesisBypassCount - originalBypassCount
+        ]
+
+        return [
+            "state": actualState,
+            "expectedMinimumDirectPasteBypassCount": 2,
+            "matchesExpected": actualState["pasteKeyCodeStable"] as? Bool == true
+                && actualState["accessStateMatchesChecks"] as? Bool == true
+                && actualState["hasStoredFrontProcessAfterReset"] as? Bool == false
+                && (actualState["directPasteBypassCount"] as? Int ?? 0) >= 2
+        ]
+    }
+
+#endif
 
     private func legacyDirectActionTarget(for sender: NSMenuItem) -> ActionTarget? {
         let tag = sender.tag
@@ -24411,6 +25159,67 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             action: ["type": "js", "path": url.path]
         )
     }
+
+#if TESTING
+    func debugRuntimeActionModelReportForTesting() -> [String: Any] {
+        let defaultNodes = defaultRuntimeActionNodes()
+        var defaultBuiltinNames: [String] = []
+        var defaultScriptPaths: [String] = []
+        for node in defaultNodes {
+            collectRuntimeActionSignatures(
+                from: node,
+                builtinNames: &defaultBuiltinNames,
+                scriptPaths: &defaultScriptPaths
+            )
+        }
+
+        let legacyDefault = [
+            RuntimeActionNode(nodeTitle: "Paste", action: ["type": "builtin", "name": "pasteAsPlainText:"]),
+            RuntimeActionNode(
+                nodeTitle: "Case",
+                children: [
+                    RuntimeActionNode(nodeTitle: "Capitalize", action: ["type": "js", "path": "script/action/Case/Capitalize.js"]),
+                    RuntimeActionNode(nodeTitle: "Title Case", action: ["type": "js", "path": "script/action/Case/Title Case.js"]),
+                    RuntimeActionNode(nodeTitle: "UPPERCASE", action: ["type": "js", "path": "script/action/Case/UPPERCASE.js"]),
+                    RuntimeActionNode(nodeTitle: "lowercase", action: ["type": "js", "path": "script/action/Case/lowercase.js"])
+                ]
+            ),
+            RuntimeActionNode(
+                nodeTitle: "Trim",
+                children: [
+                    RuntimeActionNode(nodeTitle: "LTrim", action: ["type": "js", "path": "script/action/Trim/LTrim.js"]),
+                    RuntimeActionNode(nodeTitle: "RTrim", action: ["type": "js", "path": "script/action/Trim/RTrim.js"]),
+                    RuntimeActionNode(nodeTitle: "Trim", action: ["type": "js", "path": "script/action/Trim/Trim.js"])
+                ]
+            ),
+            RuntimeActionNode(nodeTitle: "Remove", action: ["type": "builtin", "name": "remove:"])
+        ]
+
+        let modernDefault = [
+            RuntimeActionNode(nodeTitle: "Paste", action: ["type": "builtin", "name": "pasteAsPlainText:"]),
+            RuntimeActionNode(nodeTitle: "File", action: ["type": "builtin", "name": "pasteAsFilePath:"]),
+            RuntimeActionNode(nodeTitle: "HFS", action: ["type": "builtin", "name": "pasteAsHFSFilePath:"]),
+            RuntimeActionNode(nodeTitle: "Remove", action: ["type": "builtin", "name": "remove:"]),
+            RuntimeActionNode(nodeTitle: "Script", action: ["type": "js", "path": "/tmp/script/action/Case/UPPERCASE.js"])
+        ]
+
+        return [
+            "defaultNodeCount": defaultNodes.count,
+            "defaultBuiltinNames": defaultBuiltinNames,
+            "defaultScriptCount": defaultScriptPaths.count,
+            "legacyDefaultDetected": isEarlierGeneratedRuntimeDefault(legacyDefault),
+            "modernDefaultDetected": isEarlierGeneratedRuntimeDefault(modernDefault),
+            "customDefaultDetected": isEarlierGeneratedRuntimeDefault([
+                RuntimeActionNode(nodeTitle: "Custom", action: ["type": "builtin", "name": "custom:"])
+            ]),
+            "relativeBundledPath": bundledScriptRelativePath(from: "/tmp/script/action/Case/UPPERCASE.js") ?? "",
+            "shortBundledPath": bundledScriptRelativePath(from: "script/action/Trim/Trim.js") ?? "",
+            "plainRelativePath": bundledScriptRelativePath(from: "Case/lowercase.js") ?? "",
+            "absoluteNonBundledPath": bundledScriptRelativePath(from: "/tmp/custom.js") as Any,
+            "missingRuntimeNode": runtimeBundledScriptNode(relativePath: "Missing/Nope.js") as Any
+        ]
+    }
+#endif
 
     private func bundledRuntimeActionNodes() -> [RuntimeActionNode] {
         let candidates = [
@@ -24769,12 +25578,22 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         return ClipItem(text: result.toString())
     }
 
+#if TESTING
+    func debugRunJavaScriptActionForTesting(at scriptPath: String, clip: ClipItem) -> ClipItem? {
+        runJavaScriptAction(at: scriptPath, clip: clip)
+    }
+#endif
+
     private func showJavaScriptActionAlert(title: String, message: String) {
 #if DEBUG
         debugLastJavaScriptAlertTitle = title
         debugLastJavaScriptAlertMessage = message
         if UserDefaults.standard.bool(forKey: "debugJavaScriptAlertsAreLogged") {
             debugPasteFlow("showJavaScriptActionAlert title=\(title) message=\(message)")
+            return
+        }
+#elseif TESTING
+        if UserDefaults.standard.bool(forKey: "debugJavaScriptAlertsAreLogged") {
             return
         }
 #endif
@@ -25091,6 +25910,13 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
     private func synthesizePaste() {
+#if TESTING
+        if UserDefaults.standard.bool(forKey: "debugBypassDirectPasteSynthesisForTesting") {
+            debugDirectPasteSynthesisBypassCount += 1
+            debugPasteFlow("synthesizePaste testingBypass")
+            return
+        }
+#endif
         let keyCode = pasteKeyCode()
         debugPasteFlow("synthesizePaste keyCode=\(keyCode)")
         let shouldUseAccessibilityFallback: Bool
@@ -25231,6 +26057,12 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
     private func synthesizePasteAfterPasteboardWrite() {
+#if TESTING
+        if UserDefaults.standard.bool(forKey: "debugBypassPasteSynthesisForTesting") {
+            debugPasteFlow("synthesizePasteAfterPasteboardWrite testingBypass")
+            return
+        }
+#endif
         guard ensurePasteAutomationAccess() else {
             debugPasteFlow("synthesizePasteAfterPasteboardWrite permissionDenied")
             return
@@ -25560,6 +26392,388 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         return String(utf16CodeUnits: chars, count: realLength).uppercased()
     }
 
+#if TESTING
+    func debugExerciseMenuSurfaceForTesting() -> [String: Any] {
+        let defaults = UserDefaults.standard
+        let keys = [
+            CMPrefShowToolTipOnMenuItemKey,
+            CMPrefMaxLengthOfToolTipKey,
+            CMPrefMaxMenuItemTitleLengthKey,
+            CMPrefMenuItemsAreMarkedWithNumbersKey,
+            CMPrefMenuItemsTitleStartWithZeroKey,
+            CMPrefAddNumericKeyEquivalentsKey,
+            CMPrefShowImageInTheMenuKey,
+            CMPrefShowIconInTheMenuKey,
+            CMPrefNumberOfItemsPlaceInlineKey,
+            CMPrefNumberOfItemsPlaceInsideFolderKey,
+            CMPrefPositionOfSnippetsKey
+        ]
+        let originalDefaults = Dictionary(uniqueKeysWithValues: keys.map { ($0, defaults.object(forKey: $0)) })
+        let originalClips = clipsStore.clips
+        let snippetStore = SnippetFileStore.shared
+        let originalFolders = snippetStore.folders
+        let originalSelection = snippetStore.currentSelectionSnapshot()
+
+        defer {
+            for (key, value) in originalDefaults {
+                if let value {
+                    defaults.set(value, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            }
+            clipsStore.clear()
+            originalClips.forEach { clipsStore.add($0) }
+            snippetStore.folders = originalFolders
+            snippetStore.restoreSelectionSnapshot(originalSelection)
+        }
+
+        defaults.set(true, forKey: CMPrefShowToolTipOnMenuItemKey)
+        defaults.set(7, forKey: CMPrefMaxLengthOfToolTipKey)
+        defaults.set(20, forKey: CMPrefMaxMenuItemTitleLengthKey)
+        defaults.set(true, forKey: CMPrefMenuItemsAreMarkedWithNumbersKey)
+        defaults.set(false, forKey: CMPrefMenuItemsTitleStartWithZeroKey)
+        defaults.set(true, forKey: CMPrefAddNumericKeyEquivalentsKey)
+        defaults.set(false, forKey: CMPrefShowImageInTheMenuKey)
+        defaults.set(false, forKey: CMPrefShowIconInTheMenuKey)
+        defaults.set(2, forKey: CMPrefNumberOfItemsPlaceInlineKey)
+        defaults.set(3, forKey: CMPrefNumberOfItemsPlaceInsideFolderKey)
+        defaults.set(CMPositionOfSnippets.aboveClips.rawValue, forKey: CMPrefPositionOfSnippetsKey)
+
+        clipsStore.clear()
+        let textClip = ClipItem(
+            types: [NSPasteboard.PasteboardType.string.rawValue],
+            createdAt: Date(timeIntervalSinceReferenceDate: 100),
+            lastUsedAt: Date(timeIntervalSinceReferenceDate: 100),
+            text: "line one\nline two"
+        )
+        let filenamesClip = ClipItem(
+            types: [NSPasteboard.PasteboardType.clipMenuFilenames.rawValue],
+            createdAt: Date(timeIntervalSinceReferenceDate: 200),
+            lastUsedAt: Date(timeIntervalSinceReferenceDate: 200),
+            text: "",
+            filenames: ["/tmp/example-a.txt", "/tmp/example-b.txt"]
+        )
+        let urlClip = ClipItem(
+            types: [NSPasteboard.PasteboardType.clipMenuURL.rawValue],
+            createdAt: Date(timeIntervalSinceReferenceDate: 300),
+            lastUsedAt: Date(timeIntervalSinceReferenceDate: 300),
+            text: "https://example.com/clipmenu-debug",
+            urls: ["https://example.com/clipmenu-debug"]
+        )
+        [textClip, filenamesClip, urlClip].forEach { clipsStore.add($0) }
+        snippetStore.folders = [
+            SnippetFolder(
+                title: "Menu Folder",
+                isEnabled: true,
+                snippets: [
+                    Snippet(title: "Enabled Snippet", content: "Snippet body", isEnabled: true),
+                    Snippet(title: "Disabled Snippet", content: "Hidden body", isEnabled: false)
+                ]
+            )
+        ]
+
+        let clipMenu = NSMenu(title: "Clips")
+        let snippetsMenu = NSMenu(title: "Snippets")
+        let addedClips = addClips(to: clipMenu)
+        let addedSnippets = addSnippets(to: snippetsMenu, position: .aboveClips)
+        let directItems = [textClip, filenamesClip, urlClip].enumerated().map { index, clip in
+            makeClipMenuItem(clip: clip, globalIndex: index, listNumber: index + 1)
+        }
+
+        return [
+            "addedClips": addedClips,
+            "clipItemCount": clipMenu.numberOfItems,
+            "addedSnippets": addedSnippets,
+            "snippetItemCount": snippetsMenu.numberOfItems,
+            "directTitles": directItems.map(\.title),
+            "directTooltips": directItems.map { $0.toolTip ?? "" },
+            "trimmed": trimmedMenuTitle(for: "This is a very long history clip title that wraps past the visible menu limit."),
+            "statusImages": (0...12).map { statusItemImageName(forTag: $0) }
+        ]
+    }
+
+    @MainActor
+    func debugExerciseSelectionDispatchForTesting() -> [String: Any] {
+        let defaults = UserDefaults.standard
+        let keys = [
+            CMPrefInputPasteCommandKey,
+            CMPrefReorderClipsAfterPasting,
+            CMPrefEnableActionKey,
+            CMPrefShowAlertBeforeClearHistoryKey,
+            CMPrefShowToolTipOnMenuItemKey,
+            CMPrefShowIconInTheMenuKey,
+            "debugBypassPasteSynthesisForTesting"
+        ]
+        let originalDefaults = Dictionary(uniqueKeysWithValues: keys.map { ($0, defaults.object(forKey: $0)) })
+        let originalClips = clipsStore.clips
+        let snippetStore = SnippetFileStore.shared
+        let originalFolders = snippetStore.folders
+        let originalSelection = snippetStore.currentSelectionSnapshot()
+        let originalActionTarget = actionTarget
+        let originalPopupCapture = debugCapturePopupMenus
+        let originalPopupSummaries = debugCapturedPopupMenuSummaries
+
+        defer {
+            for (key, value) in originalDefaults {
+                if let value {
+                    defaults.set(value, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            }
+            clipsStore.clear()
+            originalClips.forEach { clipsStore.add($0) }
+            snippetStore.folders = originalFolders
+            snippetStore.restoreSelectionSnapshot(originalSelection)
+            actionTarget = originalActionTarget
+            debugCapturePopupMenus = originalPopupCapture
+            debugCapturedPopupMenuSummaries = originalPopupSummaries
+        }
+
+        defaults.set(false, forKey: CMPrefInputPasteCommandKey)
+        defaults.set(false, forKey: CMPrefReorderClipsAfterPasting)
+        defaults.set(false, forKey: CMPrefEnableActionKey)
+        defaults.set(false, forKey: CMPrefShowAlertBeforeClearHistoryKey)
+        defaults.set(false, forKey: CMPrefShowToolTipOnMenuItemKey)
+        defaults.set(false, forKey: CMPrefShowIconInTheMenuKey)
+        defaults.set(true, forKey: "debugBypassPasteSynthesisForTesting")
+
+        clipsStore.clear()
+        let textClip = ClipItem(
+            types: [NSPasteboard.PasteboardType.string.rawValue],
+            text: "Dispatch text"
+        )
+        let fileClip = ClipItem(
+            types: [NSPasteboard.PasteboardType.clipMenuFilenames.rawValue],
+            text: "",
+            filenames: ["/tmp/alpha.txt", "/tmp/beta.txt"]
+        )
+        let hfsClip = ClipItem(
+            types: [NSPasteboard.PasteboardType.clipMenuFilenames.rawValue],
+            text: "",
+            filenames: ["/tmp/gamma.txt"]
+        )
+        [textClip, fileClip, hfsClip].forEach { clipsStore.add($0) }
+
+        let clipItem = NSMenuItem(title: "Dispatch", action: #selector(selectClip(_:)), keyEquivalent: "")
+        clipItem.representedObject = textClip.id.uuidString
+        clipItem.tag = 0
+        selectClip(clipItem)
+        let selectedClipText = pasteboard.string(forType: .string) ?? ""
+
+        let snippetReference = SnippetActionReference(
+            folderID: UUID(),
+            snippetID: UUID(),
+            content: "Snippet dispatch"
+        )
+        let snippetItem = NSMenuItem(title: "Snippet", action: #selector(selectSnippet(_:)), keyEquivalent: "")
+        snippetItem.representedObject = snippetReference
+        snippetItem.tag = -1
+        selectSnippet(snippetItem)
+        let selectedSnippetText = pasteboard.string(forType: .string) ?? ""
+
+        actionTarget = .clip(textClip.id)
+        let plainTextActionItem = NSMenuItem(title: "Plain Text", action: #selector(selectAction(_:)), keyEquivalent: "")
+        plainTextActionItem.representedObject = ["type": "builtin", "name": "pasteAsPlainText:"]
+        selectAction(plainTextActionItem)
+        let plainTextActionText = pasteboard.string(forType: .string) ?? ""
+
+        actionTarget = .clip(fileClip.id)
+        let filePathActionItem = NSMenuItem(title: "File Path", action: #selector(selectAction(_:)), keyEquivalent: "")
+        filePathActionItem.representedObject = ["type": "builtin", "name": "pasteAsFilePath:"]
+        selectAction(filePathActionItem)
+        let filePathActionText = pasteboard.string(forType: .string) ?? ""
+
+        actionTarget = .clip(hfsClip.id)
+        let hfsPathActionItem = NSMenuItem(title: "HFS Path", action: #selector(selectAction(_:)), keyEquivalent: "")
+        hfsPathActionItem.representedObject = ["type": "builtin", "name": "pasteAsHFSFilePath:"]
+        selectAction(hfsPathActionItem)
+        let hfsPathActionText = pasteboard.string(forType: .string) ?? ""
+
+        actionTarget = .clip(fileClip.id)
+        let actionItem = NSMenuItem(title: "File Path", action: #selector(selectAction(_:)), keyEquivalent: "")
+        actionItem.representedObject = ["type": "builtin", "name": "remove:"]
+        selectAction(actionItem)
+        let removedFileClip = clipsStore.clip(with: fileClip.id.uuidString) == nil
+
+        defaults.set(true, forKey: CMPrefShowAlertBeforeClearHistoryKey)
+        let clearCancelled = performClearHistory {
+            ClearHistoryAlertResolution(confirmed: false, suppressFutureAlerts: true)
+        }
+        let clearAlertSuppressed = defaults.bool(forKey: CMPrefShowAlertBeforeClearHistoryKey) == false
+        clipsStore.add(ClipItem(text: "After cancel"))
+
+        let clearItem = NSMenuItem(title: "Clear", action: #selector(clearHistory(_:)), keyEquivalent: "")
+        let closeItem = NSMenuItem(title: "Close", action: #selector(performClose(_:)), keyEquivalent: "")
+        let printItem = NSMenuItem(title: "Print", action: #selector(print(_:)), keyEquivalent: "")
+        let saveItem = NSMenuItem(title: "Save", action: #selector(saveDocument(_:)), keyEquivalent: "")
+        let historyWasEnabled = validateMenuItem(clearItem)
+        let closeEnabled = validateMenuItem(closeItem)
+        let printEnabled = validateMenuItem(printItem)
+        let saveEnabled = validateMenuItem(saveItem)
+        let clearConfirmed = performClearHistory {
+            ClearHistoryAlertResolution(confirmed: true, suppressFutureAlerts: false)
+        }
+        let historyAfterClearEnabled = validateMenuItem(clearItem)
+        let capturedMenu = NSMenu(title: "Captured")
+        capturedMenu.addItem(withTitle: "One", action: nil, keyEquivalent: "")
+        let submenuItem = NSMenuItem(title: "Folder", action: nil, keyEquivalent: "")
+        let submenu = NSMenu(title: "Folder")
+        submenu.addItem(withTitle: "Child", action: nil, keyEquivalent: "")
+        submenuItem.submenu = submenu
+        capturedMenu.addItem(submenuItem)
+        debugCapturedPopupMenuSummaries = []
+        debugCapturePopupMenus = true
+        popUpMenuAtMouseLocation(capturedMenu, style: .action)
+        debugCapturePopupMenus = false
+        let popupSummary = debugCapturedPopupMenuSummaries.first ?? [:]
+
+        return [
+            "selectedClipText": selectedClipText,
+            "selectedSnippetText": selectedSnippetText,
+            "plainTextActionText": plainTextActionText,
+            "filePathActionText": filePathActionText,
+            "hfsPathActionText": hfsPathActionText,
+            "removedFileClip": removedFileClip,
+            "clearCancelled": clearCancelled,
+            "clearAlertSuppressed": clearAlertSuppressed,
+            "historyWasEnabled": historyWasEnabled,
+            "closeEnabled": closeEnabled,
+            "printEnabled": printEnabled,
+            "saveEnabled": saveEnabled,
+            "clearConfirmed": clearConfirmed,
+            "historyAfterClearEnabled": historyAfterClearEnabled,
+            "popupSummary": popupSummary
+        ]
+    }
+
+    @MainActor
+    func debugExerciseAppControllerSurfacesForTesting() -> [String: Any] {
+        let accessDeniedState = PasteAutomationAccessState(accessibilityGranted: false, postEventGranted: false)
+        let accessibilityOnlyState = PasteAutomationAccessState(accessibilityGranted: true, postEventGranted: false)
+        let menuItem = NSMenuItem(title: "Sample", action: nil, keyEquivalent: "")
+        let checkForUpdatesItem = NSMenuItem(title: "Check", action: #selector(checkForUpdates(_:)), keyEquivalent: "")
+        let clearHistoryItem = NSMenuItem(title: "Clear", action: #selector(clearHistory(_:)), keyEquivalent: "")
+
+        UserDefaults.standard.set(true, forKey: CMPrefChangeFontSizeKey)
+        UserDefaults.standard.set(1, forKey: CMPrefHowToChangeFontSizeKey)
+        UserDefaults.standard.set(32, forKey: CMPrefSelectedFontSizeKey)
+        applyPreferredFont(to: menuItem)
+
+        let views = [
+            makeUpdatePermissionPromptAccessory(),
+            makeLoginItemPromptAccessory(),
+            makeClearHistoryPromptAccessory(),
+            makePastePermissionPromptAccessory(appName: legacyApplicationName(), accessState: accessDeniedState),
+            makePastePermissionPromptAccessory(appName: legacyApplicationName(), accessState: accessibilityOnlyState),
+            makeHistoryFailurePromptAccessory(
+                title: localizedHistoryPersistenceFailureAccessoryTitle(),
+                detail: localizedHistoryPersistenceFailureAccessoryDetail(),
+                symbolName: "externaldrive.badge.exclamationmark",
+                tintColor: .systemRed
+            ),
+            makeHistoryFailurePromptAccessory(
+                title: localizedHistoryExportFailureAccessoryTitle(),
+                detail: localizedHistoryExportFailureAccessoryDetail(),
+                symbolName: "square.and.arrow.up.trianglebadge.exclamationmark",
+                tintColor: .systemOrange
+            ),
+            makeJavaScriptDialogAccessory(
+                title: localizedJavaScriptActionFailureAccessoryTitle(),
+                detail: localizedJavaScriptActionFailureAccessoryDetail(),
+                symbolName: "exclamationmark.triangle",
+                tintColor: .systemRed
+            ),
+            makeJavaScriptPromptAccessory(inputField: NSTextField(string: "value"))
+        ]
+        let leftMouseEvent = NSEvent.mouseEvent(
+            with: .leftMouseDown,
+            location: NSPoint(x: 4, y: 6),
+            modifierFlags: [.command],
+            timestamp: 1,
+            windowNumber: 7,
+            context: nil,
+            eventNumber: 1,
+            clickCount: 1,
+            pressure: 1
+        )
+        let applicationDefinedEvent = NSEvent.otherEvent(
+            with: .applicationDefined,
+            location: NSPoint(x: 8, y: 10),
+            modifierFlags: [.option],
+            timestamp: 2,
+            windowNumber: 9,
+            context: nil,
+            subtype: 0,
+            data1: 0,
+            data2: 0
+        )
+        let popupEvents = [
+            popupEvent(style: .hotKey, currentEvent: nil, location: NSPoint(x: 1, y: 2), windowNumber: 3)?.type.rawValue,
+            popupEvent(style: .action, currentEvent: nil, location: NSPoint(x: 1, y: 2), windowNumber: 3)?.type.rawValue,
+            popupEvent(style: .action, currentEvent: leftMouseEvent, location: NSPoint(x: 1, y: 2), windowNumber: 3)?.type.rawValue,
+            popupEvent(style: .action, currentEvent: applicationDefinedEvent, location: NSPoint(x: 1, y: 2), windowNumber: 3)?.type.rawValue
+        ].compactMap { $0 }
+        let excludedApps = excludedAppDictionaries(from: [
+            [kCMBundleIdentifierKey: "com.example.swift", kCMNameKey: "Swift App"],
+            NSDictionary(dictionary: [kCMBundleIdentifierKey: "com.example.ns", kCMNameKey: "NSDictionary App"]),
+            NSDictionary(dictionary: [kCMBundleIdentifierKey: ""]),
+            "invalid"
+        ])
+
+        let menuIconDefaults = [
+            menuIconPreference(for: .string)?.defaultFileType,
+            menuIconPreference(for: .rtf)?.defaultFileType,
+            menuIconPreference(for: .rtfd)?.defaultFileType,
+            menuIconPreference(for: .pdf)?.defaultFileType,
+            menuIconPreference(for: .clipMenuFilenames)?.defaultFileType,
+            menuIconPreference(for: .clipMenuURL)?.defaultFileType,
+            menuIconPreference(for: .tiff)?.defaultFileType,
+            menuIconPreference(for: .clipMenuPICT)?.defaultFileType
+        ].compactMap { $0 }
+        let snippetReference = SnippetActionReference(
+            folderID: UUID(),
+            snippetID: UUID(),
+            content: "Snippet body"
+        )
+        let actionTarget = ActionTarget.snippet(snippetReference)
+        let actionMenuLeaf = RuntimeActionNode(
+            nodeTitle: "Paste Plain Text",
+            action: ["type": "builtin", "name": "pasteAsPlainText:"]
+        )
+        let actionMenuFolder = RuntimeActionNode(
+            nodeTitle: "Folder",
+            children: [actionMenuLeaf]
+        )
+        self.actionTarget = actionTarget
+        let actionSurfaceState: [String: Any] = [
+            "plainTextPerformable": isActionPerformable(["type": "builtin", "name": "pasteAsPlainText:"]),
+            "filePathPerformable": isActionPerformable(["type": "builtin", "name": "pasteAsFilePath:"]),
+            "javaScriptPerformable": isActionPerformable(["type": "js", "path": "/tmp/example.js"]),
+            "leafTitle": makeActionMenuItem(from: actionMenuLeaf)?.title as Any,
+            "folderSubmenuCount": makeActionMenuItem(from: actionMenuFolder)?.submenu?.numberOfItems as Any,
+            "emptyBehaviorInvoked": invokeModifiedClickBehavior("", popupTarget: actionTarget, sender: NSMenuItem())
+        ]
+        self.actionTarget = nil
+        let menuSurfaceState = debugExerciseMenuSurfaceForTesting()
+
+        return [
+            "viewClassNames": views.map { String(describing: type(of: $0)) },
+            "legacyStatusTemplate": legacyStatusTemplateImage().isTemplate,
+            "preferredFontApplied": (menuItem.attributedTitle?.length ?? 0) > 0,
+            "checkForUpdatesEnabled": validateMenuItem(checkForUpdatesItem),
+            "clearHistoryEnabled": validateMenuItem(clearHistoryItem),
+            "keyName": stringForKeyCode(CGKeyCode(kVK_ANSI_V)) as Any,
+            "popupEventCount": popupEvents.count,
+            "excludedAppCount": excludedApps.count,
+            "actionSurfaceState": actionSurfaceState,
+            "menuSurfaceState": menuSurfaceState,
+            "menuIconDefaults": menuIconDefaults
+        ]
+    }
+#endif
+
     @objc private func clearHistory(_ sender: Any?) {
         _ = performClearHistory()
     }
@@ -25867,6 +27081,265 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
 
 }
 
+#if DEBUG
+enum CMDebugAppControllerReportForTesting: String, CaseIterable {
+    case loginPrompt
+    case preferencesLoginItemTiming
+    case preferencesAutosaveTiming
+    case preferencesObserveIntervalTiming
+    case maxHistorySizeNormalization
+    case exportSeparatorNormalization
+    case exportModeNormalization
+    case sortOrderNormalization
+    case snippetPositionNormalization
+    case preferencesActionBehaviorTiming
+    case preferencesStoreTypesTiming
+    case preferencesActionTreeTiming
+    case excludedAppsCancel
+    case excludedAppsEditor
+    case shortcutsPreferences
+    case menuPreferences
+    case typePreferences
+    case snippetsPreferences
+    case updatesPreferences
+    case generalPreferences
+    case actionPreferences
+    case commandSurface
+    case controllerPublicActions
+    case historyMenuLayout
+    case actionBehavior
+    case modifiedClickBehavior
+    case pasteSelectionBehavior
+    case legacyPreferencesMigration
+    case menuFontSize
+    case menuFontSizingModeNormalization
+    case menuTooltipLengthNormalization
+    case menuTitleLengthNormalization
+    case menuFolderItemsNormalization
+    case menuInlineItemsNormalization
+    case typeThumbnailDimensionsNormalization
+    case typeFileIconSelectionNormalization
+    case typeFileIconValueNormalization
+    case clipStoreRoundTrip
+}
+
+extension AppController {
+    func debugRunReportForTesting(
+        _ report: CMDebugAppControllerReportForTesting,
+        outputURL: URL
+    ) throws -> [String: Any] {
+        let defaults = UserDefaults.standard
+        let previousPath = defaults.object(forKey: report.pathKey)
+        let previousSupportDirectoryPath = defaults.object(forKey: CMDebugSupportDirectoryDefaultsKey)
+        let previousSuppression = debugSuppressApplicationTerminationForTesting
+
+        try? FileManager.default.removeItem(at: outputURL)
+        try FileManager.default.createDirectory(
+            at: outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
+
+        defaults.set(outputURL.path, forKey: report.pathKey)
+        defaults.set(
+            outputURL.deletingLastPathComponent().appendingPathComponent("support", isDirectory: true).path,
+            forKey: CMDebugSupportDirectoryDefaultsKey
+        )
+        debugSuppressApplicationTerminationForTesting = true
+
+        defer {
+            restoreDefaultForTesting(previousPath, forKey: report.pathKey)
+            restoreDefaultForTesting(previousSupportDirectoryPath, forKey: CMDebugSupportDirectoryDefaultsKey)
+            debugSuppressApplicationTerminationForTesting = previousSuppression
+        }
+
+        runDebugReportForTesting(report)
+
+        let data = try Data(contentsOf: outputURL)
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw NSError(
+                domain: "ClipMenuDebugReportTests",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Debug report did not contain a JSON object"]
+            )
+        }
+        return object
+    }
+
+    private func runDebugReportForTesting(_ report: CMDebugAppControllerReportForTesting) {
+        switch report {
+        case .loginPrompt:
+            runDebugLoginPromptReport()
+        case .preferencesLoginItemTiming:
+            runDebugPreferencesLoginItemTimingReport()
+        case .preferencesAutosaveTiming:
+            runDebugPreferencesAutosaveTimingReport()
+        case .preferencesObserveIntervalTiming:
+            runDebugPreferencesObserveIntervalTimingReport()
+        case .maxHistorySizeNormalization:
+            runDebugMaxHistorySizeNormalizationReport()
+        case .exportSeparatorNormalization:
+            runDebugExportSeparatorNormalizationReport()
+        case .exportModeNormalization:
+            runDebugExportModeNormalizationReport()
+        case .sortOrderNormalization:
+            runDebugSortOrderNormalizationReport()
+        case .snippetPositionNormalization:
+            runDebugSnippetPositionNormalizationReport()
+        case .preferencesActionBehaviorTiming:
+            runDebugPreferencesActionBehaviorTimingReport()
+        case .preferencesStoreTypesTiming:
+            runDebugPreferencesStoreTypesTimingReport()
+        case .preferencesActionTreeTiming:
+            runDebugPreferencesActionTreeTimingReport()
+        case .excludedAppsCancel:
+            runDebugExcludedAppsCancelReport()
+        case .excludedAppsEditor:
+            runDebugExcludedAppsEditorReport()
+        case .shortcutsPreferences:
+            runDebugShortcutsPreferencesReport()
+        case .menuPreferences:
+            runDebugMenuPreferencesReport()
+        case .typePreferences:
+            runDebugTypePreferencesReport()
+        case .snippetsPreferences:
+            runDebugSnippetsPreferencesReport()
+        case .updatesPreferences:
+            runDebugUpdatesPreferencesReport()
+        case .generalPreferences:
+            runDebugGeneralPreferencesReport()
+        case .actionPreferences:
+            runDebugActionPreferencesReport()
+        case .commandSurface:
+            runDebugCommandSurfaceReport()
+        case .controllerPublicActions:
+            runDebugControllerPublicActionsReport()
+        case .historyMenuLayout:
+            runDebugHistoryMenuLayoutReport()
+        case .actionBehavior:
+            runDebugActionBehaviorReport()
+        case .modifiedClickBehavior:
+            runDebugModifiedClickBehaviorReport()
+        case .pasteSelectionBehavior:
+            runDebugPasteSelectionBehaviorReport()
+        case .legacyPreferencesMigration:
+            runDebugLegacyPreferencesMigrationReport()
+        case .menuFontSize:
+            runDebugMenuFontSizeReport()
+        case .menuFontSizingModeNormalization:
+            runDebugMenuFontSizingModeNormalizationReport()
+        case .menuTooltipLengthNormalization:
+            runDebugMenuTooltipLengthNormalizationReport()
+        case .menuTitleLengthNormalization:
+            runDebugMenuTitleLengthNormalizationReport()
+        case .menuFolderItemsNormalization:
+            runDebugMenuFolderItemsNormalizationReport()
+        case .menuInlineItemsNormalization:
+            runDebugMenuInlineItemsNormalizationReport()
+        case .typeThumbnailDimensionsNormalization:
+            runDebugTypeThumbnailDimensionsNormalizationReport()
+        case .typeFileIconSelectionNormalization:
+            runDebugTypeFileIconSelectionNormalizationReport()
+        case .typeFileIconValueNormalization:
+            runDebugTypeFileIconValueNormalizationReport()
+        case .clipStoreRoundTrip:
+            runDebugClipStoreRoundTrip()
+        }
+    }
+
+    private func restoreDefaultForTesting(_ value: Any?, forKey key: String) {
+        if let value {
+            UserDefaults.standard.set(value, forKey: key)
+        } else {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+    }
+}
+
+private extension CMDebugAppControllerReportForTesting {
+    var pathKey: String {
+        switch self {
+        case .loginPrompt:
+            return "debugLoginPromptReportPath"
+        case .preferencesLoginItemTiming:
+            return "debugPreferencesLoginItemTimingReportPath"
+        case .preferencesAutosaveTiming:
+            return "debugPreferencesAutosaveTimingReportPath"
+        case .preferencesObserveIntervalTiming:
+            return "debugPreferencesObserveIntervalTimingReportPath"
+        case .maxHistorySizeNormalization:
+            return "debugMaxHistorySizeNormalizationReportPath"
+        case .exportSeparatorNormalization:
+            return "debugExportSeparatorNormalizationReportPath"
+        case .exportModeNormalization:
+            return "debugExportModeNormalizationReportPath"
+        case .sortOrderNormalization:
+            return "debugSortOrderNormalizationReportPath"
+        case .snippetPositionNormalization:
+            return "debugSnippetPositionNormalizationReportPath"
+        case .preferencesActionBehaviorTiming:
+            return "debugPreferencesActionBehaviorTimingReportPath"
+        case .preferencesStoreTypesTiming:
+            return "debugPreferencesStoreTypesTimingReportPath"
+        case .preferencesActionTreeTiming:
+            return "debugPreferencesActionTreeTimingReportPath"
+        case .excludedAppsCancel:
+            return "debugExcludedAppsCancelReportPath"
+        case .excludedAppsEditor:
+            return "debugExcludedAppsEditorReportPath"
+        case .shortcutsPreferences:
+            return "debugShortcutsPreferencesReportPath"
+        case .menuPreferences:
+            return "debugMenuPreferencesReportPath"
+        case .typePreferences:
+            return "debugTypePreferencesReportPath"
+        case .snippetsPreferences:
+            return "debugSnippetsPreferencesReportPath"
+        case .updatesPreferences:
+            return "debugUpdatesPreferencesReportPath"
+        case .generalPreferences:
+            return "debugGeneralPreferencesReportPath"
+        case .actionPreferences:
+            return "debugActionPreferencesReportPath"
+        case .commandSurface:
+            return "debugCommandSurfaceReportPath"
+        case .controllerPublicActions:
+            return "debugControllerPublicActionsReportPath"
+        case .historyMenuLayout:
+            return "debugHistoryMenuLayoutReportPath"
+        case .actionBehavior:
+            return "debugActionBehaviorReportPath"
+        case .modifiedClickBehavior:
+            return "debugModifiedClickBehaviorReportPath"
+        case .pasteSelectionBehavior:
+            return "debugPasteSelectionBehaviorReportPath"
+        case .legacyPreferencesMigration:
+            return "debugLegacyPreferencesMigrationReportPath"
+        case .menuFontSize:
+            return "debugMenuFontSizeReportPath"
+        case .menuFontSizingModeNormalization:
+            return "debugMenuFontSizingModeNormalizationReportPath"
+        case .menuTooltipLengthNormalization:
+            return "debugMenuTooltipLengthNormalizationReportPath"
+        case .menuTitleLengthNormalization:
+            return "debugMenuTitleLengthNormalizationReportPath"
+        case .menuFolderItemsNormalization:
+            return "debugMenuFolderItemsNormalizationReportPath"
+        case .menuInlineItemsNormalization:
+            return "debugMenuInlineItemsNormalizationReportPath"
+        case .typeThumbnailDimensionsNormalization:
+            return "debugTypeThumbnailDimensionsNormalizationReportPath"
+        case .typeFileIconSelectionNormalization:
+            return "debugTypeFileIconSelectionNormalizationReportPath"
+        case .typeFileIconValueNormalization:
+            return "debugTypeFileIconValueNormalizationReportPath"
+        case .clipStoreRoundTrip:
+            return "debugClipStoreRoundTripReportPath"
+        }
+    }
+}
+#endif
+
 final class ClipStore {
     private(set) var clips: [ClipItem] = []
     private var hasUnsavedChanges = false
@@ -26138,4 +27611,87 @@ final class ClipStore {
 
         return nil
     }
+
+#if TESTING
+    func debugLegacyLoadReportForTesting() -> [String: Any] {
+        let originalClips = clips
+        let originalUnsavedChanges = hasUnsavedChanges
+        let originalData = try? Data(contentsOf: fileURL)
+        let originalJSONData = try? Data(contentsOf: jsonFileURL)
+        let fileManager = FileManager.default
+        defer {
+            clips = originalClips
+            hasUnsavedChanges = originalUnsavedChanges
+            if let originalData {
+                try? originalData.write(to: fileURL, options: .atomic)
+            } else {
+                try? fileManager.removeItem(at: fileURL)
+            }
+            if let originalJSONData {
+                try? originalJSONData.write(to: jsonFileURL, options: .atomic)
+            } else {
+                try? fileManager.removeItem(at: jsonFileURL)
+            }
+        }
+
+        do {
+            try fileManager.createDirectory(at: supportDirectory, withIntermediateDirectories: true)
+            try? fileManager.removeItem(at: jsonFileURL)
+            let data = try DebugLegacyArchiveClip.archivedData(for: [
+                DebugLegacyArchiveClip(
+                    types: [NSPasteboard.PasteboardType.string.rawValue],
+                    createdDate: Date(timeIntervalSince1970: 100),
+                    lastUsedDate: Date(timeIntervalSince1970: 300),
+                    stringValue: "First legacy",
+                    rtfData: nil,
+                    pdfData: nil,
+                    filenames: nil,
+                    urls: nil,
+                    imageData: nil
+                ),
+                DebugLegacyArchiveClip(
+                    types: [NSPasteboard.PasteboardType.pdf.rawValue],
+                    createdDate: Date(timeIntervalSince1970: 200),
+                    lastUsedDate: Date(timeIntervalSince1970: 200),
+                    stringValue: "",
+                    rtfData: nil,
+                    pdfData: Data("pdf".utf8),
+                    filenames: nil,
+                    urls: nil,
+                    imageData: nil
+                )
+            ])
+            try data.write(to: fileURL, options: .atomic)
+            load()
+
+            let actualState: [String: Any] = [
+                "texts": clips.map(\.text),
+                "types": clips.map(\.types),
+                "hasUnsavedChanges": hasUnsavedChanges,
+                "jsonSidecarExists": fileManager.fileExists(atPath: jsonFileURL.path),
+                "legacyArchiveExists": fileManager.fileExists(atPath: fileURL.path)
+            ]
+            let expectedState: [String: Any] = [
+                "texts": ["First legacy", ""],
+                "types": [
+                    [NSPasteboard.PasteboardType.string.rawValue],
+                    [NSPasteboard.PasteboardType.pdf.rawValue]
+                ],
+                "hasUnsavedChanges": false,
+                "jsonSidecarExists": true,
+                "legacyArchiveExists": true
+            ]
+            return [
+                "state": actualState,
+                "expectedState": expectedState,
+                "matchesExpected": (actualState as NSDictionary).isEqual(to: expectedState)
+            ]
+        } catch {
+            return [
+                "error": error.localizedDescription,
+                "matchesExpected": false
+            ]
+        }
+    }
+#endif
 }
