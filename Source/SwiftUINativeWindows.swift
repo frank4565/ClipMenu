@@ -3249,7 +3249,7 @@ func CMUpdatesPreferencesSnapshotForDebug() -> [String: Any] {
         "controlTitles": [
             NSLocalizedString("1337.title", tableName: "Preferences", bundle: .main, value: "Automatically check for updates:", comment: ""),
             NSLocalizedString("1426.title", tableName: "Preferences", bundle: .main, value: "Include pre-releases", comment: ""),
-            NSLocalizedString("Automatically download and install updates in the future", comment: ""),
+            NSLocalizedString("Automatically download updates in the future", comment: ""),
             NSLocalizedString("1279.title", tableName: "Preferences", bundle: .main, value: "Time interval", comment: ""),
             NSLocalizedString("1331.title", tableName: "Preferences", bundle: .main, value: "Check Now", comment: "")
         ],
@@ -8845,7 +8845,7 @@ private struct UpdatePreferencesView: View {
     private let legacyIncludePreReleasesLabel = NSLocalizedString("1426.title", tableName: "Preferences", bundle: .main, value: "Include pre-releases", comment: "")
     private let legacyCheckNowLabel = NSLocalizedString("1331.title", tableName: "Preferences", bundle: .main, value: "Check Now", comment: "")
     private let legacyUpdateIntervalLabel = NSLocalizedString("1279.title", tableName: "Preferences", bundle: .main, value: "Time interval", comment: "")
-    private let legacyAutomaticallyInstallUpdatesLabel = NSLocalizedString("Automatically download and install updates in the future", comment: "")
+    private let legacyAutomaticallyInstallUpdatesLabel = NSLocalizedString("Automatically download updates in the future", comment: "")
 
     var body: some View {
         PreferencePane {

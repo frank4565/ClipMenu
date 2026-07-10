@@ -2223,13 +2223,12 @@ final class UpdateCoordinator: ObservableObject {
     }
 
     private enum ReadyToInstallResponse {
-        case installAndRelaunch
+        case openDownload
         case later
     }
 
     private enum ReadyToInstallPresentationDecision {
         case showReadyToInstallAlert(item: AppcastItem)
-        case installAndRelaunchWithoutPrompt
     }
 
     private enum DownloadCompletionPreflightDecision {
@@ -2913,7 +2912,7 @@ final class UpdateCoordinator: ObservableObject {
             automaticallyInstallCheckbox: automaticallyInstallCheckbox
         )
         if item.downloadURL != nil {
-            alert.addButton(withTitle: NSLocalizedString("Install Update", comment: ""))
+            alert.addButton(withTitle: NSLocalizedString("Download", comment: ""))
         }
         alert.addButton(withTitle: NSLocalizedString("Skip This Version", comment: ""))
         alert.addButton(withTitle: NSLocalizedString("Later", comment: ""))
@@ -2999,11 +2998,11 @@ final class UpdateCoordinator: ObservableObject {
     }
 
     private func shouldAutomaticallyInstallDownloadedUpdate(userInitiated: Bool) -> Bool {
-        !userInitiated && automaticallyInstallUpdatesEnabled()
+        false
     }
 
     private func makeAutomaticallyInstallUpdatesCheckbox() -> NSButton {
-        let checkbox = NSButton(checkboxWithTitle: NSLocalizedString("Automatically download and install updates in the future", comment: ""), target: nil, action: nil)
+        let checkbox = NSButton(checkboxWithTitle: NSLocalizedString("Automatically download updates in the future", comment: ""), target: nil, action: nil)
         checkbox.state = automaticallyInstallUpdatesEnabled() ? .on : .off
         return checkbox
     }
@@ -3379,14 +3378,12 @@ final class UpdateCoordinator: ObservableObject {
         installAutomatically: Bool = false
     ) {
         switch readyToInstallPresentationDecision(item: item, installAutomatically: installAutomatically) {
-        case .installAndRelaunchWithoutPrompt:
-            handleReadyToInstallResponse(.installAndRelaunch, destinationURL: destinationURL)
         case let .showReadyToInstallAlert(item):
             let alert = makeReadyToInstallAlert(item: item)
             NSApp.activate(ignoringOtherApps: true)
             let response = alert.runModal()
             let resolvedResponse: ReadyToInstallResponse = response == .alertFirstButtonReturn
-                ? .installAndRelaunch
+                ? .openDownload
                 : .later
             handleReadyToInstallResponse(resolvedResponse, destinationURL: destinationURL)
         }
@@ -3396,26 +3393,24 @@ final class UpdateCoordinator: ObservableObject {
         item: AppcastItem,
         installAutomatically: Bool
     ) -> ReadyToInstallPresentationDecision {
-        installAutomatically
-            ? .installAndRelaunchWithoutPrompt
-            : .showReadyToInstallAlert(item: item)
+        .showReadyToInstallAlert(item: item)
     }
 
     private func makeReadyToInstallAlert(item: AppcastItem) -> NSAlert {
         let alert = NSAlert()
         let appName = legacyApplicationName()
-        alert.messageText = NSLocalizedString("Ready to Install", comment: "")
+        alert.messageText = NSLocalizedString("Download Complete", comment: "")
         alert.informativeText = String(
-            format: NSLocalizedString("%1$@ %2$@ has been downloaded and is ready to use! Would you like to install it and relaunch %1$@ now?", comment: ""),
+            format: NSLocalizedString("%1$@ %2$@ has been downloaded. Would you like to open the download now?", comment: ""),
             appName,
             item.version
         )
         alert.accessoryView = makeUpdateAccessoryCard(
-            title: String(format: NSLocalizedString("%@ %@ is ready to install", comment: ""), appName, item.version),
-            detail: NSLocalizedString("The verified download is ready. Install now to open it and relaunch into the updated app.", comment: ""),
-            footnote: NSLocalizedString("Choose Later to leave the downloaded update where it is and install it yourself when convenient.", comment: "")
+            title: String(format: NSLocalizedString("%@ %@ has finished downloading", comment: ""), appName, item.version),
+            detail: NSLocalizedString("The verified update is in your Downloads folder.", comment: ""),
+            footnote: NSLocalizedString("Open the download to continue the update manually, or choose Later to leave it in Downloads.", comment: "")
         )
-        alert.addButton(withTitle: NSLocalizedString("Install and Relaunch", comment: ""))
+        alert.addButton(withTitle: NSLocalizedString("Open Download", comment: ""))
         alert.addButton(withTitle: NSLocalizedString("Later", comment: ""))
         return alert
     }
@@ -3471,7 +3466,7 @@ final class UpdateCoordinator: ObservableObject {
         openHandler: (URL) -> Void = { NSWorkspace.shared.open($0) }
     ) {
         switch response {
-        case .installAndRelaunch:
+        case .openDownload:
             openHandler(destinationURL)
         case .later:
             break
@@ -3917,11 +3912,11 @@ final class UpdateCoordinator: ObservableObject {
         )
         let alert = makeReadyToInstallAlert(item: item)
         let buttonTitles = alert.buttons.map(\.title)
-        let expectedInstallAndRelaunchTitle = NSLocalizedString("Install and Relaunch", comment: "")
+        let expectedInstallAndRelaunchTitle = NSLocalizedString("Open Download", comment: "")
         let expectedLaterTitle = NSLocalizedString("Later", comment: "")
-        let expectedMessageText = NSLocalizedString("Ready to Install", comment: "")
+        let expectedMessageText = NSLocalizedString("Download Complete", comment: "")
         let expectedInformativeText = String(
-            format: NSLocalizedString("%1$@ %2$@ has been downloaded and is ready to use! Would you like to install it and relaunch %1$@ now?", comment: ""),
+            format: NSLocalizedString("%1$@ %2$@ has been downloaded. Would you like to open the download now?", comment: ""),
             legacyApplicationName(),
             item.version
         )
@@ -3931,7 +3926,7 @@ final class UpdateCoordinator: ObservableObject {
         ]
 
         var installOpenedURL: String = ""
-        handleReadyToInstallResponse(.installAndRelaunch, destinationURL: temporaryFileURL) { url in
+        handleReadyToInstallResponse(.openDownload, destinationURL: temporaryFileURL) { url in
             installOpenedURL = url.path
         }
 
@@ -3997,14 +3992,9 @@ final class UpdateCoordinator: ObservableObject {
         let interactiveDecision = readyToInstallPresentationDecision(item: item, installAutomatically: false)
         let automaticDecision = readyToInstallPresentationDecision(item: item, installAutomatically: true)
 
-        var automaticOpenedPath = ""
-        handleReadyToInstallResponse(.installAndRelaunch, destinationURL: temporaryFileURL) { url in
-            automaticOpenedPath = url.path
-        }
-
         let interactiveState: [String: Any]
         switch interactiveDecision {
-        case let .showReadyToInstallAlert(item):
+        case .showReadyToInstallAlert:
             let alert = makeReadyToInstallAlert(item: item)
             interactiveState = [
                 "decision": "showReadyToInstallAlert",
@@ -4013,50 +4003,35 @@ final class UpdateCoordinator: ObservableObject {
                 "buttonTitles": alert.buttons.map(\.title),
                 "hasAccessoryView": alert.accessoryView != nil
             ]
-        case .installAndRelaunchWithoutPrompt:
-            interactiveState = [
-                "decision": "installAndRelaunchWithoutPrompt",
-                "messageText": "",
-                "informativeText": "",
-                "buttonTitles": [],
-                "hasAccessoryView": false
-            ]
         }
 
         let automaticState: [String: Any]
         switch automaticDecision {
-        case .installAndRelaunchWithoutPrompt:
-            automaticState = [
-                "decision": "installAndRelaunchWithoutPrompt",
-                "openedPath": automaticOpenedPath,
-                "temporaryFileStillExists": FileManager.default.fileExists(atPath: temporaryFileURL.path)
-            ]
-        case let .showReadyToInstallAlert(item):
+        case .showReadyToInstallAlert:
             automaticState = [
                 "decision": "showReadyToInstallAlert",
                 "openedPath": "",
-                "temporaryFileStillExists": FileManager.default.fileExists(atPath: temporaryFileURL.path),
-                "unexpectedItemVersion": item.version
+                "temporaryFileStillExists": FileManager.default.fileExists(atPath: temporaryFileURL.path)
             ]
         }
 
         let expectedInteractiveState: [String: Any] = [
             "decision": "showReadyToInstallAlert",
-            "messageText": NSLocalizedString("Ready to Install", comment: ""),
+            "messageText": NSLocalizedString("Download Complete", comment: ""),
             "informativeText": String(
-                format: NSLocalizedString("%1$@ %2$@ has been downloaded and is ready to use! Would you like to install it and relaunch %1$@ now?", comment: ""),
+                format: NSLocalizedString("%1$@ %2$@ has been downloaded. Would you like to open the download now?", comment: ""),
                 legacyApplicationName(),
                 item.version
             ),
             "buttonTitles": [
-                NSLocalizedString("Install and Relaunch", comment: ""),
+                NSLocalizedString("Open Download", comment: ""),
                 NSLocalizedString("Later", comment: "")
             ],
             "hasAccessoryView": true
         ]
         let expectedAutomaticState: [String: Any] = [
-            "decision": "installAndRelaunchWithoutPrompt",
-            "openedPath": temporaryFileURL.path,
+            "decision": "showReadyToInstallAlert",
+            "openedPath": "",
             "temporaryFileStillExists": true
         ]
 
@@ -4096,7 +4071,7 @@ final class UpdateCoordinator: ObservableObject {
             downloadURL: URL(string: "https://example.com/clipmenu/download.zip"),
             dsaSignature: nil
         )
-        let expectedInstallTitle = NSLocalizedString("Install Update", comment: "")
+        let expectedInstallTitle = NSLocalizedString("Download", comment: "")
         let expectedSkipTitle = NSLocalizedString("Skip This Version", comment: "")
         let expectedLaterTitle = NSLocalizedString("Later", comment: "")
         let expectedButtonTitles = [
@@ -4265,7 +4240,7 @@ final class UpdateCoordinator: ObservableObject {
             "releaseNotesLabelPresent": true,
             "openInBrowserButtonTitle": NSLocalizedString("Open in Browser", comment: ""),
             "openInBrowserButtonIdentifier": secureReleaseNotesURL.absoluteString,
-            "checkboxTitle": NSLocalizedString("Automatically download and install updates in the future", comment: ""),
+            "checkboxTitle": NSLocalizedString("Automatically download updates in the future", comment: ""),
             "checkboxState": false
         ]
         let expectedWithoutReleaseNotesState: [String: Any] = [
@@ -4275,7 +4250,7 @@ final class UpdateCoordinator: ObservableObject {
             "releaseNotesLabelPresent": false,
             "openInBrowserButtonTitle": "",
             "openInBrowserButtonIdentifier": "",
-            "checkboxTitle": NSLocalizedString("Automatically download and install updates in the future", comment: ""),
+            "checkboxTitle": NSLocalizedString("Automatically download updates in the future", comment: ""),
             "checkboxState": false
         ]
         let actualState: [String: Any] = [
@@ -5135,7 +5110,7 @@ final class UpdateCoordinator: ObservableObject {
             "checkboxEnabled": true,
             "backgroundAutomaticDownload": true,
             "manualAutomaticDownload": false,
-            "backgroundAutomaticInstall": true,
+            "backgroundAutomaticInstall": false,
             "manualAutomaticInstall": false
         ]
         let actualState: [String: Any] = [
@@ -5263,7 +5238,7 @@ final class UpdateCoordinator: ObservableObject {
             "onBackgroundUpdateAvailable": [
                 "action": "downloadAutomatically",
                 "itemVersion": "9.9.9",
-                "installAutomaticallyAfterDownload": true
+                "installAutomaticallyAfterDownload": false
             ],
             "manualNoUpdate": [
                 "action": "showUpToDate",
@@ -8990,7 +8965,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 let expectedControlTitles = [
                     NSLocalizedString("1337.title", tableName: "Preferences", bundle: .main, value: "Automatically check for updates:", comment: ""),
                     NSLocalizedString("1426.title", tableName: "Preferences", bundle: .main, value: "Include pre-releases", comment: ""),
-                    NSLocalizedString("Automatically download and install updates in the future", comment: ""),
+                    NSLocalizedString("Automatically download updates in the future", comment: ""),
                     NSLocalizedString("1279.title", tableName: "Preferences", bundle: .main, value: "Time interval", comment: ""),
                     NSLocalizedString("1331.title", tableName: "Preferences", bundle: .main, value: "Check Now", comment: "")
                 ]

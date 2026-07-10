@@ -64,6 +64,8 @@
 	<string>アップデートを自動的にチェック:</string>
 	<key>Automatically download and install updates in the future</key>
 	<string>今後のアップデートを自動的にダウンロードしてインストールする</string>
+	<key>Automatically download updates in the future</key>
+	<string>今後のアップデートを自動的にダウンロードする</string>
 	<key>Autosaving clipboard history</key>
 	<string>クリップボード履歴の自動保存</string>
 	<key>Autosaving clipboard history:</key>
@@ -270,6 +272,8 @@
 	<string>完了</string>
 	<key>Download</key>
 	<string>ダウンロード</string>
+	<key>Download Complete</key>
+	<string>ダウンロード完了</string>
 	<key>Downloading %@.</key>
 	<string>%@ をダウンロード中です。</string>
 	<key>Downloading Update</key>
@@ -522,6 +526,8 @@
 	<string>設定を開く</string>
 	<key>Open in Browser</key>
 	<string>ブラウザで開く</string>
+	<key>Open Download</key>
+	<string>ダウンロードを開く</string>
 	<key>Open...</key>
 	<string>開く...</string>
 	<key>Option + Click:</key>
@@ -1670,5 +1676,13 @@
 	<string>現在利用できる更新フィードはありません。</string>
 	<key>Imported legacy interval: %@. Choose Daily, Weekly, or Monthly to replace it.</key>
 	<string>以前の設定から引き継いだ間隔: %@。置き換えるには「毎日」「毎週」「毎月」を選択してください。</string>
+	<key>%1$@ %2$@ has been downloaded. Would you like to open the download now?</key>
+	<string>%1$@ %2$@ のダウンロードが完了しました。今すぐ開きますか？</string>
+	<key>%@ %@ has finished downloading</key>
+	<string>%@ %@ のダウンロードが完了しました</string>
+	<key>The verified update is in your Downloads folder.</key>
+	<string>検証済みのアップデートは「ダウンロード」フォルダにあります。</string>
+	<key>Open the download to continue the update manually, or choose Later to leave it in Downloads.</key>
+	<string>ダウンロードを開いて手動でアップデートを続けるか、「あとで」を選んで「ダウンロード」に残します。</string>
 </dict>
 </plist>

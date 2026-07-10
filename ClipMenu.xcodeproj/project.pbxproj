@@ -497,7 +497,6 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = A82B8AE80EC3F8D700096102 /* Build configuration list for PBXNativeTarget "ClipMenu (deployment)" */;
 			buildPhases = (
-				A82B8AB30EC3F8D700096102 /* ShellScript */,
 				A82B8AB40EC3F8D700096102 /* Resources */,
 				A82B8AC20EC3F8D700096102 /* Sources */,
 				A82B8AE10EC3F8D700096102 /* Frameworks */,
@@ -621,23 +620,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		A82B8AB30EC3F8D700096102 /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			comments = "日本語ローカライズを生成";
-			files = (
-			);
-			inputPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# Swift-only project: localization resources are maintained directly.\nAPP_FRAMEWORKS_SOURCE=\"/Applications/ClipMenu.app/Contents/Frameworks\"\nTARGET_FRAMEWORKS_DIR=\"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}\"\n\nmkdir -p \"${TARGET_FRAMEWORKS_DIR}\"\n\nfor framework_name in ShortcutRecorder.framework Sparkle.framework; do\n\tSOURCE_FRAMEWORK=\"${APP_FRAMEWORKS_SOURCE}/${framework_name}\"\n\tDESTINATION_FRAMEWORK=\"${TARGET_FRAMEWORKS_DIR}/${framework_name}\"\n\n\tif [ -d \"${SOURCE_FRAMEWORK}\" ]; then\n\t\trm -rf \"${DESTINATION_FRAMEWORK}\"\n\t\trsync -a \"${SOURCE_FRAMEWORK}\" \"${TARGET_FRAMEWORKS_DIR}/\"\n\t\tcodesign --force --sign - --deep \"${DESTINATION_FRAMEWORK}\"\n\telse\n\t\techo \"warning: ${SOURCE_FRAMEWORK} not found; skipping framework bundle parity copy\"\n\tfi\ndone\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		8D11072C0486CEB800E47090 /* Sources */ = {
