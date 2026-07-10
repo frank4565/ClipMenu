@@ -13064,6 +13064,7 @@ func CMDebugSnippetFolderDropValidationReport() -> [String: Any] {
     ]
 }
 
+#if TESTING
 func CMActionStorageLoadCoverageReportForTesting() -> [String: Any] {
     ActionFileStore.shared.debugStorageLoadCoverageReportForTesting()
 }
@@ -13071,6 +13072,7 @@ func CMActionStorageLoadCoverageReportForTesting() -> [String: Any] {
 func CMSnippetStorageLoadCoverageReportForTesting() -> [String: Any] {
     SnippetFileStore.shared.debugStorageLoadCoverageReportForTesting()
 }
+#endif
 
 @MainActor
 func CMNativeControlCoverageReportForTesting() -> [String: Any] {
