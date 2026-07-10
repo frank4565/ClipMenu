@@ -19,7 +19,7 @@
     "environmentVariableEntries" : [
       {
         "key" : "CLIPMENU_DEBUG_SUPPORT_DIRECTORY",
-        "value" : "$(TEMP_DIR)/ClipMenuTestSupport"
+        "value" : "$(TEMP_DIR)\/ClipMenuTestSupport"
       },
       {
         "key" : "CLIPMENU_EXERCISE_SWIFTUI_BODIES",
@@ -27,7 +27,7 @@
       }
     ],
     "parallelizationEnabled" : false,
-    "testExecutionOrdering" : "lexical"
+    "testExecutionOrdering" : "alphabetical"
   },
   "testTargets" : [
     {
