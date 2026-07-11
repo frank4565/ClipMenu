@@ -2,6 +2,24 @@ import XCTest
 @testable import ClipMenu
 
 final class MenuPreviewTests: XCTestCase {
+    func testHistoryMenuKeepsSingletonBucketsAtTopLevel() {
+        XCTAssertEqual(
+            CMHistoryMenuGroups(clipCount: 2, inlineCount: 1, folderCount: 10),
+            [.direct(0), .direct(1)]
+        )
+        XCTAssertEqual(
+            CMHistoryMenuGroups(clipCount: 4, inlineCount: 1, folderCount: 2),
+            [.direct(0), .folder(1..<3), .direct(3)]
+        )
+    }
+
+    func testHistoryMenuPreservesMultiItemFolders() {
+        XCTAssertEqual(
+            CMHistoryMenuGroups(clipCount: 8, inlineCount: 2, folderCount: 3),
+            [.direct(0), .direct(1), .folder(2..<5), .folder(5..<8)]
+        )
+    }
+
     func testTrimmedTitleUsesFirstLineAndEllipsisBudget() {
         XCTAssertEqual(CMMenuPreviewTrimmedTitle("  First line\nSecond line  ", limit: 80), "First line")
         XCTAssertEqual(CMMenuPreviewTrimmedTitle("abcdef", limit: 5), "ab...")

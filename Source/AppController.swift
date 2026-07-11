@@ -46,6 +46,33 @@ private let CMLegacyLastProfileSubmissionDateKey = "SULastProfileSubmissionDate"
 let CMPrefMaxMenuItemTitleLengthKey = "maxMenuItemTitleLength"
 let CMPrefNumberOfItemsPlaceInlineKey = "numberOfItemsPlaceInline"
 let CMPrefNumberOfItemsPlaceInsideFolderKey = "numberOfItemsPlaceInsideFolder"
+
+enum CMHistoryMenuGroup: Equatable {
+    case direct(Int)
+    case folder(Range<Int>)
+}
+
+func CMHistoryMenuGroups(clipCount: Int, inlineCount: Int, folderCount: Int) -> [CMHistoryMenuGroup] {
+    guard clipCount > 0 else { return [] }
+
+    let directCount = min(max(0, inlineCount), clipCount)
+    var groups = (0..<directCount).map(CMHistoryMenuGroup.direct)
+    var folderStart = directCount
+    let normalizedFolderCount = max(1, folderCount)
+
+    while folderStart < clipCount {
+        let folderEnd = min(folderStart + normalizedFolderCount, clipCount)
+        if folderEnd - folderStart == 1 {
+            groups.append(.direct(folderStart))
+        } else {
+            groups.append(.folder(folderStart..<folderEnd))
+        }
+        folderStart = folderEnd
+    }
+
+    return groups
+}
+
 let CMPrefMenuItemsAreMarkedWithNumbersKey = "menuItemsAreMarkedWithNumbers"
 let CMPrefMenuItemsTitleStartWithZeroKey = "menuItemsTitleStartWithZero"
 let CMPrefAddNumericKeyEquivalentsKey = "addNumericKeyEquivalents"
@@ -8119,8 +8146,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugPreferencesWindowReportPath")
                 ?? "/tmp/clipmenu-preferences-window-report.json")
             var report: [String: Any] = [:]
-            let expectedWindowTitle = NSLocalizedString("Preferences", comment: "")
-
             if let window = SwiftUIPreferencesWindowController.shared.window {
                 let currentApplication = NSRunningApplication.current
                 let activationDeadline = Date(timeIntervalSinceNow: 2.0)
@@ -8145,11 +8170,11 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 let configuredPaneTitles = CMConfiguredPreferencePaneTitlesForDebug()
                 let expectedPaneIconSources: [String: String] = [
                     NSLocalizedString("General", comment: ""): "systemSymbol",
-                    NSLocalizedString("Menu", comment: ""): "legacyArtwork",
-                    NSLocalizedString("1086.label", tableName: "Preferences", bundle: .main, value: "Type", comment: ""): "legacyArtwork",
-                    NSLocalizedString("Action", comment: ""): "legacyArtwork",
-                    NSLocalizedString("1366.title", tableName: "Preferences", bundle: .main, value: "Shortcuts", comment: ""): "legacyArtwork",
-                    NSLocalizedString("Updates", comment: ""): "legacyArtwork"
+                    NSLocalizedString("Menu", comment: ""): "systemSymbol",
+                    NSLocalizedString("1086.label", tableName: "Preferences", bundle: .main, value: "Type", comment: ""): "systemSymbol",
+                    NSLocalizedString("Action", comment: ""): "systemSymbol",
+                    NSLocalizedString("1366.title", tableName: "Preferences", bundle: .main, value: "Shortcuts", comment: ""): "systemSymbol",
+                    NSLocalizedString("Updates", comment: ""): "systemSymbol"
                 ]
                 let expectedSelectedTabRawValue = debugStringValue(forKey: "debugShowPreferencesTab")?.lowercased() ?? "general"
                 let expectedSelectedPaneTitle: String
@@ -8166,6 +8191,14 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                     expectedSelectedPaneTitle = NSLocalizedString("Updates", comment: "")
                 default:
                     expectedSelectedPaneTitle = NSLocalizedString("General", comment: "")
+                }
+                let expectedSelectedToolbarItemSuffix: String
+                switch expectedSelectedTabRawValue {
+                case "type": expectedSelectedToolbarItemSuffix = "types"
+                case "action": expectedSelectedToolbarItemSuffix = "actions"
+                case "shortcut": expectedSelectedToolbarItemSuffix = "shortcuts"
+                case "update": expectedSelectedToolbarItemSuffix = "updates"
+                default: expectedSelectedToolbarItemSuffix = expectedSelectedTabRawValue
                 }
                 let frameHeight = window.frame.size.height
                 let contentHeight = window.contentLayoutRect.size.height
@@ -8206,7 +8239,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                     "visibleTextValues": visibleTextValues,
                     "allExpectedPaneTitlesVisible": visiblePaneTitles == expectedPaneTitles,
                     "layoutHeightWithinExpectedBounds": layoutHeightWithinExpectedBounds,
-                    "matchesExpected": window.title == expectedWindowTitle
+                    "matchesExpected": window.title == expectedSelectedPaneTitle
                         && appIsActive
                         && window.frameAutosaveName.isEmpty
                         && self.debugToolbarStyleName(window.toolbarStyle) == "preference"
@@ -8216,6 +8249,12 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                         && visiblePaneTitles == expectedPaneTitles
                         && visiblePaneIconSources == expectedPaneIconSources
                         && (shellSnapshot["selectedPaneTitle"] as? String) == expectedSelectedPaneTitle
+                        && (shellSnapshot["windowTitle"] as? String) == expectedSelectedPaneTitle
+                        && (shellSnapshot["selectedToolbarItemIdentifier"] as? String)?.hasSuffix(expectedSelectedToolbarItemSuffix) == true
+                        && (shellSnapshot["toolbarAllowsUserCustomization"] as? Bool) == false
+                        && (shellSnapshot["toolbarAutosavesConfiguration"] as? Bool) == false
+                        && (shellSnapshot["miniaturizeButtonEnabled"] as? Bool) == false
+                        && (shellSnapshot["zoomButtonEnabled"] as? Bool) == false
                         && layoutHeightWithinExpectedBounds
                 ]
             } else {
@@ -8237,7 +8276,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugPreferencesReopenSelectionReportPath")
             ?? "/tmp/clipmenu-preferences-reopen-selection-report.json")
         let expectedPaneTitles = debugExpectedPreferencePaneTitles()
-        let expectedInitialPaneTitle = expectedPaneTitles.first
+        let expectedInitialPaneTitle = controller.debugSelectedTabTitle()
         let expectedUpdatesPaneTitle = expectedPaneTitles.last
 
         showPreferencePanel(nil)
@@ -8259,7 +8298,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                         "reopenedSelectedPaneTitle": reopenedSelectedPaneTitle as Any,
                         "matchesExpected": initialSelectedPaneTitle == expectedInitialPaneTitle
                             && mutatedSelectedPaneTitle == expectedUpdatesPaneTitle
-                            && reopenedSelectedPaneTitle == expectedInitialPaneTitle
+                            && reopenedSelectedPaneTitle == expectedUpdatesPaneTitle
                     ]
 
                     if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
@@ -8308,7 +8347,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                     ]
                 ]
                 let expectedReservedHistoryBadge = CMShortcutReservedHistoryBadgeTitle(historyDisplay: currentDisplays.history)
-                let matchesExpected = window.title == NSLocalizedString("Preferences", comment: "")
+                let matchesExpected = window.title == expectedPaneTitle
                     && self.debugToolbarStyleName(window.toolbarStyle) == "preference"
                     && window.isVisible
                     && selectedPaneTitle == expectedPaneTitle
@@ -8318,7 +8357,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                     && snapshotVisibleRowTitles == expectedVisibleRowTitles
                     && currentDisplays.history == snapshotHiddenHistoryDisplay
                     && snapshotReservedHistoryBadge == expectedReservedHistoryBadge
-                    && visibleTextValues == [NSLocalizedString("Preferences", comment: "")]
+                    && visibleTextValues == [expectedPaneTitle]
                     && !snapshotRows.contains(where: { $0["display"] == snapshotHiddenHistoryDisplay })
 
                 report = [
@@ -8479,7 +8518,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                     )
                 ]
                 let expectedSelectedFontSize = CMNormalizedMenuLegacyFontSize(UserDefaults.standard.object(forKey: CMPrefSelectedFontSizeKey) as? Int ?? 16)
-                let matchesExpected = window.title == NSLocalizedString("Preferences", comment: "")
+                let matchesExpected = window.title == (paneSnapshot["paneTitle"] as? String)
                     && self.debugToolbarStyleName(window.toolbarStyle) == "preference"
                     && window.isVisible
                     && selectedPaneTitle == (paneSnapshot["paneTitle"] as? String)
@@ -8784,7 +8823,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                     }
                 }
 
-                require(window.title == NSLocalizedString("Preferences", comment: ""), "window.title")
+                require(window.title == (paneSnapshot["paneTitle"] as? String), "window.title")
                 require(self.debugToolbarStyleName(window.toolbarStyle) == "preference", "window.toolbarStyle")
                 require(window.isVisible, "window.isVisible")
                 require(selectedPaneTitle == (paneSnapshot["paneTitle"] as? String), "selectedPaneTitle")
@@ -8898,7 +8937,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                         ?? CMPositionOfSnippets.belowClips.rawValue
                 )
                 let expectedOptionSelectedStates = [0, 1, 2].map { $0 == expectedSelectedPosition }
-                let matchesExpected = window.title == NSLocalizedString("Preferences", comment: "")
+                let matchesExpected = window.title == NSLocalizedString("General", comment: "")
                     && self.debugToolbarStyleName(window.toolbarStyle) == "preference"
                     && window.isVisible
                     && selectedPaneTitle == NSLocalizedString("General", comment: "")
@@ -8996,7 +9035,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                     feedURLPresent: expectedHasFeedURL,
                     isChecking: expectedIsChecking
                 )
-                let matchesExpected = window.title == NSLocalizedString("Preferences", comment: "")
+                let matchesExpected = window.title == (paneSnapshot["paneTitle"] as? String)
                     && self.debugToolbarStyleName(window.toolbarStyle) == "preference"
                     && window.isVisible
                     && selectedPaneTitle == (paneSnapshot["paneTitle"] as? String)
@@ -9207,7 +9246,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                     }
                 }
 
-                require(window.title == NSLocalizedString("Preferences", comment: ""), "window.title")
+                require(window.title == (paneSnapshot["paneTitle"] as? String), "window.title")
                 require(self.debugToolbarStyleName(window.toolbarStyle) == "preference", "window.toolbarStyle")
                 require(window.isVisible, "window.isVisible")
                 require(selectedPaneTitle == (paneSnapshot["paneTitle"] as? String), "selectedPaneTitle")
@@ -9373,7 +9412,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                         "user": user
                     ]
                 }()
-                let matchesExpected = window.title == NSLocalizedString("Preferences", comment: "")
+                let matchesExpected = window.title == (paneSnapshot["paneTitle"] as? String)
                     && self.debugToolbarStyleName(window.toolbarStyle) == "preference"
                     && window.isVisible
                     && selectedPaneTitle == (paneSnapshot["paneTitle"] as? String)
@@ -15222,7 +15261,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         ]
         let expectedState: [String: Any] = [
             "normalizedStoredFolderItems": 1,
-            "topLevelTitles": ["1 - 1", "2 - 2", "3 - 3"]
+            "topLevelTitles": ["1. gamma", "2. beta", "3. alpha"]
         ]
 
         let report: [String: Any] = [
@@ -23692,36 +23731,49 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         }
         let firstIndex = defaults.bool(forKey: CMPrefMenuItemsTitleStartWithZeroKey) ? 0 : 1
 
-        for (offset, clip) in clips.enumerated() where inlineCount > 0 && offset < inlineCount {
-            let listNumber = menuListNumber(forOffset: offset, firstIndex: firstIndex, maxCount: inlineCount)
-            menu.addItem(makeClipMenuItem(clip: clip, globalIndex: offset, listNumber: listNumber))
-        }
+        for group in CMHistoryMenuGroups(
+            clipCount: clips.count,
+            inlineCount: inlineCount,
+            folderCount: folderCount
+        ) {
+            switch group {
+            case let .direct(offset):
+                let numberLimit = offset < inlineCount ? inlineCount : clips.count
+                let listNumber = menuListNumber(
+                    forOffset: offset,
+                    firstIndex: firstIndex,
+                    maxCount: numberLimit
+                )
+                menu.addItem(makeClipMenuItem(clip: clips[offset], globalIndex: offset, listNumber: listNumber))
 
-        guard inlineCount < clips.count else { return true }
+            case let .folder(range):
+                let folderStart = range.lowerBound
+                let submenuItem = NSMenuItem(
+                    title: folderRangeTitle(
+                        startOffset: folderStart,
+                        folderCount: folderCount,
+                        fullHistoryCount: allClips.count,
+                        firstIndex: firstIndex
+                    ),
+                    action: nil,
+                    keyEquivalent: ""
+                )
+                applyPreferredFont(to: submenuItem)
 
-        var folderStart = inlineCount
-        while folderStart < clips.count {
-            let folderEnd = min(folderStart + folderCount, clips.count)
-            let submenuItem = NSMenuItem(
-                title: folderRangeTitle(
-                    startOffset: folderStart,
-                    folderCount: folderCount,
-                    fullHistoryCount: allClips.count,
-                    firstIndex: firstIndex
-                ),
-                action: nil,
-                keyEquivalent: ""
-            )
-            applyPreferredFont(to: submenuItem)
-
-            let submenu = NSMenu(title: submenuItem.title)
-            for offset in folderStart..<folderEnd {
-                let listNumber = menuListNumber(forOffset: offset - folderStart, firstIndex: firstIndex, maxCount: folderCount)
-                submenu.addItem(makeClipMenuItem(clip: clips[offset], globalIndex: offset, listNumber: listNumber))
+                let submenu = NSMenu(title: submenuItem.title)
+                for offset in range {
+                    let listNumber = menuListNumber(
+                        forOffset: offset - folderStart,
+                        firstIndex: firstIndex,
+                        maxCount: folderCount
+                    )
+                    submenu.addItem(
+                        makeClipMenuItem(clip: clips[offset], globalIndex: offset, listNumber: listNumber)
+                    )
+                }
+                submenuItem.submenu = submenu
+                menu.addItem(submenuItem)
             }
-            submenuItem.submenu = submenu
-            menu.addItem(submenuItem)
-            folderStart = folderEnd
         }
         return true
     }
@@ -26428,6 +26480,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             CMPrefAddNumericKeyEquivalentsKey,
             CMPrefShowImageInTheMenuKey,
             CMPrefShowIconInTheMenuKey,
+            CMPrefShowLabelsInMenuKey,
+            CMPrefMaxHistorySizeKey,
             CMPrefNumberOfItemsPlaceInlineKey,
             CMPrefNumberOfItemsPlaceInsideFolderKey,
             CMPrefPositionOfSnippetsKey
@@ -26460,6 +26514,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         defaults.set(true, forKey: CMPrefAddNumericKeyEquivalentsKey)
         defaults.set(false, forKey: CMPrefShowImageInTheMenuKey)
         defaults.set(false, forKey: CMPrefShowIconInTheMenuKey)
+        defaults.set(false, forKey: CMPrefShowLabelsInMenuKey)
+        defaults.set(20, forKey: CMPrefMaxHistorySizeKey)
         defaults.set(2, forKey: CMPrefNumberOfItemsPlaceInlineKey)
         defaults.set(3, forKey: CMPrefNumberOfItemsPlaceInsideFolderKey)
         defaults.set(CMPositionOfSnippets.aboveClips.rawValue, forKey: CMPrefPositionOfSnippetsKey)
@@ -26505,6 +26561,16 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             makeClipMenuItem(clip: clip, globalIndex: index, listNumber: index + 1)
         }
 
+        defaults.set(1, forKey: CMPrefNumberOfItemsPlaceInlineKey)
+        defaults.set(10, forKey: CMPrefNumberOfItemsPlaceInsideFolderKey)
+        clipsStore.clear()
+        [textClip, urlClip].forEach { clipsStore.add($0) }
+        let twoClipMenu = NSMenu(title: "Two Clips")
+        _ = addClips(to: twoClipMenu)
+        let secondHistoryItemIsDirect = twoClipMenu.numberOfItems == 2
+            && twoClipMenu.items[1].submenu == nil
+            && twoClipMenu.items[1].representedObject != nil
+
         return [
             "addedClips": addedClips,
             "clipItemCount": clipMenu.numberOfItems,
@@ -26512,6 +26578,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             "snippetItemCount": snippetsMenu.numberOfItems,
             "directTitles": directItems.map(\.title),
             "directTooltips": directItems.map { $0.toolTip ?? "" },
+            "secondHistoryItemIsDirect": secondHistoryItemIsDirect,
             "trimmed": trimmedMenuTitle(for: "This is a very long history clip title that wraps past the visible menu limit."),
             "statusImages": (0...12).map { statusItemImageName(forTag: $0) }
         ]

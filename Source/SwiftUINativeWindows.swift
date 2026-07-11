@@ -715,15 +715,13 @@ final class ClipMenuUndoWindow: NSWindow {
 
 private final class PreferencesPresentationState: ObservableObject {
     @Published var selection: PreferenceTab?
-    @Published var sidebarQuery = ""
 
     init() {
         resetForPresentation()
     }
 
     func resetForPresentation() {
-        selection = CMInitialPreferenceTabSelection() ?? .general
-        sidebarQuery = ""
+        selection = CMInitialPreferenceTabSelection()
     }
 }
 
@@ -752,17 +750,18 @@ private enum CMForegroundWindowActivationPolicyBridge {
     }
 }
 
-final class SwiftUIPreferencesWindowController: NSWindowController, NSWindowDelegate {
+final class SwiftUIPreferencesWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate {
     static let shared = SwiftUIPreferencesWindowController()
     private static let defaultContentSize = NSSize(width: 760, height: 640)
+    private static let toolbarIdentifier = NSToolbar.Identifier("com.naotaka.ClipMenu.preferences")
     private let presentationState = PreferencesPresentationState()
+    private var selectionObserver: AnyCancellable?
 
     private init() {
         let controller = NSHostingController(rootView: PreferencesView(state: presentationState))
         let window = NSWindow(contentViewController: controller)
-        window.title = NSLocalizedString("Preferences", comment: "")
+        window.title = presentationState.selection?.title ?? NSLocalizedString("Preferences", comment: "")
         window.setContentSize(Self.defaultContentSize)
-        window.minSize = NSSize(width: 700, height: 540)
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.collectionBehavior = [.canJoinAllSpaces]
         window.titleVisibility = .visible
@@ -771,7 +770,29 @@ final class SwiftUIPreferencesWindowController: NSWindowController, NSWindowDele
         window.isRestorable = false
         window.toolbarStyle = .preference
         super.init(window: window)
+
+        let toolbar = NSToolbar(identifier: Self.toolbarIdentifier)
+        toolbar.delegate = self
+        toolbar.allowsUserCustomization = false
+        toolbar.autosavesConfiguration = false
+        toolbar.displayMode = .iconAndLabel
+        toolbar.sizeMode = .regular
+        window.toolbar = toolbar
+        window.setContentSize(Self.defaultContentSize)
+        window.contentMinSize = Self.defaultContentSize
+        window.contentMaxSize = Self.defaultContentSize
+        updateWindowChrome(for: presentationState.selection ?? .general)
+        window.standardWindowButton(.miniaturizeButton)?.isEnabled = false
+        window.standardWindowButton(.zoomButton)?.isEnabled = false
+
         window.delegate = self
+        selectionObserver = presentationState.$selection
+            .compactMap { $0 }
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] tab in
+                self?.updateWindowChrome(for: tab)
+            }
     }
 
     required init?(coder: NSCoder) {
@@ -799,8 +820,18 @@ final class SwiftUIPreferencesWindowController: NSWindowController, NSWindowDele
                 uniqueKeysWithValues: visibleTabs.map { ($0.title, $0.debugIconSourceName) }
             ),
             "selectedPaneTitle": selectedTab.title,
-            "selectedPaneIconSource": selectedTab.debugIconSourceName
+            "selectedPaneIconSource": selectedTab.debugIconSourceName,
+            "windowTitle": window?.title as Any,
+            "selectedToolbarItemIdentifier": window?.toolbar?.selectedItemIdentifier?.rawValue as Any,
+            "toolbarAllowsUserCustomization": window?.toolbar?.allowsUserCustomization as Any,
+            "toolbarAutosavesConfiguration": window?.toolbar?.autosavesConfiguration as Any,
+            "miniaturizeButtonEnabled": window?.standardWindowButton(.miniaturizeButton)?.isEnabled as Any,
+            "zoomButtonEnabled": window?.standardWindowButton(.zoomButton)?.isEnabled as Any
         ]
+    }
+
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        sender.frame.size
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -824,6 +855,51 @@ final class SwiftUIPreferencesWindowController: NSWindowController, NSWindowDele
         presentationState.selection = CMPreferenceTab(debugRawValue: rawValue)
     }
     #endif
+
+    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        PreferenceTab.allCases.map(\.toolbarItemIdentifier)
+    }
+
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        toolbarDefaultItemIdentifiers(toolbar)
+    }
+
+    func toolbarSelectableItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        toolbarDefaultItemIdentifiers(toolbar)
+    }
+
+    func toolbar(
+        _ toolbar: NSToolbar,
+        itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
+        willBeInsertedIntoToolbar flag: Bool
+    ) -> NSToolbarItem? {
+        guard let tab = PreferenceTab.allCases.first(where: { $0.toolbarItemIdentifier == itemIdentifier }) else {
+            return nil
+        }
+
+        let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+        item.label = tab.title
+        item.paletteLabel = tab.title
+        item.toolTip = tab.title
+        item.image = tab.toolbarImage
+        item.target = self
+        item.action = #selector(selectPreferencePane(_:))
+        item.isEnabled = true
+        return item
+    }
+
+    @objc private func selectPreferencePane(_ sender: NSToolbarItem) {
+        guard let tab = PreferenceTab.allCases.first(where: { $0.toolbarItemIdentifier == sender.itemIdentifier }) else {
+            return
+        }
+        presentationState.selection = tab
+    }
+
+    private func updateWindowChrome(for tab: PreferenceTab) {
+        window?.title = tab.title
+        window?.toolbar?.selectedItemIdentifier = tab.toolbarItemIdentifier
+        UserDefaults.standard.set(tab.rawValue, forKey: CMSelectedPreferencePaneKey)
+    }
 }
 
 final class SwiftUISnippetEditorWindowController: NSWindowController, NSWindowDelegate {
@@ -1335,6 +1411,10 @@ private enum PreferenceTab: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    var toolbarItemIdentifier: NSToolbarItem.Identifier {
+        NSToolbarItem.Identifier("com.naotaka.ClipMenu.preferences.\(rawValue)")
+    }
+
     var title: String {
         switch self {
         case .general: return NSLocalizedString("General", comment: "")
@@ -1392,7 +1472,7 @@ private enum PreferenceTab: String, CaseIterable, Identifiable {
     }
 
     var debugIconSourceName: String {
-        iconPrefersLegacyArtwork ? "legacyArtwork" : "systemSymbol"
+        "systemSymbol"
     }
 
     var subtitle: String {
@@ -1450,7 +1530,13 @@ private enum PreferenceTab: String, CaseIterable, Identifiable {
         copiedImage.isTemplate = legacyImageUsesTemplateRendering
         return copiedImage
     }
+
+    var toolbarImage: NSImage? {
+        NSImage(systemSymbolName: systemImage, accessibilityDescription: title)
+    }
 }
+
+private let CMSelectedPreferencePaneKey = "CMSelectedPreferencePane"
 
 func CMConfiguredPreferencePaneTitlesForDebug() -> [String] {
     PreferenceTab.allCases.map(\.title)
@@ -1502,6 +1588,10 @@ private func CMInitialPreferenceTabSelection() -> PreferenceTab? {
         }
     }
 #endif
+    if let rawValue = UserDefaults.standard.string(forKey: CMSelectedPreferencePaneKey),
+       let tab = PreferenceTab(rawValue: rawValue) {
+        return tab
+    }
     return .general
 }
 
@@ -1522,27 +1612,11 @@ private struct PreferencesView: View {
     @ObservedObject var state: PreferencesPresentationState
 
     var body: some View {
-        VStack(spacing: 0) {
-            PreferencesTabBar(selection: Binding(
-                get: { state.selection ?? .general },
-                set: { state.selection = $0 }
-            ))
-
-            Divider()
-
+        Group {
             if let selection = state.selection {
                 selectedPane(for: selection)
             } else {
-                VStack(alignment: .center, spacing: 10) {
-                    Image(systemName: "sidebar.left")
-                        .font(.system(size: 28))
-                        .foregroundColor(.secondary)
-                    Text(CMPreferencesEmptySelectionTitle())
-                        .font(.headline)
-                    Text(CMPreferencesEmptySelectionDetail())
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                selectedPane(for: .general)
             }
         }
         .background(Color(NSColor.windowBackgroundColor))
@@ -1571,69 +1645,6 @@ private struct PreferencesView: View {
         case .updates:
             UpdatePreferencesView()
         }
-    }
-}
-
-private struct PreferencesTabBar: View {
-    @Binding var selection: PreferenceTab
-
-    var body: some View {
-        HStack(spacing: 6) {
-            ForEach(PreferenceTab.allCases) { tab in
-                Button {
-                    selection = tab
-                } label: {
-                    PreferenceTabIcon(
-                        tab: tab,
-                        size: 18,
-                        foregroundColor: selection == tab ? tab.sidebarAccentColor : Color.secondary
-                    )
-                    .frame(width: 30, height: 30)
-                }
-                .buttonStyle(.plain)
-                .help(tab.title)
-                .accessibilityLabel(Text(tab.title))
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct PreferenceTabIcon: View {
-    let tab: PreferenceTab
-    let size: CGFloat
-    let foregroundColor: Color
-
-    var body: some View {
-        Group {
-            if let image = tab.legacySidebarImage {
-                if tab.legacyImageUsesTemplateRendering {
-                    Image(nsImage: image)
-                        .renderingMode(.template)
-                        .resizable()
-                        .interpolation(.high)
-                        .scaledToFit()
-                        .foregroundColor(foregroundColor)
-                        .padding(tab.iconPrefersLegacyArtwork ? max(2, size * 0.14) : 0)
-                } else {
-                    Image(nsImage: image)
-                        .renderingMode(.original)
-                        .resizable()
-                        .interpolation(.high)
-                        .scaledToFit()
-                        .padding(tab.iconPrefersLegacyArtwork ? max(2, size * 0.14) : 0)
-                }
-            } else {
-                Image(systemName: tab.systemImage)
-                    .font(.system(size: size, weight: .semibold))
-                    .foregroundColor(foregroundColor)
-            }
-        }
-        .frame(width: size, height: size)
     }
 }
 
@@ -5542,8 +5553,6 @@ private struct MenuPreferencesView: View {
                                 "Prefix menu rows with numbered titles.",
                                 japanese: "メニュー行の先頭に番号を付けます。"
                             ),
-                            systemImage: "list.ordered",
-                            tint: .accentColor,
                             isOn: $markWithNumbers
                         )
                         menuToggleCard(
@@ -5552,8 +5561,6 @@ private struct MenuPreferencesView: View {
                                 "Switch numbering from `1.` to `0.`.",
                                 japanese: "番号表示を `1.` から `0.` に切り替えます。"
                             ),
-                            systemImage: "0.circle",
-                            tint: .secondary,
                             isOn: $titleStartsWithZero,
                             disabled: !markWithNumbers
                         )
@@ -5563,8 +5570,6 @@ private struct MenuPreferencesView: View {
                                 "Use number keys to select visible menu items.",
                                 japanese: "数字キーで表示中のメニュー項目を選択できるようにします。"
                             ),
-                            systemImage: "number",
-                            tint: .green,
                             isOn: $numericKeyEquivalents
                         )
                     }
@@ -5574,22 +5579,16 @@ private struct MenuPreferencesView: View {
                         menuToggleCard(
                             title: legacyShowLabelsLabel,
                             detail: NSLocalizedString("Show or hide the History and Snippets section labels in the menu.", comment: ""),
-                            systemImage: "tag",
-                            tint: .blue,
                             isOn: $showLabels
                         )
                         menuToggleCard(
                             title: legacyClearHistoryMenuItemLabel,
                             detail: NSLocalizedString("Keep the explicit Clear History command visible in the main status menu.", comment: ""),
-                            systemImage: "trash",
-                            tint: .orange,
                             isOn: $clearHistoryItem
                         )
                         menuToggleCard(
                             title: legacyAlertBeforeClearLabel,
                             detail: NSLocalizedString("Ask for confirmation before clearing unless suppression has been chosen.", comment: ""),
-                            systemImage: "exclamationmark.bubble",
-                            tint: .secondary,
                             isOn: $alertBeforeClear,
                             disabled: !clearHistoryItem
                         )
@@ -5602,8 +5601,6 @@ private struct MenuPreferencesView: View {
                         menuToggleCard(
                             title: legacyShowTooltipsLabel,
                             detail: NSLocalizedString("Preview long or multiline content without changing the stored clipboard payload.", comment: ""),
-                            systemImage: showTooltips ? "message" : "message.slash",
-                            tint: showTooltips ? .blue : .secondary,
                             isOn: $showTooltips
                         )
 
@@ -5624,8 +5621,6 @@ private struct MenuPreferencesView: View {
                         menuToggleCard(
                             title: legacyChangeFontSizeLabel,
                             detail: NSLocalizedString("Choose whether menu titles follow the icon size or a fixed point size.", comment: ""),
-                            systemImage: "textformat.size",
-                            tint: changeFontSize ? .accentColor : .secondary,
                             isOn: $changeFontSize
                         )
 
@@ -5813,29 +5808,20 @@ private struct MenuPreferencesView: View {
     private func menuToggleCard(
         title: String,
         detail: String,
-        systemImage: String,
-        tint: Color,
         isOn: Binding<Bool>,
         disabled: Bool = false
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(title)
-                    .font(.body)
-                    .foregroundColor(disabled ? .secondary : .primary)
-
-                Spacer(minLength: 12)
-
-                Toggle("", isOn: isOn)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .disabled(disabled)
-            }
+            Toggle(title, isOn: isOn)
+                .toggleStyle(.checkbox)
+                .controlSize(.regular)
+                .disabled(disabled)
 
             Text(detail)
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.leading, 22)
         }
         .padding(.vertical, 2)
         .opacity(disabled ? 0.75 : 1)
