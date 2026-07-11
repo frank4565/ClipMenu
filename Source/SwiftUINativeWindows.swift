@@ -754,14 +754,15 @@ private enum CMForegroundWindowActivationPolicyBridge {
 
 final class SwiftUIPreferencesWindowController: NSWindowController, NSWindowDelegate {
     static let shared = SwiftUIPreferencesWindowController()
+    private static let defaultContentSize = NSSize(width: 760, height: 640)
     private let presentationState = PreferencesPresentationState()
 
     private init() {
         let controller = NSHostingController(rootView: PreferencesView(state: presentationState))
         let window = NSWindow(contentViewController: controller)
         window.title = NSLocalizedString("Preferences", comment: "")
-        window.setContentSize(NSSize(width: 1016, height: 640))
-        window.minSize = NSSize(width: 820, height: 540)
+        window.setContentSize(Self.defaultContentSize)
+        window.minSize = NSSize(width: 700, height: 540)
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.collectionBehavior = [.canJoinAllSpaces]
         window.titleVisibility = .visible
@@ -1668,6 +1669,7 @@ private struct PreferencePane<Content: View>: View {
             .padding(.top, 24)
             .padding(.bottom, 28)
             .frame(maxWidth: 760, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
