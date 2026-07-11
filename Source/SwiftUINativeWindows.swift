@@ -1728,7 +1728,7 @@ private struct PreferenceRow<Control: View>: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .center, spacing: 14) {
             Text(title)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(width: 258, alignment: .trailing)
