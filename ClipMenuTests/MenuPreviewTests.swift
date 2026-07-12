@@ -2,14 +2,18 @@ import XCTest
 @testable import ClipMenu
 
 final class MenuPreviewTests: XCTestCase {
-    func testHistoryMenuKeepsSingletonBucketsAtTopLevel() {
+    func testHistoryMenuKeepsIncompleteBucketsAtTopLevel() {
         XCTAssertEqual(
             CMHistoryMenuGroups(clipCount: 2, inlineCount: 1, folderCount: 10),
             [.direct(0), .direct(1)]
         )
         XCTAssertEqual(
-            CMHistoryMenuGroups(clipCount: 4, inlineCount: 1, folderCount: 2),
-            [.direct(0), .folder(1..<3), .direct(3)]
+            CMHistoryMenuGroups(clipCount: 4, inlineCount: 1, folderCount: 10),
+            [.direct(0), .direct(1), .direct(2), .direct(3)]
+        )
+        XCTAssertEqual(
+            CMHistoryMenuGroups(clipCount: 6, inlineCount: 1, folderCount: 3),
+            [.direct(0), .folder(1..<4), .direct(4), .direct(5)]
         )
     }
 
