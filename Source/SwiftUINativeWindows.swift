@@ -713,11 +713,15 @@ final class ClipMenuUndoWindow: NSWindow {
     }
 }
 
-private final class PreferencesPresentationState: ObservableObject {
+final class PreferencesPresentationState: ObservableObject {
     @Published var selection: PreferenceTab?
 
     init() {
         resetForPresentation()
+    }
+
+    init(selection: PreferenceTab) {
+        self.selection = selection
     }
 
     func resetForPresentation() {
@@ -725,7 +729,7 @@ private final class PreferencesPresentationState: ObservableObject {
     }
 }
 
-private enum CMForegroundWindowActivationPolicyBridge {
+enum CMForegroundWindowActivationPolicyBridge {
     private static var retainCount = 0
     private static var previousActivationPolicy: NSApplication.ActivationPolicy?
 
@@ -750,363 +754,7 @@ private enum CMForegroundWindowActivationPolicyBridge {
     }
 }
 
-final class SwiftUIPreferencesWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate {
-    static let shared = SwiftUIPreferencesWindowController()
-    private static let defaultContentSize = NSSize(width: 760, height: 640)
-    private static let toolbarIdentifier = NSToolbar.Identifier("com.naotaka.ClipMenu.preferences")
-    private let presentationState = PreferencesPresentationState()
-    private var selectionObserver: AnyCancellable?
-
-    private init() {
-        let controller = NSHostingController(rootView: PreferencesView(state: presentationState))
-        let window = NSWindow(contentViewController: controller)
-        window.title = presentationState.selection?.title ?? NSLocalizedString("Preferences", comment: "")
-        window.setContentSize(Self.defaultContentSize)
-        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-        window.collectionBehavior = [.canJoinAllSpaces]
-        window.titleVisibility = .visible
-        window.titlebarAppearsTransparent = false
-        window.isMovableByWindowBackground = false
-        window.isRestorable = false
-        window.toolbarStyle = .preference
-        super.init(window: window)
-
-        let toolbar = NSToolbar(identifier: Self.toolbarIdentifier)
-        toolbar.delegate = self
-        toolbar.allowsUserCustomization = false
-        toolbar.autosavesConfiguration = false
-        toolbar.displayMode = .iconAndLabel
-        toolbar.sizeMode = .regular
-        window.toolbar = toolbar
-        window.setContentSize(Self.defaultContentSize)
-        window.contentMinSize = Self.defaultContentSize
-        window.contentMaxSize = Self.defaultContentSize
-        updateWindowChrome(for: presentationState.selection ?? .general)
-        window.standardWindowButton(.miniaturizeButton)?.isEnabled = false
-        window.standardWindowButton(.zoomButton)?.isEnabled = false
-
-        window.delegate = self
-        selectionObserver = presentationState.$selection
-            .compactMap { $0 }
-            .removeDuplicates()
-            .receive(on: RunLoop.main)
-            .sink { [weak self] tab in
-                self?.updateWindowChrome(for: tab)
-            }
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override func showWindow(_ sender: Any?) {
-        presentationState.resetForPresentation()
-        window?.center()
-        CMForegroundWindowActivationPolicyBridge.retainRegularActivationPolicy()
-        super.showWindow(sender)
-        NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps])
-        NSApp.activate(ignoringOtherApps: true)
-        window?.orderFrontRegardless()
-        window?.makeMain()
-        window?.makeKeyAndOrderFront(self)
-    }
-
-    func debugShellSnapshot() -> [String: Any] {
-        let selectedTab = presentationState.selection ?? .general
-        let visibleTabs = PreferenceTab.allCases
-        return [
-            "visiblePaneTitles": visibleTabs.map(\.title),
-            "visiblePaneIconSources": Dictionary(
-                uniqueKeysWithValues: visibleTabs.map { ($0.title, $0.debugIconSourceName) }
-            ),
-            "selectedPaneTitle": selectedTab.title,
-            "selectedPaneIconSource": selectedTab.debugIconSourceName,
-            "windowTitle": window?.title as Any,
-            "selectedToolbarItemIdentifier": window?.toolbar?.selectedItemIdentifier?.rawValue as Any,
-            "toolbarAllowsUserCustomization": window?.toolbar?.allowsUserCustomization as Any,
-            "toolbarAutosavesConfiguration": window?.toolbar?.autosavesConfiguration as Any,
-            "miniaturizeButtonEnabled": window?.standardWindowButton(.miniaturizeButton)?.isEnabled as Any,
-            "zoomButtonEnabled": window?.standardWindowButton(.zoomButton)?.isEnabled as Any
-        ]
-    }
-
-    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
-        sender.frame.size
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        if let window, !window.makeFirstResponder(window) {
-            window.endEditing(for: nil)
-        }
-        RecordingPreferencesStore.shared.applyStoreTypes()
-        ActionFileStore.shared.commitPendingChanges()
-        ActionBehaviorDraft.shared.commitPendingSelections()
-        CMForegroundWindowActivationPolicyBridge.releaseRegularActivationPolicy()
-        NSApp.deactivate()
-        NotificationCenter.default.post(name: .CMPreferencePanelWillClose, object: nil)
-    }
-
-    #if DEBUG
-    func debugSelectedTabTitle() -> String? {
-        presentationState.selection?.title
-    }
-
-    func debugSelectTab(rawValue: String) {
-        presentationState.selection = CMPreferenceTab(debugRawValue: rawValue)
-    }
-    #endif
-
-    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        PreferenceTab.allCases.map(\.toolbarItemIdentifier)
-    }
-
-    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        toolbarDefaultItemIdentifiers(toolbar)
-    }
-
-    func toolbarSelectableItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        toolbarDefaultItemIdentifiers(toolbar)
-    }
-
-    func toolbar(
-        _ toolbar: NSToolbar,
-        itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
-        willBeInsertedIntoToolbar flag: Bool
-    ) -> NSToolbarItem? {
-        guard let tab = PreferenceTab.allCases.first(where: { $0.toolbarItemIdentifier == itemIdentifier }) else {
-            return nil
-        }
-
-        let item = NSToolbarItem(itemIdentifier: itemIdentifier)
-        item.label = tab.title
-        item.paletteLabel = tab.title
-        item.toolTip = tab.title
-        item.image = tab.toolbarImage
-        item.target = self
-        item.action = #selector(selectPreferencePane(_:))
-        item.isEnabled = true
-        return item
-    }
-
-    @objc private func selectPreferencePane(_ sender: NSToolbarItem) {
-        guard let tab = PreferenceTab.allCases.first(where: { $0.toolbarItemIdentifier == sender.itemIdentifier }) else {
-            return
-        }
-        presentationState.selection = tab
-    }
-
-    private func updateWindowChrome(for tab: PreferenceTab) {
-        window?.title = tab.title
-        window?.toolbar?.selectedItemIdentifier = tab.toolbarItemIdentifier
-        UserDefaults.standard.set(tab.rawValue, forKey: CMSelectedPreferencePaneKey)
-    }
-}
-
-final class SwiftUISnippetEditorWindowController: NSWindowController, NSWindowDelegate {
-    private let store = SnippetFileStore.shared
-    private static let frameAutosaveName = "SnippetEditorWindow"
-    private static let defaultContentSize = NSSize(width: 640, height: 480)
-    private static let verticalDividerAutosaveName = "SnippetEditorVerticalDivider"
-    private static let horizontalDividerAutosaveName = "SnippetEditorHorizontalDivider"
-    private static let defaultVerticalPrimarySize: CGFloat = 244
-    private static let defaultHorizontalPrimarySize: CGFloat = 235
-    private var dirtyStateObserver: AnyCancellable?
-    private var lastSelectionSnapshot: SnippetFileStore.SelectionSnapshot?
-    private let restoredFrameOnInit: Bool
-
-    init() {
-        let controller = NSHostingController(rootView: SnippetEditorView(store: store))
-        if #available(macOS 13.0, *) {
-            controller.sizingOptions = []
-        }
-        let window = ClipMenuUndoWindow(contentViewController: controller)
-        window.title = NSLocalizedString("Snippet Editor", comment: "")
-        window.setContentSize(Self.defaultContentSize)
-        window.minSize = NSSize(width: 560, height: 400)
-        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-        window.collectionBehavior = [.canJoinAllSpaces]
-        window.titleVisibility = .visible
-        window.titlebarAppearsTransparent = false
-        window.isMovableByWindowBackground = false
-        window.isRestorable = false
-        window.toolbarStyle = .unifiedCompact
-        let restoredFrame = window.setFrameAutosaveName(Self.frameAutosaveName)
-        restoredFrameOnInit = restoredFrame
-        if !restoredFrame {
-            window.center()
-        }
-        window.providedUndoManager = { [weak store] in store?.undoManager }
-        super.init(window: window)
-        window.delegate = self
-        dirtyStateObserver = store.$hasUnsavedChanges
-            .receive(on: RunLoop.main)
-            .sink { [weak window] hasUnsavedChanges in
-                window?.isDocumentEdited = hasUnsavedChanges
-            }
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override func showWindow(_ sender: Any?) {
-        store.reload()
-        let targetFrame = window?.frame
-        CMForegroundWindowActivationPolicyBridge.retainRegularActivationPolicy()
-        super.showWindow(sender)
-        window?.isDocumentEdited = store.hasUnsavedChanges
-        if let window, let targetFrame, restoredFrameOnInit {
-            let applyTargetFrame = {
-                var centeredFrame = targetFrame
-                let centeredOrigin = CMCenteredWindowOriginForDebug(frameSize: targetFrame.size, screen: window.screen)
-                centeredFrame.origin = centeredOrigin
-                window.setFrame(centeredFrame, display: false)
-            }
-            applyTargetFrame()
-            DispatchQueue.main.async(execute: applyTargetFrame)
-        } else {
-            window?.setContentSize(Self.defaultContentSize)
-            window?.center()
-            DispatchQueue.main.async { [weak window] in
-                window?.setContentSize(Self.defaultContentSize)
-                window?.center()
-            }
-        }
-        NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps])
-        NSApp.activate(ignoringOtherApps: true)
-        window?.orderFrontRegardless()
-        window?.makeMain()
-        window?.makeKeyAndOrderFront(self)
-        restoreSplitPositionsAfterWindowSetup()
-        if let lastSelectionSnapshot {
-            store.restoreSelectionSnapshot(lastSelectionSnapshot)
-        }
-    }
-
-    private func restoreSplitPositionsAfterWindowSetup() {
-        func savedPrimarySize(forKey key: String, fallback: CGFloat) -> CGFloat {
-            guard let savedNumber = UserDefaults.standard.object(forKey: key) as? NSNumber else {
-                return fallback
-            }
-            return CGFloat(savedNumber.doubleValue)
-        }
-
-        let applyRestoredPositions = { [weak self] in
-            guard let self,
-                  let rootView = self.window?.contentViewController?.view ?? self.window?.contentView else {
-                return
-            }
-
-            rootView.layoutSubtreeIfNeeded()
-
-            if let verticalSplit = CMFindSplitView(in: rootView, identifier: Self.verticalDividerAutosaveName) {
-                verticalSplit.setPosition(
-                    savedPrimarySize(
-                        forKey: Self.verticalDividerAutosaveName,
-                        fallback: Self.defaultVerticalPrimarySize
-                    ),
-                    ofDividerAt: 0
-                )
-            }
-
-            if let horizontalSplit = CMFindSplitView(in: rootView, identifier: Self.horizontalDividerAutosaveName) {
-                horizontalSplit.setPosition(
-                    savedPrimarySize(
-                        forKey: Self.horizontalDividerAutosaveName,
-                        fallback: Self.defaultHorizontalPrimarySize
-                    ),
-                    ofDividerAt: 0
-                )
-            }
-
-            rootView.layoutSubtreeIfNeeded()
-        }
-
-        let restoreDelays: [TimeInterval] = [0, 0.02, 0.08, 0.16, 0.5]
-        for delay in restoreDelays {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                applyRestoredPositions()
-            }
-        }
-    }
-
-    func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
-        store.undoManager
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        if let window, !window.makeFirstResponder(window) {
-            window.endEditing(for: nil)
-        }
-        CMForegroundWindowActivationPolicyBridge.releaseRegularActivationPolicy()
-        NSApp.deactivate()
-        lastSelectionSnapshot = store.currentSelectionSnapshot()
-        store.restoreSelectionSnapshot(.init(
-            selectedFolderIDs: [],
-            selectedSnippetIDs: [],
-            primarySelectedFolderID: nil,
-            primarySelectedSnippetID: nil
-        ))
-        store.save()
-        NotificationCenter.default.post(name: .CMSnippetEditorWillClose, object: nil)
-    }
-
-    @objc func saveDocument(_ sender: Any?) {
-        if let window, !window.makeFirstResponder(window) {
-            window.endEditing(for: nil)
-        }
-        store.save()
-    }
-
-    @objc func save(_ sender: Any?) {
-        saveDocument(sender)
-    }
-
-    @objc func saveDocumentAs(_ sender: Any?) {
-        if let window, !window.makeFirstResponder(window) {
-            window.endEditing(for: nil)
-        }
-        store.exportSnippetsToPanel()
-    }
-
-    @objc func saveAs(_ sender: Any?) {
-        saveDocumentAs(sender)
-    }
-
-    @objc func revertDocumentToSaved(_ sender: Any?) {
-        if let window, !window.makeFirstResponder(window) {
-            window.endEditing(for: nil)
-        }
-        store.reload()
-    }
-
-    @objc func revertToSaved(_ sender: Any?) {
-        revertDocumentToSaved(sender)
-    }
-
-    @objc func importSnippets(_ sender: Any?) {
-        if let window, !window.makeFirstResponder(window) {
-            window.endEditing(for: nil)
-        }
-        store.importSnippetsFromPanel()
-    }
-
-    func importSnippets(from url: URL) {
-        if let window, !window.makeFirstResponder(window) {
-            window.endEditing(for: nil)
-        }
-        store.importSnippets(from: url)
-    }
-
-    @objc func exportSnippets(_ sender: Any?) {
-        if let window, !window.makeFirstResponder(window) {
-            window.endEditing(for: nil)
-        }
-        store.exportSnippetsToPanel()
-    }
-}
-
-private func CMCenteredWindowOriginForDebug(frameSize: NSSize, screen: NSScreen?) -> CGPoint {
+func CMCenteredWindowOriginForDebug(frameSize: NSSize, screen: NSScreen?) -> CGPoint {
     let targetScreen = screen ?? NSScreen.main
     let initialFrame = NSRect(origin: targetScreen?.frame.origin ?? .zero, size: frameSize)
     let probeWindow = NSWindow(
@@ -1207,18 +855,18 @@ extension SwiftUISnippetEditorWindowController {
         let originalFrame = defaults.object(forKey: frameKey)
 
         defer {
-            if let originalVertical {
-                defaults.set(originalVertical, forKey: verticalKey)
+            if let storedVertical = originalVertical {
+                defaults.set(storedVertical as Any?, forKey: verticalKey)
             } else {
                 defaults.removeObject(forKey: verticalKey)
             }
-            if let originalHorizontal {
-                defaults.set(originalHorizontal, forKey: horizontalKey)
+            if let storedHorizontal = originalHorizontal {
+                defaults.set(storedHorizontal as Any?, forKey: horizontalKey)
             } else {
                 defaults.removeObject(forKey: horizontalKey)
             }
-            if let originalFrame {
-                defaults.set(originalFrame, forKey: frameKey)
+            if let storedFrame = originalFrame {
+                defaults.set(storedFrame as Any?, forKey: frameKey)
             } else {
                 defaults.removeObject(forKey: frameKey)
             }
@@ -1294,7 +942,7 @@ extension SwiftUISnippetEditorWindowController {
 }
 #endif
 
-private func CMFindSplitView(in view: NSView, identifier: String) -> NSSplitView? {
+func CMFindSplitView(in view: NSView, identifier: String) -> NSSplitView? {
     if let splitView = view as? NSSplitView,
        splitView.identifier?.rawValue == identifier {
         return splitView
@@ -1401,7 +1049,7 @@ extension SwiftUISnippetEditorWindowController: NSMenuItemValidation {
     }
 }
 
-private enum PreferenceTab: String, CaseIterable, Identifiable {
+enum PreferenceTab: String, CaseIterable, Identifiable {
     case general
     case menu
     case types
@@ -1536,7 +1184,7 @@ private enum PreferenceTab: String, CaseIterable, Identifiable {
     }
 }
 
-private let CMSelectedPreferencePaneKey = "CMSelectedPreferencePane"
+let CMSelectedPreferencePaneKey = "CMSelectedPreferencePane"
 
 func CMConfiguredPreferencePaneTitlesForDebug() -> [String] {
     PreferenceTab.allCases.map(\.title)
@@ -1556,7 +1204,7 @@ private func CMVisiblePreferenceTabsForDebug(query: String) -> [PreferenceTab] {
     }
 }
 
-private func CMPreferenceTab(debugRawValue: String) -> PreferenceTab? {
+func CMPreferenceTab(debugRawValue: String) -> PreferenceTab? {
     switch debugRawValue
         .trimmingCharacters(in: .whitespacesAndNewlines)
         .lowercased() {
@@ -1577,7 +1225,7 @@ private func CMPreferenceTab(debugRawValue: String) -> PreferenceTab? {
     }
 }
 
-private func CMInitialPreferenceTabSelection() -> PreferenceTab? {
+func CMInitialPreferenceTabSelection() -> PreferenceTab? {
 #if DEBUG
     let arguments = ProcessInfo.processInfo.arguments
     if let index = arguments.firstIndex(of: "-debugShowPreferencesTab"),
@@ -1606,6 +1254,85 @@ func CMPreferencesShellSnapshotForDebug() -> [String: Any] {
         "selectedPaneTitle": selectedTab.title,
         "selectedPaneIconSource": selectedTab.debugIconSourceName
     ]
+}
+
+#if DEBUG
+struct CMPreferencesPreviewRoot: View {
+    @StateObject private var state: PreferencesPresentationState
+
+    init(initialTab: PreferenceTab) {
+        _state = StateObject(
+            wrappedValue: PreferencesPresentationState(selection: initialTab)
+        )
+    }
+
+    private var selectedTab: Binding<PreferenceTab> {
+        Binding(
+            get: { state.selection ?? .general },
+            set: { state.selection = $0 }
+        )
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Picker(
+                NSLocalizedString("Preference pane", comment: "Xcode preview pane selector"),
+                selection: selectedTab
+            ) {
+                ForEach(PreferenceTab.allCases) { tab in
+                    Text(tab.title).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+
+            Divider()
+            PreferencesView(state: state)
+        }
+    }
+}
+
+#Preview("Preferences — General") {
+    CMPreferencesPreviewRoot(initialTab: .general)
+        .frame(width: 760, height: 700)
+}
+
+#Preview("Preferences — Menu") {
+    CMPreferencesPreviewRoot(initialTab: .menu)
+        .frame(width: 760, height: 700)
+}
+
+#Preview("Preferences — Type") {
+    CMPreferencesPreviewRoot(initialTab: .types)
+        .frame(width: 760, height: 700)
+}
+
+#Preview("Preferences — Action") {
+    CMPreferencesPreviewRoot(initialTab: .actions)
+        .frame(width: 760, height: 700)
+}
+
+#Preview("Preferences — Shortcuts") {
+    CMPreferencesPreviewRoot(initialTab: .shortcuts)
+        .frame(width: 760, height: 700)
+}
+
+#Preview("Preferences — Updates") {
+    CMPreferencesPreviewRoot(initialTab: .updates)
+        .frame(width: 760, height: 700)
+}
+#endif
+
+func CMPreferencesRootView(state: PreferencesPresentationState) -> AnyView {
+    AnyView(PreferencesView(state: state))
+}
+
+func CMCommitPreferencesBeforeWindowClose() {
+    RecordingPreferencesStore.shared.applyStoreTypes()
+    ActionFileStore.shared.commitPendingChanges()
+    ActionBehaviorDraft.shared.commitPendingSelections()
 }
 
 private struct PreferencesView: View {
@@ -2166,7 +1893,7 @@ private struct PasteAutomationPreferencesView: View {
         systemImage: String,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
+        Button(action: { action() }) {
             Label(title, systemImage: systemImage)
                 .font(.subheadline.weight(.medium))
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -2308,183 +2035,6 @@ private struct HotKeyRecorderControl: NSViewRepresentable {
             self.modifierFlags = modifierFlags
         }
         view.refresh()
-    }
-}
-
-private final class HotKeyRecorderNSView: NSView {
-    var keyCode = 0
-    var modifierFlags = 0
-    var onCapture: ((Int, Int) -> Void)?
-
-    private let label = NSTextField(labelWithString: "")
-    private var isRecording = false
-
-    override var acceptsFirstResponder: Bool { true }
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        wantsLayer = true
-        layer?.cornerRadius = 7
-        layer?.borderWidth = 1
-
-        label.alignment = .center
-        label.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .medium)
-        label.lineBreakMode = .byTruncatingTail
-        addSubview(label)
-        refresh()
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override var intrinsicContentSize: NSSize {
-        NSSize(width: 210, height: 26)
-    }
-
-    override func layout() {
-        super.layout()
-        label.frame = bounds.insetBy(dx: 8, dy: 4)
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        window?.makeFirstResponder(self)
-        isRecording = true
-        refresh()
-    }
-
-    override func keyDown(with event: NSEvent) {
-        guard isRecording else {
-            super.keyDown(with: event)
-            return
-        }
-
-        if event.keyCode == 53 {
-            isRecording = false
-            refresh()
-            return
-        }
-
-        if event.modifierFlags.normalizedShortcutFlags.isEmpty,
-           event.keyCode == 51 || event.keyCode == 117 {
-            keyCode = -1
-            modifierFlags = 0
-            isRecording = false
-            onCapture?(keyCode, modifierFlags)
-            refresh()
-            return
-        }
-
-        let flags = event.modifierFlags.normalizedShortcutFlags
-        guard !flags.isEmpty else {
-            NSSound.beep()
-            return
-        }
-
-        keyCode = Int(event.keyCode)
-        modifierFlags = Int(flags.rawValue)
-        isRecording = false
-        onCapture?(keyCode, modifierFlags)
-        refresh()
-    }
-
-    override func resignFirstResponder() -> Bool {
-        isRecording = false
-        refresh()
-        return true
-    }
-
-    func refresh() {
-        label.stringValue = isRecording
-            ? NSLocalizedString("Type shortcut", comment: "")
-            : Self.displayString(keyCode: keyCode, modifierFlags: modifierFlags)
-        label.textColor = (keyCode >= 0 && modifierFlags != 0) || isRecording
-            ? .labelColor
-            : .secondaryLabelColor
-        layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
-        layer?.borderColor = (isRecording ? NSColor.keyboardFocusIndicatorColor : NSColor.separatorColor).cgColor
-    }
-
-    private static func displayString(keyCode: Int, modifierFlags: Int) -> String {
-        guard keyCode >= 0, modifierFlags != 0 else {
-            return NSLocalizedString("(None)", comment: "")
-        }
-
-        let flags = NSEvent.ModifierFlags(rawValue: UInt(modifierFlags))
-        var parts = ""
-        if flags.contains(.control) {
-            parts += "\u{2303}"
-        }
-        if flags.contains(.option) {
-            parts += "\u{2325}"
-        }
-        if flags.contains(.shift) {
-            parts += "\u{21E7}"
-        }
-        if flags.contains(.command) {
-            parts += "\u{2318}"
-        }
-        return parts + keyName(for: keyCode)
-    }
-
-    fileprivate static func keyName(for keyCode: Int) -> String {
-        if let layoutName = keyboardLayoutKeyName(for: keyCode) {
-            return layoutName
-        }
-
-        let names: [Int: String] = [
-            0: "A", 1: "S", 2: "D", 3: "F", 4: "H", 5: "G", 6: "Z", 7: "X",
-            8: "C", 9: "V", 11: "B", 12: "Q", 13: "W", 14: "E", 15: "R",
-            16: "Y", 17: "T", 18: "1", 19: "2", 20: "3", 21: "4", 22: "6",
-            23: "5", 24: "=", 25: "9", 26: "7", 27: "-", 28: "8", 29: "0",
-            30: "]", 31: "O", 32: "U", 33: "[", 34: "I", 35: "P", 37: "L",
-            38: "J", 39: "'", 40: "K", 41: ";", 42: "\\", 43: ",", 44: "/",
-            45: "N", 46: "M", 47: ".", 49: "Space", 50: "`", 51: "Delete",
-            53: "Escape", 65: ".", 67: "*", 69: "+", 71: "Clear", 75: "/",
-            76: "Return", 78: "-", 81: "=", 82: "0", 83: "1", 84: "2",
-            85: "3", 86: "4", 87: "5", 88: "6", 89: "7", 91: "8", 92: "9",
-            96: "F5", 97: "F6", 98: "F7", 99: "F3", 100: "F8", 101: "F9",
-            103: "F11", 105: "F13", 106: "F16", 107: "F14", 109: "F10",
-            111: "F12", 113: "F15", 114: "Help", 115: "Home", 116: "Page Up",
-            117: "Forward Delete", 118: "F4", 119: "End", 120: "F2",
-            121: "Page Down", 122: "F1", 123: "Left", 124: "Right",
-            125: "Down", 126: "Up"
-        ]
-        return names[keyCode] ?? "Key \(keyCode)"
-    }
-
-    private static func keyboardLayoutKeyName(for keyCode: Int) -> String? {
-        guard keyCode >= 0,
-              let inputSource = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
-              let layoutData = TISGetInputSourceProperty(inputSource, kTISPropertyUnicodeKeyLayoutData) else {
-            return nil
-        }
-
-        let data = unsafeBitCast(layoutData, to: CFData.self)
-        guard let keyboardLayout = UnsafeRawPointer(CFDataGetBytePtr(data))?.assumingMemoryBound(to: UCKeyboardLayout.self) else {
-            return nil
-        }
-
-        var keysDown = UInt32(0)
-        var chars = [UniChar](repeating: 0, count: 4)
-        var realLength = 0
-        let status = UCKeyTranslate(
-            keyboardLayout,
-            UInt16(keyCode),
-            UInt16(kUCKeyActionDisplay),
-            0,
-            UInt32(LMGetKbdType()),
-            OptionBits(kUCKeyTranslateNoDeadKeysBit),
-            &keysDown,
-            chars.count,
-            &realLength,
-            &chars
-        )
-
-        guard status == noErr, realLength > 0 else { return nil }
-        let translated = String(utf16CodeUnits: chars, count: realLength)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return translated.isEmpty ? nil : translated.uppercased()
     }
 }
 
@@ -2699,15 +2249,15 @@ func CMMenuPreferencesSnapshotForDebug() -> [String: Any] {
     let legacyToolTipCharacterUnitLabel = NSLocalizedString("1259.title", tableName: "Preferences", bundle: .main, value: "chars", comment: "")
     let legacyPointUnitLabel = NSLocalizedString("742.title", tableName: "Preferences", bundle: .main, value: "pt", comment: "")
 
-    return [
-        "paneTitle": NSLocalizedString("Menu", comment: ""),
-        "sectionTitles": [
+    var report: [String: Any] = [:]
+    report["paneTitle"] = NSLocalizedString("Menu", comment: "")
+    report["sectionTitles"] = [
             NSLocalizedString("Layout", comment: ""),
             NSLocalizedString("Menu Items", comment: ""),
             NSLocalizedString("Tooltips", comment: ""),
             NSLocalizedString("Font", comment: "")
-        ],
-        "layout": [
+        ]
+    report["layout"] = [
             "controlTitles": [
                 NSLocalizedString("703.title", tableName: "Preferences", bundle: .main, value: "Number of characters in the menu:", comment: ""),
                 NSLocalizedString("1028.title", tableName: "Preferences", bundle: .main, value: "Number of items place inline:", comment: ""),
@@ -2723,8 +2273,8 @@ func CMMenuPreferencesSnapshotForDebug() -> [String: Any] {
                 "inlineItems": inlineItems,
                 "folderItems": folderItems
             ]
-        ],
-        "menuRowPreview": [
+        ]
+    let menuRowPreview: [String: Any] = [
             "title": NSLocalizedString("Current Menu Row Preview", comment: ""),
             "detail": NSLocalizedString("Menu rows reflect numbering, labels, key equivalents, and tooltip trimming from the active settings.", comment: ""),
             "badges": [
@@ -2741,8 +2291,9 @@ func CMMenuPreferencesSnapshotForDebug() -> [String: Any] {
             "snippetFolderTitle": "QA",
             "snippetRowTitle": previewSnippetRowTitle,
             "tooltipPreview": previewTooltip as Any
-        ],
-        "menuItems": [
+        ]
+    report["menuRowPreview"] = menuRowPreview
+    let menuItems: [String: Any] = [
             "toggleTitles": [
                 NSLocalizedString("706.title", tableName: "Preferences", bundle: .main, value: "Mark menu items with numbers", comment: ""),
                 NSLocalizedString("705.title", tableName: "Preferences", bundle: .main, value: "Menu items' title starts with 0", comment: ""),
@@ -2763,16 +2314,17 @@ func CMMenuPreferencesSnapshotForDebug() -> [String: Any] {
                 "titleStartsWithZeroEnabled": markWithNumbers,
                 "alertBeforeClearEnabled": clearHistoryItem
             ]
-        ],
-        "tooltips": [
+        ]
+    report["menuItems"] = menuItems
+    report["tooltips"] = [
             "toggleTitle": NSLocalizedString("1157.title", tableName: "Preferences", bundle: .main, value: "Show tool tip on a menu item", comment: ""),
             "maxLengthTitle": NSLocalizedString("1256.title", tableName: "Preferences", bundle: .main, value: "Max length of tool tip string:", comment: ""),
             "unitTitle": legacyToolTipCharacterUnitLabel,
             "showTooltips": showTooltips,
             "maxTooltipLength": maxTooltipLength,
             "maxLengthEnabled": showTooltips
-        ],
-        "font": [
+        ]
+    let font: [String: Any] = [
             "toggleTitle": NSLocalizedString("744.title", tableName: "Preferences", bundle: .main, value: "Change font size in the menu", comment: ""),
             "unitTitle": legacyPointUnitLabel,
             "changeFontSize": changeFontSize,
@@ -2786,7 +2338,8 @@ func CMMenuPreferencesSnapshotForDebug() -> [String: Any] {
                 NSLocalizedString("1239.title", tableName: "Preferences", bundle: .main, value: "Select:", comment: "")
             ]
         ]
-    ]
+    report["font"] = font
+    return report
 }
 
 func CMMenuLegacyFontSizeOptions() -> [Int] {
@@ -3105,9 +2658,9 @@ func CMTypePreferencesSnapshotForDebug() -> [String: Any] {
         ]
     }
 
-    return [
-        "paneTitle": NSLocalizedString("1086.label", tableName: "Preferences", bundle: .main, value: "Type", comment: ""),
-        "storeTypes": [
+    var report: [String: Any] = [:]
+    report["paneTitle"] = NSLocalizedString("1086.label", tableName: "Preferences", bundle: .main, value: "Type", comment: "")
+    let storeTypesReport: [String: Any] = [
             "sectionTitle": NSLocalizedString("1088.title", tableName: "Preferences", bundle: .main, value: "Select clipboard types to store:", comment: ""),
             "enabledCount": enabledStoreTypeTitles.count,
             "disabledCount": disabledStoreTypeTitles.count,
@@ -3117,8 +2670,9 @@ func CMTypePreferencesSnapshotForDebug() -> [String: Any] {
             "disabledTitles": disabledStoreTypeTitles,
             "checkAllVisible": true,
             "checkAllTitle": NSLocalizedString("1066.title", tableName: "Preferences", bundle: .main, value: "Check All", comment: "")
-        ],
-        "images": [
+        ]
+    report["storeTypes"] = storeTypesReport
+    let images: [String: Any] = [
             "sectionTitle": NSLocalizedString("Images", comment: ""),
             "toggleTitle": NSLocalizedString("737.title", tableName: "Preferences", bundle: .main, value: "Show Image", comment: ""),
             "controlTitles": [
@@ -3134,8 +2688,9 @@ func CMTypePreferencesSnapshotForDebug() -> [String: Any] {
             ],
             "summaryTitle": CMTypeThumbnailSummaryTitle(width: thumbnailWidth, height: thumbnailHeight),
             "dimensionBadges": CMTypeThumbnailDimensionBadgeTitles(width: thumbnailWidth, height: thumbnailHeight, pixelLabel: pixelLabel)
-        ],
-        "icons": [
+        ]
+    report["images"] = images
+    let icons: [String: Any] = [
             "sectionTitle": NSLocalizedString("Icons", comment: ""),
             "toggleTitle": NSLocalizedString("934.title", tableName: "Preferences", bundle: .main, value: "Show Icon in the Menu", comment: ""),
             "controlTitles": [
@@ -3147,8 +2702,9 @@ func CMTypePreferencesSnapshotForDebug() -> [String: Any] {
             "showIcons": showIcons,
             "sizeOptions": CMTypeLegacyMenuIconSizeOptions().map(String.init),
             "sizeBadge": CMTypeIconSizeBadgeTitle(size: menuIconSize, pixelLabel: pixelLabel)
-        ],
-        "fileTypeIcons": [
+        ]
+    report["icons"] = icons
+    let fileTypeIcons: [String: Any] = [
             "sectionTitle": NSLocalizedString("File Type Icons", comment: ""),
             "editorEnabled": showIcons,
             "customMappingCount": customMappingCount,
@@ -3162,7 +2718,8 @@ func CMTypePreferencesSnapshotForDebug() -> [String: Any] {
             },
             "mappings": fileTypeMappings
         ]
-    ]
+    report["fileTypeIcons"] = fileTypeIcons
+    return report
 }
 
 func CMSnippetPreferencesSnapshotForDebug() -> [String: Any] {
@@ -3243,23 +2800,23 @@ func CMUpdatesPreferencesSnapshotForDebug() -> [String: Any] {
         coordinator: coordinator
     )
 
-    return [
-        "paneTitle": NSLocalizedString("Updates", comment: ""),
-        "statusActionTitle": NSLocalizedString("1331.title", tableName: "Preferences", bundle: .main, value: "Check Now", comment: ""),
-        "sectionTitles": [
+    var report: [String: Any] = [:]
+    report["paneTitle"] = NSLocalizedString("Updates", comment: "")
+    report["statusActionTitle"] = NSLocalizedString("1331.title", tableName: "Preferences", bundle: .main, value: "Check Now", comment: "")
+    report["sectionTitles"] = [
             NSLocalizedString("Updates", comment: ""),
             NSLocalizedString("Status", comment: "")
-        ],
-        "controlTitles": [
+        ]
+    report["controlTitles"] = [
             NSLocalizedString("1337.title", tableName: "Preferences", bundle: .main, value: "Automatically check for updates:", comment: ""),
             NSLocalizedString("1426.title", tableName: "Preferences", bundle: .main, value: "Include pre-releases", comment: ""),
             NSLocalizedString("Automatically download updates in the future", comment: ""),
             NSLocalizedString("1279.title", tableName: "Preferences", bundle: .main, value: "Time interval", comment: ""),
             NSLocalizedString("1331.title", tableName: "Preferences", bundle: .main, value: "Check Now", comment: "")
-        ],
-        "intervalTitles": intervalOptions.map(\.title),
-        "workflowStages": workflowStages.map(\.debugDictionary),
-        "states": [
+        ]
+    report["intervalTitles"] = intervalOptions.map(\.title)
+    report["workflowStages"] = workflowStages.map(\.debugDictionary)
+    let states: [String: Any] = [
             "automaticChecks": automaticChecks,
             "preReleases": preReleases,
             "automaticallyInstallUpdates": automaticallyInstallUpdates,
@@ -3274,7 +2831,8 @@ func CMUpdatesPreferencesSnapshotForDebug() -> [String: Any] {
             "hasFeedURL": coordinator.feedURL != nil,
             "availability": availability
         ]
-    ]
+    report["states"] = states
+    return report
 }
 
 func CMActionPreferencesSnapshotForDebug() -> [String: Any] {
@@ -3336,15 +2894,15 @@ func CMActionPreferencesSnapshotForDebug() -> [String: Any] {
     let inspectorSnapshot = inspectorState.currentSnapshot(store: store)
     let actionMenuCountSummary = "\(flattenedActionCount) \(NSLocalizedString("1171.title", tableName: "Preferences", bundle: .main, value: "items", comment: ""))"
 
-    var report: [String: Any] = [
-        "paneTitle": NSLocalizedString("Action", comment: ""),
-        "sectionTitles": [
+    var report: [String: Any] = [:]
+    report["paneTitle"] = NSLocalizedString("Action", comment: "")
+    report["sectionTitles"] = [
             NSLocalizedString("1305.title", tableName: "Preferences", bundle: .main, value: "Behavior", comment: ""),
             NSLocalizedString("1223.title", tableName: "Preferences", bundle: .main, value: "Modifier key + Click behaviors on history menu items", comment: ""),
             NSLocalizedString("Available Actions", comment: ""),
             NSLocalizedString("1232.title", tableName: "Preferences", bundle: .main, value: "Action Menu", comment: "")
-        ],
-        "behavior": [
+        ]
+    report["behavior"] = [
             "toggleTitles": [
                 NSLocalizedString("756.title", tableName: "Preferences", bundle: .main, value: "Enable Action", comment: ""),
                 NSLocalizedString("757.title", tableName: "Preferences", bundle: .main, value: "Invoke an action immediately if only one action was registered", comment: "")
@@ -3357,8 +2915,8 @@ func CMActionPreferencesSnapshotForDebug() -> [String: Any] {
                 "invokeImmediatelyEnabled": enableActions,
                 "modifierBehaviorControlsEnabled": enableActions
             ]
-            ],
-            "modifierRows": [
+        ]
+    report["modifierRows"] = [
             [
                 "title": NSLocalizedString("1190.title", tableName: "Preferences", bundle: .main, value: "Control + Click:", comment: ""),
                 "selectionTitle": behaviorTitle(for: CMPrefContorlClickBehaviorKey)
@@ -3375,8 +2933,8 @@ func CMActionPreferencesSnapshotForDebug() -> [String: Any] {
                 "title": NSLocalizedString("1221.title", tableName: "Preferences", bundle: .main, value: "Command + Click:", comment: ""),
                 "selectionTitle": behaviorTitle(for: CMPrefCommandClickBehaviorKey)
             ]
-        ],
-        "availableActions": [
+        ]
+    let availableActions: [String: Any] = [
             "sourceTitle": store.reservedKind.title,
             "sourceTitles": ReservedActionKind.allCases.map(\.title),
             "countSummary": "\(flattenedReservedCount) \(NSLocalizedString("1171.title", tableName: "Preferences", bundle: .main, value: "items", comment: ""))",
@@ -3397,8 +2955,9 @@ func CMActionPreferencesSnapshotForDebug() -> [String: Any] {
                     "message": CMActionReservedEmptyStateMessage(for: .user)
                 ]
             ]
-        ],
-        "actionMenu": [
+        ]
+    report["availableActions"] = availableActions
+    let actionMenu: [String: Any] = [
             "countSummary": actionMenuCountSummary,
             "summary": actionMenuSummary(),
             "selectedPath": store.currentSelectedActionNodePath() as Any,
@@ -3422,7 +2981,7 @@ func CMActionPreferencesSnapshotForDebug() -> [String: Any] {
                 "moveDown": store.canMoveSelectedActionNodeDown()
             ]
         ]
-    ]
+    report["actionMenu"] = actionMenu
 
     if let inspectorSnapshot {
         var inspectorReport: [String: Any] = [
@@ -3512,20 +3071,20 @@ func CMGeneralPreferencesSnapshotForDebug() -> [String: Any] {
     }()
     let selectedStatusItemOption = StatusItemOption(rawValue: CMNormalizedStatusItemSelectionTag(showStatusItem)) ?? .default
 
-    return [
-        "paneTitle": NSLocalizedString("General", comment: ""),
-        "sectionTitles": [
+    var report: [String: Any] = [:]
+    report["paneTitle"] = NSLocalizedString("General", comment: "")
+    report["sectionTitles"] = [
             NSLocalizedString("Startup", comment: ""),
             NSLocalizedString("1275.title", tableName: "Preferences", bundle: .main, value: "Clipboard History", comment: ""),
             NSLocalizedString("1277.title", tableName: "Preferences", bundle: .main, value: "Appearance", comment: "")
-        ],
-        "startup": [
+        ]
+    report["startup"] = [
             "toggleTitles": [
                 NSLocalizedString("768.title", tableName: "Preferences", bundle: .main, value: "Launch on Login", comment: ""),
                 NSLocalizedString("Do not ask about startup launch", comment: "")
             ]
-        ],
-        "clipboardHistory": [
+        ]
+    let clipboardHistory: [String: Any] = [
             "pasteAutomationSurface": CMPasteAutomationPreferencesSnapshotForDebug(
                 inputPasteCommand: inputPasteCommand
             ),
@@ -3587,8 +3146,9 @@ func CMGeneralPreferencesSnapshotForDebug() -> [String: Any] {
                 "timeInterval": timeInterval,
                 "excludedApps": excludedApps
             ]
-        ],
-        "appearance": [
+        ]
+    report["clipboardHistory"] = clipboardHistory
+    report["appearance"] = [
             "controlTitle": NSLocalizedString("1316.title", tableName: "Preferences", bundle: .main, value: "Status Bar icon style:", comment: ""),
             "selectedStatusItemTitle": selectedStatusItemOption.title,
             "selectedStatusItemPreviewSource": selectedStatusItemOption == .none ? "systemSymbol" : "legacyArtwork",
@@ -3600,7 +3160,7 @@ func CMGeneralPreferencesSnapshotForDebug() -> [String: Any] {
                 ]
             }
         ]
-    ]
+    return report
 }
 
 private let CMPrefStoreTypesKey = "storeTypes"
@@ -6274,10 +5834,10 @@ private struct MenuIconTypeRow: View {
     }
 }
 
-private let CMActionNodeTitleKey = "nodeTitle"
-private let CMActionNodeIsLeafKey = "isLeaf"
-private let CMActionNodeChildrenKey = "children"
-private let CMActionNodeActionKey = "action"
+let CMActionNodeTitleKey = "nodeTitle"
+let CMActionNodeIsLeafKey = "isLeaf"
+let CMActionNodeChildrenKey = "children"
+let CMActionNodeActionKey = "action"
 private let CMActionTypeKey = "type"
 private let CMBuiltinActionType = "builtin"
 private let CMJavaScriptActionType = "js"
@@ -6473,6 +6033,10 @@ private func actionDictionary(from object: Any?) -> [String: String]? {
     return result.isEmpty ? nil : normalizedActionDictionary(result)
 }
 
+func CMLegacyActionDictionary(from object: Any?) -> [String: String]? {
+    actionDictionary(from: object)
+}
+
 private func normalizedActionDictionary(_ action: [String: String]) -> [String: String] {
     var normalized = action
     if normalized["name"] == "removeAction" {
@@ -6650,33 +6214,8 @@ func CMUpdatePreferencesAvailabilityReport(
     ]
 }
 
-@objc(CMLegacyArchivedActionNode)
-private final class LegacyArchivedActionNode: NSObject, NSCoding {
-    var nodeTitle = ""
-    var isLeaf = false
-    var children: [LegacyArchivedActionNode] = []
-    var action: [String: String]?
-
-    override init() {
-        super.init()
-    }
-
-    required init?(coder: NSCoder) {
-        nodeTitle = coder.decodeObject(forKey: CMActionNodeTitleKey) as? String ?? ""
-        isLeaf = (coder.decodeObject(forKey: CMActionNodeIsLeafKey) as? NSNumber)?.boolValue ?? false
-        let decodedChildren = coder.decodeObject(forKey: CMActionNodeChildrenKey)
-        if let childNodes = decodedChildren as? [LegacyArchivedActionNode] {
-            children = childNodes
-        } else if let childNodes = decodedChildren as? NSArray {
-            children = childNodes.compactMap { $0 as? LegacyArchivedActionNode }
-        }
-        action = actionDictionary(from: coder.decodeObject(forKey: CMActionNodeActionKey))
-        super.init()
-    }
-
-    func encode(with coder: NSCoder) {}
-
-    func actionNode() -> ActionNode {
+extension LegacyArchivedActionNode {
+    fileprivate func actionNode() -> ActionNode {
         if isLeaf {
             return ActionNode(nodeTitle: nodeTitle, action: action)
         }
@@ -7971,7 +7510,7 @@ private struct ActionPreferencesView: View {
         disabled: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
+        Button(action: { action() }) {
             actionToolbarIcon(legacyImageName: legacyImageName, fallbackSystemImage: systemImage)
                 .frame(width: 18, height: 18)
         }
@@ -8260,7 +7799,7 @@ final class ActionBehaviorDraft: ObservableObject {
     func commitPendingSelections() {
         guard !pendingDefaults.isEmpty else { return }
         for (key, value) in pendingDefaults {
-            UserDefaults.standard.set(value, forKey: key)
+            UserDefaults.standard.set(value as Any?, forKey: key)
         }
         pendingDefaults.removeAll()
     }
@@ -8319,13 +7858,13 @@ private struct ActionBehaviorOption: Identifiable, Hashable {
 
     static func id(for defaultsObject: Any?, options: [ActionBehaviorOption]) -> String {
         let fallback = none.id
-        guard let defaultsObject else { return fallback }
+        guard let resolvedDefaultsObject = defaultsObject else { return fallback }
 
-        if let value = defaultsObject as? String {
+        if let value = resolvedDefaultsObject as? String {
             return options.last { $0.behavior == .string(value) }?.id ?? fallback
         }
 
-        if let action = actionDictionary(from: defaultsObject) {
+        if let action = actionDictionary(from: resolvedDefaultsObject as Any?) {
             let id = actionID(action)
             return options.last { option in
                 guard case .action(let optionAction) = option.behavior else { return false }
@@ -10497,6 +10036,10 @@ final class SnippetFileStore: ObservableObject {
     }
 }
 
+func CMSnippetEditorRootView() -> AnyView {
+    AnyView(SnippetEditorView(store: .shared))
+}
+
 private struct SnippetEditorView: View {
     @ObservedObject var store: SnippetFileStore
     @State private var searchText = ""
@@ -10714,7 +10257,7 @@ private struct SnippetEditorView: View {
         tint: Color = .primary,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
+        Button(action: { action() }) {
             snippetLegacyIcon(
                 legacyImageName: legacyImageName,
                 fallbackSystemImage: systemImage,
@@ -10738,7 +10281,7 @@ private struct SnippetEditorView: View {
         isDisabled: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
+        Button(action: { action() }) {
             snippetLegacyIcon(
                 legacyImageName: legacyImageName,
                 fallbackSystemImage: systemImage,
@@ -10780,8 +10323,12 @@ private struct SnippetEditorView: View {
             )
 
             Menu {
-                Button(NSLocalizedString("Import Snippets...", comment: ""), action: performSnippetImport)
-                Button(NSLocalizedString("Export Snippets...", comment: ""), action: performSnippetExport)
+                Button(NSLocalizedString("Import Snippets...", comment: "")) {
+                    performSnippetImport()
+                }
+                Button(NSLocalizedString("Export Snippets...", comment: "")) {
+                    performSnippetExport()
+                }
                     .disabled(store.folders.isEmpty)
             } label: {
                 snippetLegacyIcon(
@@ -11545,7 +11092,7 @@ private struct NativeSnippetFolderBrowser: NSViewRepresentable {
                 proposedChildIndex: index,
                 draggingSource: info.draggingSource
                ) {
-                let groupItem: Any = NativeSnippetFolderBrowser.groupItemIdentifier
+                let groupItem: Any? = NativeSnippetFolderBrowser.groupItemIdentifier
                 outlineView.setDropItem(groupItem, dropChildIndex: max(0, index))
                 return .move
             }
@@ -11935,116 +11482,6 @@ private struct AutoSavingSplitView<Primary: View, Secondary: View>: NSViewContro
 
     func updateNSViewController(_ controller: AutoSavingSplitViewController, context: Context) {
         controller.update(primary: AnyView(primary), secondary: AnyView(secondary))
-    }
-}
-
-private struct CMSplitPaneHostingRoot: View {
-    let content: AnyView
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            content
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-}
-
-private final class AutoSavingSplitViewController: NSSplitViewController {
-    private let autosaveName: String
-    private let initialPrimarySize: CGFloat
-    private let primaryHost = NSHostingController(rootView: AnyView(EmptyView()))
-    private let secondaryHost = NSHostingController(rootView: AnyView(EmptyView()))
-    private var didApplyInitialPosition = false
-    private var didScheduleInitialPosition = false
-    private let savedPrimarySize: CGFloat?
-
-    init(
-        autosaveName: String,
-        isVertical: Bool,
-        dividerStyle: NSSplitView.DividerStyle,
-        initialPrimarySize: CGFloat,
-        primaryMin: CGFloat,
-        primaryMax: CGFloat?,
-        secondaryMin: CGFloat
-    ) {
-        self.autosaveName = autosaveName
-        self.initialPrimarySize = initialPrimarySize
-        if let savedNumber = UserDefaults.standard.object(forKey: autosaveName) as? NSNumber {
-            self.savedPrimarySize = CGFloat(savedNumber.doubleValue)
-        } else {
-            self.savedPrimarySize = nil
-        }
-        super.init(nibName: nil, bundle: nil)
-
-        if #available(macOS 13.0, *) {
-            primaryHost.sizingOptions = []
-            secondaryHost.sizingOptions = []
-        }
-
-        let primaryItem = NSSplitViewItem(viewController: primaryHost)
-        primaryItem.canCollapse = false
-        primaryItem.minimumThickness = primaryMin
-        if let primaryMax {
-            primaryItem.maximumThickness = primaryMax
-        }
-
-        let secondaryItem = NSSplitViewItem(viewController: secondaryHost)
-        secondaryItem.canCollapse = false
-        secondaryItem.minimumThickness = secondaryMin
-
-        addSplitViewItem(primaryItem)
-        addSplitViewItem(secondaryItem)
-
-        splitView.isVertical = isVertical
-        splitView.dividerStyle = dividerStyle
-        splitView.identifier = NSUserInterfaceItemIdentifier(autosaveName)
-        splitView.delegate = self
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-    func update(primary: AnyView, secondary: AnyView) {
-        primaryHost.rootView = AnyView(CMSplitPaneHostingRoot(content: primary))
-        secondaryHost.rootView = AnyView(CMSplitPaneHostingRoot(content: secondary))
-    }
-
-    override func viewDidLayout() {
-        super.viewDidLayout()
-        applyInitialPositionIfNeeded()
-    }
-
-    private func applyInitialPositionIfNeeded() {
-        guard !didApplyInitialPosition else { return }
-        let totalPrimaryAxis = splitView.isVertical ? splitView.bounds.width : splitView.bounds.height
-        guard totalPrimaryAxis > splitView.dividerThickness else { return }
-        guard !didScheduleInitialPosition else { return }
-        let targetPrimarySize = savedPrimarySize ?? initialPrimarySize
-        didScheduleInitialPosition = true
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.splitView.setPosition(targetPrimarySize, ofDividerAt: 0)
-            self.splitView.layoutSubtreeIfNeeded()
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                self.splitView.setPosition(targetPrimarySize, ofDividerAt: 0)
-                self.splitView.layoutSubtreeIfNeeded()
-                self.didApplyInitialPosition = true
-                self.persistCurrentPrimarySize()
-            }
-        }
-    }
-
-    override func splitViewDidResizeSubviews(_ notification: Notification) {
-        super.splitViewDidResizeSubviews(notification)
-        guard didApplyInitialPosition else { return }
-        persistCurrentPrimarySize()
-    }
-
-    private func persistCurrentPrimarySize() {
-        guard let primarySubview = splitView.subviews.first else { return }
-        let primarySize = splitView.isVertical ? primarySubview.frame.width : primarySubview.frame.height
-        UserDefaults.standard.set(Double(primarySize), forKey: autosaveName)
     }
 }
 
@@ -12677,8 +12114,8 @@ func CMSnippetEditorSnapshotForDebug() -> [String: Any] {
         NSLocalizedString("Delete Snippet", comment: ""): true,
         NSLocalizedString("Enable/Disable Snippet", comment: ""): !store.selectedSnippetIDs.isEmpty
     ]
-    return [
-        "search": [
+    var report: [String: Any] = [:]
+    report["search"] = [
             "isEnabled": store.hasSingleSelectedFolder,
             "appearance": searchFieldAppearance,
             "placeholder": CMSnippetEditorSearchPlaceholder(),
@@ -12686,13 +12123,13 @@ func CMSnippetEditorSnapshotForDebug() -> [String: Any] {
             "scopeOptions": SnippetSearchScope.allCases.map(\.localizedTitle),
             "selectedScopeRawValue": currentSearchScopeRawValue,
             "selectedScopeTitle": currentSearchScopeTitle
-        ],
-        "toolbarIconSources": [
+        ]
+    report["toolbarIconSources"] = [
             NSLocalizedString("Add Snippet", comment: ""): "legacyArtwork",
             NSLocalizedString("Delete Snippet", comment: ""): "legacyArtwork",
             NSLocalizedString("Enable/Disable Snippet", comment: ""): "legacyArtwork"
-        ],
-        "toolbarLayout": [
+        ]
+    report["toolbarLayout"] = [
             "defaultItemLabels": [
                 NSLocalizedString("Add Snippet", comment: ""),
                 NSLocalizedString("Delete Snippet", comment: ""),
@@ -12702,48 +12139,48 @@ func CMSnippetEditorSnapshotForDebug() -> [String: Any] {
             ],
             "usesFlexibleSpaceBeforeSearch": true,
             "searchFieldWidth": 182
-        ],
-        "toolbarItemStates": toolbarItemStates,
-        "splitLayout": splitLayout,
-        "splitDebug": splitDebug,
-        "browserMetrics": browserMetrics,
-        "browserAppearance": browserAppearance,
-        "browserHeaders": browserHeaders,
-        "browserTextAppearance": browserTextAppearance,
-        "browserDebug": browserDebug,
-        "folderBrowserStructure": folderBrowserStructure,
-        "folderGroupHeader": CMSnippetEditorFolderGroupHeader(),
-        "folderActionBarIconSources": [
+        ]
+    report["toolbarItemStates"] = toolbarItemStates
+    report["splitLayout"] = splitLayout
+    report["splitDebug"] = splitDebug
+    report["browserMetrics"] = browserMetrics
+    report["browserAppearance"] = browserAppearance
+    report["browserHeaders"] = browserHeaders
+    report["browserTextAppearance"] = browserTextAppearance
+    report["browserDebug"] = browserDebug
+    report["folderBrowserStructure"] = folderBrowserStructure
+    report["folderGroupHeader"] = CMSnippetEditorFolderGroupHeader()
+    report["folderActionBarIconSources"] = [
             NSLocalizedString("Add Folder", comment: ""): "legacyTemplate",
             NSLocalizedString("Delete Folder", comment: ""): "legacyTemplate",
             NSLocalizedString("Enable/Disable Folder", comment: ""): "legacyTemplate",
             NSLocalizedString("Snippet Actions", comment: ""): "legacyTemplate"
-        ],
-        "folderActionBarStates": [
+        ]
+    report["folderActionBarStates"] = [
             NSLocalizedString("Add Folder", comment: ""): true,
             NSLocalizedString("Delete Folder", comment: ""): !store.selectedFolderIDs.isEmpty,
             NSLocalizedString("Enable/Disable Folder", comment: ""): !store.selectedFolderIDs.isEmpty,
             NSLocalizedString("Snippet Actions", comment: ""): true
-        ],
-        "snippetActionsMenuTitles": [
+        ]
+    report["snippetActionsMenuTitles"] = [
             NSLocalizedString("Import Snippets...", comment: ""),
             NSLocalizedString("Export Snippets...", comment: "")
-        ],
-        "snippetActionsMenuStates": [
+        ]
+    report["snippetActionsMenuStates"] = [
             NSLocalizedString("Import Snippets...", comment: ""): true,
             NSLocalizedString("Export Snippets...", comment: ""): !store.folders.isEmpty
-        ],
-        "rowIconSources": [
+        ]
+    report["rowIconSources"] = [
             "folder": "workspaceGenericFolderIcon",
             "snippet": "workspaceClippingTextIcon"
-        ],
-        "snippetListState": snippetListState,
-        "visibleSnippetTitles": visibleSnippetTitles,
-        "snippetListSurface": [
+        ]
+    report["snippetListState"] = snippetListState
+    report["visibleSnippetTitles"] = visibleSnippetTitles
+    report["snippetListSurface"] = [
             "showsTableSurface": true,
             "showsEmptyStateCard": false
-        ],
-        "detailPane": [
+        ]
+    let detailPane: [String: Any] = [
             "style": "contentEditor",
             "sectionTitles": detailPaneSectionTitles,
             "state": detailPaneState,
@@ -12754,15 +12191,16 @@ func CMSnippetEditorSnapshotForDebug() -> [String: Any] {
             "showsInlineTitle": false,
             "showsInlineFolder": false,
             "showsEnabledToggle": false
-        ],
-        "footerButtons": [],
-        "footerButtonIconSources": [:],
-        "selection": [
+        ]
+    report["detailPane"] = detailPane
+    report["footerButtons"] = []
+    report["footerButtonIconSources"] = [:]
+    report["selection"] = [
             "selectedFolderTitle": selectedFolder?.title as Any,
             "selectedSnippetTitle": effectiveSelectedSnippet?.title as Any,
             "selectedSnippetEnabled": effectiveSelectedSnippet?.isEnabled as Any
         ]
-    ]
+    return report
 }
 
 func CMDebugSnippetNormalizationReport() -> [String: Any] {

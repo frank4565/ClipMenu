@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		7A1000030000000000000001 /* AppController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1000010000000000000001 /* AppController.swift */; };
 		7A1000060000000000000001 /* SwiftUINativeWindows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1000050000000000000001 /* SwiftUINativeWindows.swift */; };
+		7A1000210000000000000001 /* SwiftUINativeAppKitSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1000200000000000000001 /* SwiftUINativeAppKitSupport.swift */; };
 		7A2000100000000000000001 /* PreferenceNormalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000010000000000000001 /* PreferenceNormalizationTests.swift */; };
 		7A2000110000000000000001 /* MenuPreviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000020000000000000001 /* MenuPreviewTests.swift */; };
 		7A2000120000000000000001 /* ClipItemTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000030000000000000001 /* ClipItemTests.swift */; };
@@ -52,6 +53,7 @@
 		A82B8ABC0EC3F8D700096102 /* Menu.png in Resources */ = {isa = PBXBuildFile; fileRef = 3578F76F0D7E3D5E00E804BF /* Menu.png */; };
 		7A1000040000000000000001 /* AppController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1000010000000000000001 /* AppController.swift */; };
 		7A1000070000000000000001 /* SwiftUINativeWindows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1000050000000000000001 /* SwiftUINativeWindows.swift */; };
+		7A1000220000000000000001 /* SwiftUINativeAppKitSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1000200000000000000001 /* SwiftUINativeAppKitSupport.swift */; };
 		A82B8AE20EC3F8D700096102 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1058C7A1FEA54F0111CA2CBB /* Cocoa.framework */; };
 		A8464D9D108AAC3B0040C8C6 /* StatusMenuIconByDaveUlrich-scissors1-bw-left.png in Resources */ = {isa = PBXBuildFile; fileRef = A8464D95108AAC3B0040C8C6 /* StatusMenuIconByDaveUlrich-scissors1-bw-left.png */; };
 		A8464D9E108AAC3B0040C8C6 /* StatusMenuIconByDaveUlrich-scissors1-bw-right.png in Resources */ = {isa = PBXBuildFile; fileRef = A8464D96108AAC3B0040C8C6 /* StatusMenuIconByDaveUlrich-scissors1-bw-right.png */; };
@@ -141,6 +143,7 @@
 		29B97325FDCFA39411CA2CEA /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = /System/Library/Frameworks/Foundation.framework; sourceTree = "<absolute>"; };
 		7A1000010000000000000001 /* AppController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppController.swift; path = Source/AppController.swift; sourceTree = "<group>"; };
 		7A1000050000000000000001 /* SwiftUINativeWindows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SwiftUINativeWindows.swift; path = Source/SwiftUINativeWindows.swift; sourceTree = "<group>"; };
+		7A1000200000000000000001 /* SwiftUINativeAppKitSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SwiftUINativeAppKitSupport.swift; path = Source/SwiftUINativeAppKitSupport.swift; sourceTree = "<group>"; };
 		7A10000A0000000000000001 /* ComposingPreferences.tiff */ = {isa = PBXFileReference; lastKnownFileType = image.tiff; name = ComposingPreferences.tiff; path = resource/ComposingPreferences.tiff; sourceTree = "<group>"; };
 		7A10000B0000000000000001 /* MainMenu.nib */ = {isa = PBXFileReference; lastKnownFileType = wrapper.nib; name = MainMenu.nib; path = English.lproj/MainMenu.nib; sourceTree = "<group>"; };
 		7A10000E0000000000000001 /* Snippets.mom */ = {isa = PBXFileReference; lastKnownFileType = wrapper.mom; name = Snippets.mom; path = resource/Snippets.mom; sourceTree = "<group>"; };
@@ -241,6 +244,7 @@
 			children = (
 			7A1000010000000000000001 /* AppController.swift */,
 			7A1000050000000000000001 /* SwiftUINativeWindows.swift */,
+			7A1000200000000000000001 /* SwiftUINativeAppKitSupport.swift */,
 				3505FF180D7FAE0000B55D03 /* Clip */,
 				A83A1FA210AA3F9A002CB62A /* Snippet */,
 				3505FF150D7FADC400B55D03 /* Action */,
@@ -673,6 +677,7 @@
 			files = (
 			7A1000030000000000000001 /* AppController.swift in Sources */,
 			7A1000060000000000000001 /* SwiftUINativeWindows.swift in Sources */,
+			7A1000210000000000000001 /* SwiftUINativeAppKitSupport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -682,6 +687,7 @@
 			files = (
 			7A1000040000000000000001 /* AppController.swift in Sources */,
 			7A1000070000000000000001 /* SwiftUINativeWindows.swift in Sources */,
+			7A1000220000000000000001 /* SwiftUINativeAppKitSupport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
