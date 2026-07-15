@@ -4596,7 +4596,10 @@ private struct GeneralPreferencesView: View {
             }
         }
         .onAppear(perform: normalizeStoredValues)
-        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+        .onReceive(
+            NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+                .receive(on: RunLoop.main)
+        ) { _ in
             normalizeStoredValues()
         }
     }
@@ -4652,7 +4655,7 @@ private struct StatusItemPreviewPicker: View {
     @Binding var selection: Int
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: 10) {
             Picker("", selection: $selection) {
                 ForEach(StatusItemOption.allCases) { option in
                     Text(option.title).tag(option.tag)
@@ -4662,22 +4665,9 @@ private struct StatusItemPreviewPicker: View {
             .pickerStyle(.menu)
             .frame(width: 220, alignment: .leading)
 
-            statusMenuBarPreview(option: selectedOption)
+            StatusItemPreviewImage(option: selectedOption)
         }
-        .frame(maxWidth: 420, alignment: .leading)
-    }
-
-    private func statusMenuBarPreview(option: StatusItemOption) -> some View {
-        HStack(spacing: 10) {
-            Circle()
-                .fill(option == .none ? Color.clear : Color(NSColor.separatorColor).opacity(0.6))
-                .frame(width: 4, height: 4)
-            StatusItemPreviewImage(option: option)
-            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .fill(Color(NSColor.separatorColor).opacity(0.55))
-                .frame(width: 24, height: 4)
-        }
-        .padding(.vertical, 1)
+        .frame(maxWidth: 260, alignment: .leading)
     }
 
     private var selectedOption: StatusItemOption {
@@ -4731,7 +4721,7 @@ private struct StatusItemPreviewImage: View {
         Group {
             if option == .none {
                 Image(systemName: "eye.slash")
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.secondary)
             } else if let image = option.image {
                 Image(nsImage: image)
@@ -4740,11 +4730,11 @@ private struct StatusItemPreviewImage: View {
                     .scaledToFit()
             } else {
                 Image(systemName: "scissors")
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.secondary)
             }
         }
-        .frame(width: 26, height: 26)
+        .frame(width: 18, height: 18)
     }
 }
 

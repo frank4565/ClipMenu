@@ -60,6 +60,12 @@ func CMHistoryMenuGroups(clipCount: Int, inlineCount: Int, folderCount: Int) -> 
     var folderStart = directCount
     let normalizedFolderCount = max(1, folderCount)
 
+    let remainingRange = folderStart..<clipCount
+    if remainingRange.count <= normalizedFolderCount {
+        groups.append(contentsOf: remainingRange.map(CMHistoryMenuGroup.direct))
+        return groups
+    }
+
     while folderStart < clipCount {
         let folderEnd = min(folderStart + normalizedFolderCount, clipCount)
         let range = folderStart..<folderEnd
@@ -22483,6 +22489,17 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
     @objc private func userDefaultsDidChange(_ notification: Notification) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.applyUserDefaultsChanges()
+            }
+            return
+        }
+
+        applyUserDefaultsChanges()
+    }
+
+    private func applyUserDefaultsChanges() {
         AppController.migrateLegacyHotKeyDefaultsIfNeeded()
         AppController.migrateLegacyUpdateDefaultsIfNeeded()
         AppController.syncLegacyUpdateDefaultsFromModernPreferencesIfNeeded()
@@ -25982,6 +25999,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
 #if DEBUG
         shouldUseAccessibilityFallback = debugBoolArgumentValue(forKey: "debugForceAccessibilityPasteFallback") == true
             || UserDefaults.standard.bool(forKey: "debugForceAccessibilityPasteFallback")
+            || (!CGPreflightPostEventAccess() && AXIsProcessTrusted())
 #else
         shouldUseAccessibilityFallback = !CGPreflightPostEventAccess() && AXIsProcessTrusted()
 #endif

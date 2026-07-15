@@ -66,8 +66,8 @@ Suggested sample content:
 | CM-PASTE-006 | Numeric labels | Enable numbered menu items. Open ClipMenu. | Clips and snippets are prefixed with list numbers. |
 | CM-PASTE-007 | Zero-based labels | Enable `Menu items' title starts with 0`. Open ClipMenu. | Numbered items start at `0.` instead of `1.`. |
 | CM-PASTE-008 | Numeric key equivalents | Enable numeric key equivalents and open the menu. Press a number matching a visible item. | The matching item is selected without mouse interaction. |
-| CM-PASTE-009 | Foldered history menu | Set inline count to 2 and folder size to 3. Copy at least 8 items. | First 2 clips are inline; each complete 3-item page is grouped into a range submenu. |
-| CM-PASTE-009A | Incomplete history bucket | Set inline count to 1 and folder size to 10. Leave 2-4 history items. | Every clip appears directly at the history menu’s top level; the incomplete trailing page is not wrapped in a range submenu. |
+| CM-PASTE-009 | Foldered history menu | Set inline count to 2 and folder size to 3. Copy at least 8 items. | First 2 clips are inline; when the overflow spans multiple pages, each complete 3-item page is grouped into a range submenu. |
+| CM-PASTE-009A | Single-page history overflow | Set inline count to 1 and folder size to 10. Leave 2-11 history items. | Every clip appears directly at the history menu’s top level; overflow that fits in one page is not wrapped in a range submenu. |
 | CM-PASTE-010 | Clear history menu item | Ensure clear-history menu item is enabled. Copy text, open ClipMenu, choose `Clear History`. | Confirmation appears if enabled; confirming removes all history items. In the main status menu, `Clear History` remains enabled even when history is empty, matching the installed Objective-C app's `MenuController`-targeted item. |
 | CM-PASTE-011 | Clear history suppression | In the clear-history alert, check suppression and confirm. Trigger clear again after adding clips. | The confirmation alert no longer appears and preference is persisted. |
 

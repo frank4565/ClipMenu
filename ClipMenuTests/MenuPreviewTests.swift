@@ -17,6 +17,21 @@ final class MenuPreviewTests: XCTestCase {
         )
     }
 
+    func testHistoryMenuKeepsSingleOverflowPageAtTopLevel() {
+        XCTAssertEqual(
+            CMHistoryMenuGroups(clipCount: 11, inlineCount: 1, folderCount: 10),
+            (0..<11).map(CMHistoryMenuGroup.direct)
+        )
+        XCTAssertEqual(
+            CMHistoryMenuGroups(clipCount: 10, inlineCount: 0, folderCount: 10),
+            (0..<10).map(CMHistoryMenuGroup.direct)
+        )
+        XCTAssertEqual(
+            CMHistoryMenuGroups(clipCount: 12, inlineCount: 1, folderCount: 10),
+            [.direct(0), .folder(1..<11), .direct(11)]
+        )
+    }
+
     func testHistoryMenuPreservesMultiItemFolders() {
         XCTAssertEqual(
             CMHistoryMenuGroups(clipCount: 8, inlineCount: 2, folderCount: 3),
