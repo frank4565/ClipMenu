@@ -1930,9 +1930,9 @@ private struct PreferenceStepper: View {
         PreferenceRow(title) {
             HStack(spacing: 10) {
                 TextField("", value: $value, formatter: Self.integerFormatter)
-                    .textFieldStyle(PlainTextFieldStyle())
+                    .textFieldStyle(.roundedBorder)
                     .multilineTextAlignment(.trailing)
-                    .font(.system(.body, design: .monospaced))
+                    .font(.body)
                     .preferenceValueFieldFrame(width: 76)
                     .onChange(of: value) { newValue in
                         value = min(max(newValue, range.lowerBound), range.upperBound)
@@ -1963,9 +1963,9 @@ private struct PreferenceDoubleField: View {
 
     var body: some View {
         TextField("", value: $value, formatter: Self.decimalFormatter)
-            .textFieldStyle(PlainTextFieldStyle())
+            .textFieldStyle(.roundedBorder)
             .multilineTextAlignment(.trailing)
-            .font(.system(.body, design: .monospaced))
+            .font(.body)
             .preferenceValueFieldFrame(width: 76)
             .onChange(of: value) { newValue in
                 value = min(max(newValue, range.lowerBound), range.upperBound)
@@ -2002,8 +2002,6 @@ private struct PreferenceValueFieldFrame: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
             .frame(width: width)
     }
 }
