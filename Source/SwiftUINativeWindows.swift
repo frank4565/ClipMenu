@@ -1439,9 +1439,25 @@ private struct PreferenceToggle: View {
     @Binding var isOn: Bool
 
     var body: some View {
-        Toggle(title, isOn: $isOn)
-            .toggleStyle(.checkbox)
-            .controlSize(.regular)
+        PreferenceControlRow {
+            Toggle(title, isOn: $isOn)
+                .toggleStyle(.checkbox)
+                .controlSize(.regular)
+        }
+    }
+}
+
+private struct PreferenceControlRow<Control: View>: View {
+    let control: Control
+
+    init(@ViewBuilder control: () -> Control) {
+        self.control = control()
+    }
+
+    var body: some View {
+        PreferenceRow("") {
+            control
+        }
     }
 }
 
@@ -1458,7 +1474,7 @@ private struct PreferenceRow<Control: View>: View {
         HStack(alignment: .center, spacing: 14) {
             Text(title)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(width: 258, alignment: .trailing)
+                .frame(width: 190, alignment: .trailing)
                 .foregroundColor(.primary)
             control
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -4096,19 +4112,17 @@ private struct StoreTypePreferencesViewContent: View {
 
     var body: some View {
         PreferenceSection(legacyStoreTypesSectionTitle) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Spacer(minLength: 0)
-
+            PreferenceControlRow {
+                VStack(alignment: .leading, spacing: 10) {
                     Button(NSLocalizedString("1066.title", tableName: "Preferences", bundle: .main, value: "Check All", comment: "")) {
                         store.enableAllStoreTypes()
                     }
                     .controlSize(.small)
-                }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(StoreTypeOption.all) { option in
-                        storeTypeToggleCard(option: option)
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(StoreTypeOption.all) { option in
+                            storeTypeToggleCard(option: option)
+                        }
                     }
                 }
             }
@@ -4504,8 +4518,10 @@ private struct GeneralPreferencesView: View {
             }
             PreferenceSection(legacyClipboardHistorySectionTitle) {
                 PreferenceToggle(title: legacyInputPasteCommandLabel, isOn: $inputPasteCommand)
-                PasteAutomationPreferencesView(inputPasteCommand: inputPasteCommand)
-                    .padding(.leading, 26)
+                PreferenceControlRow {
+                    PasteAutomationPreferencesView(inputPasteCommand: inputPasteCommand)
+                        .padding(.leading, 26)
+                }
                 PreferenceRow(legacySortHistoryLabel) {
                     PreferencePicker(selection: reorderClipsAfterPastingSelection, width: 170) {
                         Text(legacyLastUsedLabel).tag(true)
@@ -4534,7 +4550,7 @@ private struct GeneralPreferencesView: View {
                         }
                         .disabled(!exportHistoryAsSingleFile)
                     }
-                    PreferenceRow("") {
+                    PreferenceControlRow {
                         Button(legacyExportButtonLabel) {
                             NSApp.sendAction(#selector(AppController.exportHistory(_:)), to: NSApp.delegate, from: nil)
                         }
@@ -4966,21 +4982,19 @@ private struct ShortcutRecorderRow: View {
     @Binding var modifierFlags: Int
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.body.weight(.medium))
-                .fixedSize(horizontal: false, vertical: true)
+        PreferenceRow(title) {
+            VStack(alignment: .leading, spacing: 8) {
+                HotKeyRecorderControl(
+                    keyCode: $keyCode,
+                    modifierFlags: $modifierFlags
+                )
+                .frame(width: 210, height: 28)
 
-            HotKeyRecorderControl(
-                keyCode: $keyCode,
-                modifierFlags: $modifierFlags
-            )
-            .frame(width: 210, height: 28)
-
-            Text(detail)
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }
@@ -5092,7 +5106,9 @@ private struct MenuPreferencesView: View {
                 }
             }
             PreferenceSection(NSLocalizedString("Menu Items", comment: "")) {
-                menuRowPreviewSurface
+                PreferenceControlRow {
+                    menuRowPreviewSurface
+                }
                 menuConfigurationSurface {
                     VStack(alignment: .leading, spacing: 10) {
                         menuToggleCard(
@@ -5172,27 +5188,31 @@ private struct MenuPreferencesView: View {
                             isOn: $changeFontSize
                         )
 
-                        Picker(selection: normalizedFontSizingModeBinding) {
-                            Text(legacyFitToIconSizeLabel).tag(0)
-                            Text(legacySelectFontSizeLabel).tag(1)
-                        } label: {
-                            EmptyView()
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: 220, alignment: .leading)
-                        .disabled(!changeFontSize)
-
-                        HStack(spacing: 10) {
-                            PreferencePicker(selection: normalizedSelectedFontSizeBinding, width: 120) {
-                                ForEach(Self.fontSizeOptions, id: \.self) { size in
-                                    Text("\(size)").tag(size)
-                                }
+                        PreferenceControlRow {
+                            Picker(selection: normalizedFontSizingModeBinding) {
+                                Text(legacyFitToIconSizeLabel).tag(0)
+                                Text(legacySelectFontSizeLabel).tag(1)
+                            } label: {
+                                EmptyView()
                             }
-                            Text(legacyPointUnitLabel)
-                                .foregroundColor(.secondary)
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .frame(width: 220, alignment: .leading)
+                            .disabled(!changeFontSize)
                         }
-                        .disabled(!changeFontSize || normalizedFontSizingMode != 1)
+
+                        PreferenceControlRow {
+                            HStack(spacing: 10) {
+                                PreferencePicker(selection: normalizedSelectedFontSizeBinding, width: 120) {
+                                    ForEach(Self.fontSizeOptions, id: \.self) { size in
+                                        Text("\(size)").tag(size)
+                                    }
+                                }
+                                Text(legacyPointUnitLabel)
+                                    .foregroundColor(.secondary)
+                            }
+                            .disabled(!changeFontSize || normalizedFontSizingMode != 1)
+                        }
                     }
                 }
             }
@@ -5359,20 +5379,22 @@ private struct MenuPreferencesView: View {
         isOn: Binding<Bool>,
         disabled: Bool = false
     ) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Toggle(title, isOn: isOn)
-                .toggleStyle(.checkbox)
-                .controlSize(.regular)
-                .disabled(disabled)
+        PreferenceControlRow {
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle(title, isOn: isOn)
+                    .toggleStyle(.checkbox)
+                    .controlSize(.regular)
+                    .disabled(disabled)
 
-            Text(detail)
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.leading, 22)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 22)
+            }
+            .padding(.vertical, 2)
+            .opacity(disabled ? 0.75 : 1)
         }
-        .padding(.vertical, 2)
-        .opacity(disabled ? 0.75 : 1)
     }
 
     private func normalizeMenuPreferencesIfNeeded() {
@@ -5420,7 +5442,9 @@ private struct IconPreferencesViewContent: View {
 
     var body: some View {
         PreferenceSection(NSLocalizedString("Images", comment: "")) {
-            imageInlinePreviewStrip
+            PreferenceControlRow {
+                imageInlinePreviewStrip
+            }
             PreferenceToggle(title: legacyShowImageLabel, isOn: $showImages)
             PreferenceStepper(
                 legacyThumbnailWidthLabel,
@@ -5438,7 +5462,9 @@ private struct IconPreferencesViewContent: View {
             .disabled(!showImages)
         }
         PreferenceSection(NSLocalizedString("Icons", comment: "")) {
-            iconInlinePreviewStrip
+            PreferenceControlRow {
+                iconInlinePreviewStrip
+            }
             PreferenceToggle(title: legacyShowIconLabel, isOn: $showIcons)
             PreferenceRow(legacyIconSizeLabel) {
                 HStack(spacing: 10) {
@@ -5752,31 +5778,29 @@ private struct MenuIconTypeRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 14) {
-            Text(option.title)
-                .font(.body)
-                .frame(width: 120, alignment: .trailing)
+        PreferenceRow(option.title) {
+            HStack(alignment: .center, spacing: 14) {
+                Picker("", selection: $selectionTag) {
+                    Text(NSLocalizedString("963.title", tableName: "Preferences", bundle: .main, value: "File extension", comment: "")).tag(0)
+                    Text(NSLocalizedString("962.title", tableName: "Preferences", bundle: .main, value: "File type code", comment: "")).tag(1)
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 160, alignment: .leading)
 
-            Picker("", selection: $selectionTag) {
-                Text(NSLocalizedString("963.title", tableName: "Preferences", bundle: .main, value: "File extension", comment: "")).tag(0)
-                Text(NSLocalizedString("962.title", tableName: "Preferences", bundle: .main, value: "File type code", comment: "")).tag(1)
+                TextField("", text: $fileType)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(.body, design: .monospaced))
+                    .frame(width: 128)
+
+                Button(NSLocalizedString("Reset", comment: "")) {
+                    resetToDefaults()
+                }
+                .controlSize(.small)
+                .disabled(isDefaultMapping)
+
+                Spacer(minLength: 0)
             }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .frame(width: 160, alignment: .leading)
-
-            TextField("", text: $fileType)
-                .textFieldStyle(.roundedBorder)
-                .font(.system(.body, design: .monospaced))
-                .frame(width: 128)
-
-            Button(NSLocalizedString("Reset", comment: "")) {
-                resetToDefaults()
-            }
-            .controlSize(.small)
-            .disabled(isDefaultMapping)
-
-            Spacer(minLength: 0)
         }
         .onChange(of: selectionTag) { _ in save() }
         .onChange(of: fileType) { _ in save() }
@@ -7239,9 +7263,11 @@ private struct ActionPreferencesView: View {
                         .disabled(!enableActions)
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Text(legacyModifierClickBehaviorsTitle)
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(.secondary)
+                        PreferenceControlRow {
+                            Text(legacyModifierClickBehaviorsTitle)
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.secondary)
+                        }
 
                         VStack(alignment: .leading, spacing: 10) {
                             modifierBehaviorPicker(
@@ -7429,11 +7455,8 @@ private struct ActionPreferencesView: View {
         defaultsKey: String,
         options: [ActionBehaviorOption]
     ) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption)
-                .foregroundColor(.secondary)
-            Picker("", selection: selection) {
+        PreferenceRow(title) {
+            PreferencePicker(selection: selection, width: 320) {
                 ForEach(options) { option in
                     if option.isSeparator {
                         Divider()
@@ -7442,8 +7465,6 @@ private struct ActionPreferencesView: View {
                     }
                 }
             }
-            .labelsHidden()
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .onChange(of: selection.wrappedValue) { newValue in
             ActionBehaviorDraft.shared.stageSelection(id: newValue, defaultsKey: defaultsKey, options: options)
@@ -8378,10 +8399,12 @@ private struct UpdatePreferencesView: View {
                         .disabled(!automaticChecks)
                     }
                     if automaticChecks && showsImportedIntervalNotice {
-                        Text(CMImportedUpdateIntervalNoticeTitle(for: interval))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                        PreferenceControlRow {
+                            Text(CMImportedUpdateIntervalNoticeTitle(for: interval))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
             }
@@ -8419,7 +8442,7 @@ private struct UpdatePreferencesView: View {
                         }
                     }
 
-                    PreferenceRow("") {
+                    PreferenceControlRow {
                         Button {
                             updateCoordinator.checkForUpdates()
                         } label: {
