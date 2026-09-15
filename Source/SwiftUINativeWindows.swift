@@ -7952,10 +7952,13 @@ private struct ActionTreePanel: View {
     var emptyState: EmptyState?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.headline)
-                .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: 0) {
+            if !title.isEmpty {
+                Text(title)
+                    .font(.headline)
+                    .foregroundColor(.secondary)
+                    .padding(8)
+            }
 
             if let columnHeaderTitle, !columnHeaderTitle.isEmpty {
                 VStack(spacing: 0) {
@@ -8005,7 +8008,14 @@ private struct ActionTreePanel: View {
                 onDrop?(providers) ?? false
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 220, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(NSColor.controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(Color(NSColor.separatorColor), lineWidth: 1)
+                .allowsHitTesting(false)
+        )
     }
 
     @ViewBuilder
