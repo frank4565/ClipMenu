@@ -5,6 +5,101 @@ import XCTest
 #if DEBUG
 @MainActor
 final class AppControllerDebugReportTests: XCTestCase {
+    func testMaxHistoryNormalizationReportPreservesPreferencesAndExistingHistory() throws {
+        let appController = try XCTUnwrap(NSApp.delegate as? AppController)
+        let defaults = UserDefaults.standard
+        let domainName = try XCTUnwrap(Bundle.main.bundleIdentifier)
+        let originalDomain = defaults.persistentDomain(forName: domainName)
+        let originalClips = appController.debugHistoryClipsForTesting
+        let reportURL = temporaryReportURL(named: "history-restoration")
+        defer {
+            if let originalDomain {
+                defaults.setPersistentDomain(originalDomain, forName: domainName)
+            } else {
+                defaults.removePersistentDomain(forName: domainName)
+            }
+            appController.debugReplaceHistoryClipsForTesting(originalClips)
+            try? FileManager.default.removeItem(at: reportURL.deletingLastPathComponent())
+        }
+
+        defaults.set(20, forKey: CMPrefMaxHistorySizeKey)
+        defaults.set(false, forKey: CMPrefReorderClipsAfterPasting)
+        defaults.set(
+            reportURL.deletingLastPathComponent().appendingPathComponent("original-support").path,
+            forKey: CMDebugSupportDirectoryDefaultsKey
+        )
+        let unrelatedPreference: [String: Any] = ["value": "preserve-me", "items": ["alpha", "beta"]]
+        defaults.set(unrelatedPreference, forKey: "ClipMenuTests.UnrelatedPreference")
+        let originalHistory = ["existing-one", "existing-two", "existing-three"].enumerated().map { index, text in
+            let date = Date(timeIntervalSince1970: TimeInterval(index + 1))
+            return ClipItem(text: text, createdAt: date, lastUsedAt: date)
+        }
+        appController.debugReplaceHistoryClipsForTesting(originalHistory)
+        let expectedDomain = defaults.persistentDomain(forName: domainName) ?? [:]
+
+        let report = try appController.debugRunReportForTesting(
+            .maxHistorySizeNormalization,
+            outputURL: reportURL
+        )
+
+        XCTAssertEqual(report["matchesExpected"] as? Bool, true)
+        XCTAssertEqual(defaults.integer(forKey: CMPrefMaxHistorySizeKey), 20)
+        let restoredDomain = defaults.persistentDomain(forName: domainName) ?? [:]
+        XCTAssertTrue(
+            (restoredDomain as NSDictionary).isEqual(to: expectedDomain),
+            "The debug report must restore every persistent preference, including its support directory override."
+        )
+        XCTAssertEqual(appController.debugHistoryClipsForTesting, originalHistory)
+
+        appController.debugCaptureHistoryTextForTesting("copied-four")
+        appController.debugCaptureHistoryTextForTesting("copied-five")
+
+        let restoredHistory = appController.debugHistoryClipsForTesting
+        XCTAssertEqual(restoredHistory.count, 5)
+        XCTAssertEqual(Array(restoredHistory.prefix(3)), originalHistory)
+        XCTAssertEqual(restoredHistory.suffix(2).map(\.text), ["copied-four", "copied-five"])
+    }
+
+    func testMaxHistoryNormalizationReportRestoresLoadedDuplicateEntriesExactly() throws {
+        let appController = try XCTUnwrap(NSApp.delegate as? AppController)
+        let defaults = UserDefaults.standard
+        let domainName = try XCTUnwrap(Bundle.main.bundleIdentifier)
+        let originalDomain = defaults.persistentDomain(forName: domainName)
+        let originalClips = appController.debugHistoryClipsForTesting
+        let reportURL = temporaryReportURL(named: "duplicate-history-restoration")
+        defer {
+            if let originalDomain {
+                defaults.setPersistentDomain(originalDomain, forName: domainName)
+            } else {
+                defaults.removePersistentDomain(forName: domainName)
+            }
+            appController.debugReplaceHistoryClipsForTesting(originalClips)
+            try? FileManager.default.removeItem(at: reportURL.deletingLastPathComponent())
+        }
+
+        defaults.set(20, forKey: CMPrefMaxHistorySizeKey)
+        defaults.set(false, forKey: CMPrefReorderClipsAfterPasting)
+        let loadedHistory = ["same text", "different text", "same text"].enumerated().map { index, text in
+            ClipItem(
+                text: text,
+                createdAt: Date(timeIntervalSince1970: TimeInterval(index + 1)),
+                lastUsedAt: Date(timeIntervalSince1970: TimeInterval(index + 101))
+            )
+        }
+        XCTAssertEqual(loadedHistory[0].duplicateKey, loadedHistory[2].duplicateKey)
+        XCTAssertNotEqual(loadedHistory[0].id, loadedHistory[2].id)
+        appController.debugReplaceHistoryClipsForTesting(loadedHistory)
+        XCTAssertEqual(appController.debugHistoryClipsForTesting, loadedHistory)
+
+        let report = try appController.debugRunReportForTesting(
+            .maxHistorySizeNormalization,
+            outputURL: reportURL
+        )
+
+        XCTAssertEqual(report["matchesExpected"] as? Bool, true)
+        XCTAssertEqual(appController.debugHistoryClipsForTesting, loadedHistory)
+    }
+
     func testSynchronousAppControllerDebugReportsMatchExpectedState() throws {
         let appController = try XCTUnwrap(NSApp.delegate as? AppController)
         let reports: [CMDebugAppControllerReportForTesting] = [

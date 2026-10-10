@@ -19,6 +19,22 @@ final class ClipStoreTests: XCTestCase {
         super.tearDown()
     }
 
+    func testAddingDistinctTextClipsAppendsWithoutReplacingExistingEntries() {
+        UserDefaults.standard.set(20, forKey: CMPrefMaxHistorySizeKey)
+        let store = ClipStore()
+        let clips = ["first copy", "second copy", "third copy"].enumerated().map { index, text in
+            let date = Date(timeIntervalSince1970: TimeInterval(index + 1))
+            return ClipItem(text: text, createdAt: date, lastUsedAt: date)
+        }
+
+        for (index, clip) in clips.enumerated() {
+            store.add(clip)
+            XCTAssertEqual(store.clips, Array(clips.prefix(index + 1)))
+        }
+
+        XCTAssertTrue(store.debugHasUnsavedChanges)
+    }
+
     func testAddingDuplicateClipPromotesExistingEntryInsteadOfAppending() {
         UserDefaults.standard.set(10, forKey: CMPrefMaxHistorySizeKey)
         let store = ClipStore()
@@ -32,6 +48,21 @@ final class ClipStoreTests: XCTestCase {
         XCTAssertEqual(store.clips[0].text, "same")
         XCTAssertGreaterThan(store.clips[0].lastUsedAt, original.lastUsedAt)
         XCTAssertTrue(store.debugHasUnsavedChanges)
+    }
+
+    func testHistoryLimitOfOneIntentionallyRetainsOnlyLatestDistinctClip() {
+        UserDefaults.standard.set(1, forKey: CMPrefMaxHistorySizeKey)
+        UserDefaults.standard.set(false, forKey: CMPrefReorderClipsAfterPasting)
+        let store = ClipStore()
+        let clips = ["one", "two", "three"].enumerated().map { index, text in
+            let date = Date(timeIntervalSince1970: TimeInterval(index + 1))
+            return ClipItem(text: text, createdAt: date, lastUsedAt: date)
+        }
+
+        for clip in clips {
+            store.add(clip)
+            XCTAssertEqual(store.clips, [clip])
+        }
     }
 
     func testOrderedClipsCanSortByCreationOrLastUsedDate() {

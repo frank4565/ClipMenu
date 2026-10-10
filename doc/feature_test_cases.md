@@ -52,6 +52,7 @@ Suggested sample content:
 | --- | --- | --- | --- |
 | CM-HIST-001 | Plain text capture | Copy `alpha`, wait longer than the observe interval, open ClipMenu. | `alpha` appears in the History section. |
 | CM-HIST-002 | Multiple item ordering | Copy `alpha`, `beta`, `gamma` in order. | History shows newest first: `gamma`, `beta`, `alpha`. |
+| CM-HIST-002A | Preserve existing history on copy | Set max history size to 20. Copy three distinct texts, waiting longer than the observe interval between copies, then copy two more. | All five entries remain available with their original content. Each new copy adds an entry instead of replacing the latest one. |
 | CM-HIST-003 | Duplicate handling | Copy `alpha`, `beta`, then `alpha` again. | Only one `alpha` item exists; its last-used date moves it to the newest position. |
 | CM-HIST-004 | Max history trimming | Set max history size to 3. Copy 5 unique text items. | Only the 3 newest clips remain. Older clips are removed. |
 | CM-HIST-005 | Multiline title | Copy `line one\nline two`. | Menu title displays only the first line, while selecting the clip pastes the full multiline content. |
@@ -60,6 +61,7 @@ Suggested sample content:
 | CM-HIST-008 | Excluded app | Add an app bundle id to the exclude list. Copy text while that app is frontmost. | No history item is captured from the excluded app. |
 | CM-HIST-009 | Reorder after pasting enabled | Enable reorder-after-pasting. Select an older history item. | Selected item is pasted and moves to the top of history. |
 | CM-HIST-010 | Reorder after pasting disabled | Disable reorder-after-pasting. Select an older history item. | Selected item is pasted and history ordering stays based on creation date. |
+| CM-HIST-011 | Test preferences isolation | Record the Debug app's history limit and support-directory override. Run history tests with the ClipMenu scheme's Testing configuration, then reopen the Debug app. | Tests run in `ClipMenuTestHost.app` with a separate preferences domain and temporary history files. The Debug app's settings and history remain intact, including after an interrupted test. |
 
 ## Paste and menu operation
 

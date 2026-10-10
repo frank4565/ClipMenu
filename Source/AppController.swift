@@ -5547,7 +5547,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         installHotKeyEventHandler()
         registerHotKey()
         syncLoginItemState()
-#if TESTING
+#if TESTING || CLIPMENU_TEST_HOST
         UpdateCoordinator.shared.configureFromDefaults()
 #else
         if !promptToAddLoginItemIfNeeded(),
@@ -6671,7 +6671,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         let defaults = UserDefaults.standard
         let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugMaxHistorySizeNormalizationReportPath")
             ?? "/tmp/clipmenu-max-history-size-normalization-report.json")
-        let originalClips = clipsStore.clips
+        let originalHistory = clipsStore.debugSnapshotForTesting
         let originalMaxHistorySize = defaults.object(forKey: CMPrefMaxHistorySizeKey)
         let originalReorderClipsAfterPasting = defaults.object(forKey: CMPrefReorderClipsAfterPasting)
 
@@ -6690,10 +6690,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         }
 
         defer {
-            clipsStore.clear()
-            originalClips.forEach { clipsStore.add($0) }
             restoreDefault(originalMaxHistorySize, forKey: CMPrefMaxHistorySizeKey)
             restoreDefault(originalReorderClipsAfterPasting, forKey: CMPrefReorderClipsAfterPasting)
+            clipsStore.debugRestoreSnapshotForTesting(originalHistory)
             rebuildMenu()
             debugTerminateApplication()
         }
@@ -27233,13 +27232,39 @@ enum CMDebugAppControllerReportForTesting: String, CaseIterable {
 }
 
 extension AppController {
+    var debugHistoryClipsForTesting: [ClipItem] {
+        clipsStore.clips
+    }
+
+    func debugReplaceHistoryClipsForTesting(_ clips: [ClipItem]) {
+        clipsStore.debugRestoreSnapshotForTesting(.init(clips: clips, hasUnsavedChanges: true))
+        rebuildMenu()
+    }
+
+    func debugCaptureHistoryTextForTesting(_ text: String) {
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        pasteboard.setString(text, forType: .string)
+        if let clip = capturedClip(from: pasteboard, frontmostBundleIdentifier: nil) {
+            clipsStore.add(clip)
+        }
+        rebuildMenu()
+    }
+
     func debugRunReportForTesting(
         _ report: CMDebugAppControllerReportForTesting,
         outputURL: URL
     ) throws -> [String: Any] {
         let defaults = UserDefaults.standard
-        let previousPath = defaults.object(forKey: report.pathKey)
-        let previousSupportDirectoryPath = defaults.object(forKey: CMDebugSupportDirectoryDefaultsKey)
+        guard let defaultsDomain = Bundle.main.bundleIdentifier else {
+            throw NSError(
+                domain: "ClipMenuDebugReportTests",
+                code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "The test host has no preferences domain"]
+            )
+        }
+        let previousDefaults = defaults.persistentDomain(forName: defaultsDomain)
+        let previousHistory = clipsStore.debugSnapshotForTesting
         let previousSuppression = debugSuppressApplicationTerminationForTesting
 
         try? FileManager.default.removeItem(at: outputURL)
@@ -27257,8 +27282,15 @@ extension AppController {
         debugSuppressApplicationTerminationForTesting = true
 
         defer {
-            restoreDefaultForTesting(previousPath, forKey: report.pathKey)
-            restoreDefaultForTesting(previousSupportDirectoryPath, forKey: CMDebugSupportDirectoryDefaultsKey)
+            if let previousDefaults {
+                defaults.setPersistentDomain(previousDefaults, forName: defaultsDomain)
+            } else {
+                defaults.removePersistentDomain(forName: defaultsDomain)
+            }
+            // Preserve loaded records and their timestamps without deduplicating
+            // them or marking unchanged history as dirty during report cleanup.
+            clipsStore.debugRestoreSnapshotForTesting(previousHistory)
+            rebuildMenu()
             debugSuppressApplicationTerminationForTesting = previousSuppression
         }
 
@@ -27355,14 +27387,6 @@ extension AppController {
             runDebugClipStoreRoundTrip()
         }
     }
-
-    private func restoreDefaultForTesting(_ value: Any?, forKey key: String) {
-        if let value {
-            UserDefaults.standard.set(value, forKey: key)
-        } else {
-            UserDefaults.standard.removeObject(forKey: key)
-        }
-    }
 }
 
 private extension CMDebugAppControllerReportForTesting {
@@ -27452,6 +27476,22 @@ private extension CMDebugAppControllerReportForTesting {
 final class ClipStore {
     private(set) var clips: [ClipItem] = []
     private var hasUnsavedChanges = false
+
+#if DEBUG
+    struct DebugSnapshot {
+        let clips: [ClipItem]
+        let hasUnsavedChanges: Bool
+    }
+
+    var debugSnapshotForTesting: DebugSnapshot {
+        DebugSnapshot(clips: clips, hasUnsavedChanges: hasUnsavedChanges)
+    }
+
+    func debugRestoreSnapshotForTesting(_ snapshot: DebugSnapshot) {
+        clips = snapshot.clips
+        hasUnsavedChanges = snapshot.hasUnsavedChanges
+    }
+#endif
 
     var debugHasUnsavedChanges: Bool {
         hasUnsavedChanges
