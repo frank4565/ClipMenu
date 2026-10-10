@@ -1,0 +1,36 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches: [master, swiftui-native]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Test release metadata and appcast helpers
+        run: python3 -m unittest discover -s script/tests -v
+      - name: Build Debug
+        run: >-
+          xcodebuild -project ClipMenu.xcodeproj -scheme ClipMenu -configuration Debug
+          -derivedDataPath build/DerivedDataCI -onlyUsePackageVersionsFromResolvedFile
+          CODE_SIGNING_ALLOWED=NO build
+      - name: Run unit tests
+        run: >-
+          xcodebuild -project ClipMenu.xcodeproj -scheme ClipMenu -configuration Testing
+          -derivedDataPath build/DerivedDataCI -onlyUsePackageVersionsFromResolvedFile
+          -destination 'platform=macOS' -only-testing:ClipMenuTests
+          CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES test

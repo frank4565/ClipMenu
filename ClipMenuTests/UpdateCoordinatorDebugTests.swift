@@ -1,70 +1,98 @@
 import XCTest
 @testable import ClipMenu
 
-#if DEBUG || TESTING
-final class UpdateCoordinatorDebugTests: XCTestCase {
-#if TESTING
-    override func setUp() {
-        super.setUp()
-        UpdateCoordinator.shared.debugResetForTesting()
+final class UpdateCoordinatorTests: XCTestCase {
+    func testFreshInstallLeavesAutomaticChecksForSparkleConsent() {
+        let migrated = UpdateCoordinator.migratedLegacyPreferences([:])
+        XCTAssertNil(migrated["SUEnableAutomaticChecks"])
+        XCTAssertNil(migrated["SUAutomaticallyUpdate"])
+        XCTAssertEqual(migrated[UpdateCoordinator.legacyPreferencesMigrationKey] as? Bool, true)
     }
 
-    override func tearDown() {
-        UpdateCoordinator.shared.debugResetForTesting()
-        super.tearDown()
-    }
-#endif
-
-    func testUpdateCoordinatorPolicyReportsMatchExpectedState() throws {
-        let coordinator = UpdateCoordinator.shared
-        let reports: [(String, [String: Any])] = [
-            ("skip", coordinator.debugUpdateSkipBehaviorReport()),
-            ("readyToInstallPresentation", coordinator.debugReadyToInstallPresentationPolicyReport()),
-            ("downloadFailure", coordinator.debugDownloadFailurePolicyReport()),
-            ("checkFailure", coordinator.debugUpdateCheckFailurePolicyReport()),
-            ("checkNetwork", coordinator.debugUpdateCheckNetworkExerciseReport()),
-            ("appcastParsing", coordinator.debugAppcastParsingAndDownloadNamingReport()),
-            ("payloadFailure", coordinator.debugUpdateCheckPayloadFailureReport()),
-            ("passiveAlerts", coordinator.debugUpdatePassiveAlertsReport()),
-            ("automaticInstall", coordinator.debugAutomaticInstallUpdatesReport()),
-            ("presentation", coordinator.debugUpdatePresentationPolicyReport()),
-            ("systemProfileFeed", coordinator.debugSystemProfileFeedReport())
+    func testMigrationPreservesManualOnlyPreferenceAndUserData() {
+        let lastCheck = Date(timeIntervalSince1970: 1_700_000_000)
+        let domain: [String: Any] = [
+            CMEnableAutomaticCheckKey: false,
+            CMUpdateCheckIntervalKey: 604_800,
+            CMEnableAutomaticCheckPreReleaseKey: true,
+            "SUEnableAutomaticChecks": true,
+            "SUAutomaticallyUpdate": true,
+            "SULastCheckTime": lastCheck,
+            "SUSkippedVersion": "0.4.4a12",
+            "SUFeedURL": "http://feeds.feedburner.com/clipmenu-appcast",
+            "unrelatedPreference": ["value": "keep"]
         ]
-        let failedReports = reports.compactMap { name, report in
-            (report["matchesExpected"] as? Bool) == true ? nil : name
-        }
-        if !failedReports.isEmpty {
-            XCTFail("Reports did not match expected state: \(failedReports.joined(separator: ", "))")
+        let migrated = UpdateCoordinator.migratedLegacyPreferences(domain)
+        XCTAssertEqual(migrated["SUEnableAutomaticChecks"] as? Bool, false)
+        XCTAssertEqual((migrated["SUScheduledCheckInterval"] as? NSNumber)?.doubleValue, 604_800)
+        XCTAssertEqual(migrated[CMEnableAutomaticCheckPreReleaseKey] as? Bool, true)
+        XCTAssertEqual(migrated["SUAutomaticallyUpdate"] as? Bool, false)
+        XCTAssertEqual(migrated["SULastCheckTime"] as? Date, lastCheck)
+        XCTAssertEqual(migrated["SUSkippedVersion"] as? String, "0.4.4a12")
+        XCTAssertEqual(migrated["unrelatedPreference"] as? [String: String], ["value": "keep"])
+        XCTAssertNil(migrated["SUFeedURL"])
+        XCTAssertNotNil(domain["SUFeedURL"], "Migration must not mutate its input.")
+    }
+
+    func testMigrationPreservesLegacyAutomaticCheckChoices() {
+        for key in ["SUEnableAutomaticChecks", "SUCheckAtStartup", "SUAllowsAutomaticUpdates"] {
+            for enabled in [false, true] {
+                let migrated = UpdateCoordinator.migratedLegacyPreferences([key: enabled])
+                XCTAssertEqual(migrated["SUEnableAutomaticChecks"] as? Bool, enabled, key)
+            }
         }
     }
 
-#if TESTING
-    func testUpdateCoordinatorNetworkAndVerificationSmokeReportsRun() {
-        let coordinator = UpdateCoordinator.shared
-        XCTAssertFalse(coordinator.debugDownloadAndOpenFailureExerciseReport().isEmpty)
-        XCTAssertFalse(coordinator.debugDownloadedUpdateVerificationReport().isEmpty)
-        XCTAssertEqual(coordinator.debugUpdatePresentationDispatchReport()["matchesExpected"] as? Bool, true)
+    func testInstallationConsentIsOnlyResetOnce() {
+        var migrated = UpdateCoordinator.migratedLegacyPreferences(["SUAutomaticallyUpdate": true])
+        XCTAssertEqual(migrated["SUAutomaticallyUpdate"] as? Bool, false)
+        migrated["SUAutomaticallyUpdate"] = true
+        let secondMigration = UpdateCoordinator.migratedLegacyPreferences(migrated)
+        XCTAssertTrue((secondMigration as NSDictionary).isEqual(to: migrated))
+        XCTAssertEqual(secondMigration["SUAutomaticallyUpdate"] as? Bool, true)
     }
-#endif
 
-    func testUpdateCoordinatorUIFactoryReportsMatchExpectedState() throws {
-        let coordinator = UpdateCoordinator.shared
-        let reports: [(String, [String: Any])] = [
-            ("checking", coordinator.debugCheckingForUpdatesReport()),
-            ("permissionPrompt", coordinator.debugUpdatePermissionPromptReport()),
-            ("readyToInstall", coordinator.debugReadyToInstallReport()),
-            ("availableAlert", coordinator.debugAvailableUpdateAlertReport()),
-            ("availableAccessory", coordinator.debugAvailableUpdateAccessoryReport()),
-            ("downloadProgress", coordinator.debugDownloadProgressReport()),
-            ("feedSelection", coordinator.debugUpdateFeedSelectionReport())
-        ]
-
-        let failedReports = reports.compactMap { name, report in
-            (report["matchesExpected"] as? Bool) == true ? nil : name
+    func testLegacyNeverIntervalPreservesManualOnlyBehavior() {
+        for intervalKey in [CMUpdateCheckIntervalKey, "SUScheduledCheckInterval"] {
+            var migrated = UpdateCoordinator.migratedLegacyPreferences([
+                "SUEnableAutomaticChecks": true, intervalKey: 0
+            ])
+            XCTAssertEqual(migrated["SUEnableAutomaticChecks"] as? Bool, false)
+            XCTAssertEqual((migrated["SUScheduledCheckInterval"] as? NSNumber)?.doubleValue, 86_400)
+            migrated["SUEnableAutomaticChecks"] = true
+            let afterOptIn = UpdateCoordinator.migratedLegacyPreferences(migrated)
+            XCTAssertEqual(afterOptIn["SUEnableAutomaticChecks"] as? Bool, true)
         }
-        if !failedReports.isEmpty {
-            XCTFail("Reports did not match expected state: \(failedReports.joined(separator: ", "))")
+    }
+
+    func testSecureConfigurationRequiresHTTPSAndEd25519PublicKey() {
+        let validKey = Data(repeating: 1, count: 32).base64EncodedString()
+        XCTAssertTrue(UpdateCoordinator.hasSecureConfiguration(
+            feedURLString: "https://frank4565.github.io/ClipMenu/appcast.xml", publicEDKey: validKey
+        ))
+        for feed in [nil, "", "http://example.com/appcast.xml", "file:///tmp/appcast.xml", "https:///appcast.xml"] as [String?] {
+            XCTAssertFalse(UpdateCoordinator.hasSecureConfiguration(feedURLString: feed, publicEDKey: validKey))
+        }
+        for key in [nil, "", "$(CLIPMENU_SPARKLE_PUBLIC_KEY)", "invalid", Data(repeating: 1, count: 31).base64EncodedString()] as [String?] {
+            XCTAssertFalse(UpdateCoordinator.hasSecureConfiguration(feedURLString: "https://example.com/appcast.xml", publicEDKey: key))
+        }
+    }
+
+    func testManualChecksRemainAvailableWhenAutomaticChecksAreOff() {
+        let state = CMUpdatePreferencesAvailabilityReport(
+            automaticChecks: false, feedURLPresent: true, isChecking: false,
+            configurationAvailable: true, canCheckForUpdates: true
+        )
+        XCTAssertEqual(state["checkNowEnabled"], true)
+        XCTAssertEqual(state["preReleasesEnabled"], true)
+        XCTAssertEqual(state["intervalEnabled"], false)
+        XCTAssertEqual(state["automaticallyInstallUpdatesEnabled"], false)
+        for (configured, canCheck) in [(false, true), (true, false)] {
+            let unavailable = CMUpdatePreferencesAvailabilityReport(
+                automaticChecks: true, feedURLPresent: true, isChecking: true,
+                configurationAvailable: configured, canCheckForUpdates: canCheck
+            )
+            XCTAssertEqual(unavailable["checkNowEnabled"], false)
         }
     }
 }
-#endif

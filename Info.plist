@@ -19,13 +19,13 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.4.3</string>
+	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleVersion</key>
-	<string>0.4.3</string>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSMinimumSystemVersion</key>
-	<string>11.0</string>
+	<string>12.0</string>
 	<key>LSUIElement</key>
 	<string>1</string>
 	<key>NSMainNibFile</key>
@@ -33,10 +33,8 @@
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>SUFeedURL</key>
-	<string>http://feeds.feedburner.com/clipmenu-appcast</string>
-	<key>SUPreReleaseFeedURL</key>
-	<string>http://feeds.feedburner.com/clipmenu-pre-appcast</string>
-	<key>SUPublicDSAKeyFile</key>
-	<string>dsa_pub.pem</string>
+	<string>$(CLIPMENU_UPDATE_FEED_URL)</string>
+	<key>SUPublicEDKey</key>
+	<string>$(CLIPMENU_SPARKLE_PUBLIC_KEY)</string>
 </dict>
 </plist>

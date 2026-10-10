@@ -1,8 +1,8 @@
 ClipMenu
 ========
-A clipboard manager for Mac OS X.
+A clipboard manager for macOS 12 and later, with native SwiftUI preferences.
 
-**New ClipMenu, completely rebuilt using Swift language, is now under development. Further information is coming soon!**
+The Swift app uses Sparkle 2 for signed updates. The release workflow publishes packages to GitHub Releases and an HTTPS update feed to GitHub Pages. See [release setup and publishing](doc/releasing.md) for signing credentials, repository configuration, and migration from the legacy updater.
 
 ![ClipMenu](./screenshot.jpg)
 
@@ -18,20 +18,14 @@ Thank you for your cooperation.
 Target environments
 -------------------
 
-* Mac OS X 10.5 - 10.6
-* Xcode 3.2
-* Manual reference counting
+* macOS 12 or later
+* A current Xcode installation with Swift Package Manager
 
 Dependencies
 ------------
-The source code is dependent on some libraries. You have to download and install them if you want to compile, run, or test the source code.
+Xcode resolves the pinned [Sparkle](https://sparkle-project.org/) package automatically. No separate dependency installation is needed.
 
-* [PTHotKey](http://www.rogueamoeba.com/utm/posts/Random/Homegrown_Developer_Tools-2004-07-14-12-00) by Quentin D. Carnicelli
-* [Shortcut Recorder](http://code.google.com/p/shortcutrecorder/) by contributors to ShortcutRecorder
-* [Sparkle](http://sparkle.andymatuschak.org/) by Andy Matuschak
-* [DBPrefsWindowController](http://www.mere-mortal-software.com/blog/sourcecode.php) by Dave Batton
-* [Google Toolbox for Mac](http://code.google.com/p/google-toolbox-for-mac/) by Google Inc.
-* [BWToolkit](http://www.brandonwalkin.com/bwtoolkit/) by Brandon Walkin
+Build with `xcodebuild -project ClipMenu.xcodeproj -scheme ClipMenu -configuration Debug -derivedDataPath build/DerivedData build`. The project includes this fork's public update key and feed URL. Fork maintainers should configure their own key and feed before distributing builds.
 
 Author
 ------

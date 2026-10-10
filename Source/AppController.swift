@@ -3,6 +3,7 @@ import Carbon
 import Darwin
 import JavaScriptCore
 import ServiceManagement
+import Sparkle
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
@@ -33,16 +34,11 @@ let CMPrefTimeIntervalKey = "timeInterval"
 private let CMMinimumAutosaveInterval: TimeInterval = 15
 private let CMMaximumPasteboardPollingInterval = 1.0
 private let CMLastUpdateCheckDateKey = "SULastCheckTime"
-private let CMSkippedUpdateVersionKey = "SUSkippedVersion"
 let CMAutomaticallyInstallUpdatesKey = "SUAutomaticallyUpdate"
 private let CMLegacyAutomaticChecksEnabledKey = "SUEnableAutomaticChecks"
 private let CMLegacyAutomaticChecksEnabledOldKey = "SUCheckAtStartup"
 private let CMLegacyUpdateCheckIntervalKey = "SUScheduledCheckInterval"
-private let CMLegacyHasLaunchedBeforeKey = "SUHasLaunchedBefore"
-private let CMLegacySendProfileInfoKey = "SUSendProfileInfo"
-private let CMLegacyEnableSystemProfilingKey = "SUEnableSystemProfiling"
 private let CMLegacyAllowsAutomaticUpdatesKey = "SUAllowsAutomaticUpdates"
-private let CMLegacyLastProfileSubmissionDateKey = "SULastProfileSubmissionDate"
 let CMPrefMaxMenuItemTitleLengthKey = "maxMenuItemTitleLength"
 let CMPrefNumberOfItemsPlaceInlineKey = "numberOfItemsPlaceInline"
 let CMPrefNumberOfItemsPlaceInsideFolderKey = "numberOfItemsPlaceInsideFolder"
@@ -435,26 +431,8 @@ private func debugBypassLoginItemPromptUI() -> Bool {
         "debugWriteQuitMenuItemReportAfterLaunchDelay",
         "debugWriteTerminationPersistenceReportAfterLaunchDelay",
         "debugWriteMenuFontSizeReportAfterLaunchDelay",
-        "debugWriteUpdateSkipBehaviorReportAfterLaunchDelay",
-        "debugWriteLegacyUpdateDefaultsSyncReportAfterLaunchDelay",
-        "debugWriteUpdatePreferencesAvailabilityReportAfterLaunchDelay",
-        "debugWriteCheckingForUpdatesReportAfterLaunchDelay",
-        "debugWriteUpdatePermissionPromptReportAfterLaunchDelay",
-        "debugWriteReadyToInstallUpdateReportAfterLaunchDelay",
-        "debugWriteReadyToInstallPresentationPolicyReportAfterLaunchDelay",
-        "debugWriteAvailableUpdateAlertReportAfterLaunchDelay",
-        "debugWriteAvailableUpdateAccessoryReportAfterLaunchDelay",
-        "debugWriteDownloadProgressReportAfterLaunchDelay",
-        "debugWriteDownloadFailurePolicyReportAfterLaunchDelay",
-        "debugWriteUpdateFeedSelectionReportAfterLaunchDelay",
-        "debugWriteUpdateCheckFailurePolicyReportAfterLaunchDelay",
-        "debugWriteUpdateCheckPayloadFailureReportAfterLaunchDelay",
         "debugWritePastePermissionPromptReportAfterLaunchDelay",
         "debugWriteHistoryFailureAlertsReportAfterLaunchDelay",
-        "debugWriteAutomaticInstallUpdatesReportAfterLaunchDelay",
-        "debugWriteUpdatePresentationPolicyReportAfterLaunchDelay",
-        "debugWriteSystemProfileFeedReportAfterLaunchDelay",
-        "debugWriteInstalledSparkleCompatibilityReportAfterLaunchDelay",
         "debugWriteDefaultsShapeReportAfterLaunchDelay",
         "debugRunClipStoreRoundTripAfterLaunchDelay",
         "debugRunSnippetStoreRoundTripAfterLaunchDelay",
@@ -463,7 +441,6 @@ private func debugBypassLoginItemPromptUI() -> Bool {
         "debugRunActionMenuSelectionAfterLaunchDelay",
         "debugShowVisibleActionMenuAfterLaunchDelay",
         "debugRunPasteboardRoundTripAfterLaunchDelay",
-        "debugRunUpdateCheckAfterLaunchDelay",
         "debugDumpDefaultsAfterLaunchDelay",
         "debugShowPreferencesAfterLaunchDelay",
         "debugShowSnippetEditorAfterLaunchDelay",
@@ -2020,3391 +1997,297 @@ enum LoginItemManager {
 #endif
 }
 
-final class UpdateCoordinator: ObservableObject {
+/// Sparkle owns scheduling, consent, signatures, installation, and relaunching.
+/// Only the channel preference remains application-specific.
+final class UpdateCoordinator: NSObject, ObservableObject, SPUUpdaterDelegate, SPUStandardUserDriverDelegate {
     static let shared = UpdateCoordinator()
+    static let legacyPreferencesMigrationKey = "CMSparkle2PreferencesMigrated"
 
-    private var timer: Timer?
+    @Published private(set) var canCheckForUpdates = false
     @Published private(set) var isChecking = false
     @Published private(set) var lastCheckDate: Date?
-#if TESTING
-    private var debugDownloadFailurePresentationCount = 0
-    private var debugAvailableUpdatePresentationCount = 0
-    private var debugUpToDatePresentationCount = 0
-#endif
+    @Published private(set) var configurationError: String?
 
-    private final class DownloadProgressController: NSObject {
-        let panel: NSPanel
-        var task: URLSessionDownloadTask?
-        private(set) var isCancelled = false
-        let titleLabel: NSTextField
-        let detailLabel: NSTextField
-        let progressIndicator: NSProgressIndicator
+    private var updaterController: SPUStandardUpdaterController?
+    private var observations: [NSKeyValueObservation] = []
+    private var hasAttemptedStart = false
+    private var previousChannelPreference: Bool?
+    private var activationPolicyBeforeUpdate: NSApplication.ActivationPolicy?
+    private var dockBadgeBeforeUpdate: String?
 
-        init(filename: String) {
-            panel = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 456, height: 146),
-                styleMask: [.titled],
-                backing: .buffered,
-                defer: false
-            )
-            panel.title = NSLocalizedString("Downloading update...", comment: "")
-            panel.isReleasedWhenClosed = false
-            panel.level = .floating
-            panel.titleVisibility = .hidden
-            panel.titlebarAppearsTransparent = true
-            panel.isMovableByWindowBackground = true
-
-            let contentView = NSView(frame: panel.contentView?.bounds ?? NSRect(x: 0, y: 0, width: 456, height: 146))
-            let backgroundView = NSVisualEffectView(frame: contentView.bounds)
-            backgroundView.autoresizingMask = [.width, .height]
-            backgroundView.material = .sidebar
-            backgroundView.state = .active
-            panel.contentView = backgroundView
-
-            let iconContainer = NSView(frame: NSRect(x: 20, y: 78, width: 44, height: 44))
-            let iconBackground = NSVisualEffectView(frame: iconContainer.bounds)
-            iconBackground.material = .menu
-            iconBackground.state = .active
-            iconBackground.wantsLayer = true
-            iconBackground.layer?.cornerRadius = 10
-            iconBackground.layer?.masksToBounds = true
-            iconContainer.addSubview(iconBackground)
-
-            let iconView = NSImageView(frame: NSRect(x: 8, y: 8, width: 28, height: 28))
-            iconView.image = NSApp.applicationIconImage
-            iconView.imageScaling = .scaleProportionallyUpOrDown
-            iconContainer.addSubview(iconView)
-            backgroundView.addSubview(iconContainer)
-
-            titleLabel = NSTextField(labelWithString: NSLocalizedString("Downloading update...", comment: ""))
-            titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
-            titleLabel.frame = NSRect(x: 78, y: 108, width: 300, height: 18)
-            backgroundView.addSubview(titleLabel)
-
-            detailLabel = NSTextField(labelWithString: String(
-                format: NSLocalizedString("Downloading %@.", comment: ""),
-                filename
-            ))
-            detailLabel.textColor = .secondaryLabelColor
-            detailLabel.lineBreakMode = .byTruncatingMiddle
-            detailLabel.frame = NSRect(x: 78, y: 86, width: 338, height: 17)
-            backgroundView.addSubview(detailLabel)
-
-            progressIndicator = NSProgressIndicator(frame: NSRect(x: 20, y: 48, width: 356, height: 14))
-            progressIndicator.style = .bar
-            progressIndicator.isIndeterminate = true
-            progressIndicator.usesThreadedAnimation = true
-            progressIndicator.startAnimation(nil)
-            backgroundView.addSubview(progressIndicator)
-
-            let cancelButton = NSButton(
-                title: NSLocalizedString("Cancel Update", comment: ""),
-                target: nil,
-                action: #selector(cancelDownload(_:))
-            )
-            cancelButton.bezelStyle = .rounded
-            cancelButton.keyEquivalent = "\u{1b}"
-            cancelButton.frame = NSRect(x: 380, y: 42, width: 56, height: 28)
-            backgroundView.addSubview(cancelButton)
-
-            super.init()
-            cancelButton.target = self
-        }
-
-        func show() {
-            NSApp.activate(ignoringOtherApps: true)
-            panel.center()
-            panel.makeKeyAndOrderFront(nil)
-        }
-
-        func close() {
-            panel.close()
-            task = nil
-        }
-
-        @objc private func cancelDownload(_ sender: Any?) {
-            isCancelled = true
-            task?.cancel()
-            close()
+    private override init() {
+        super.init()
+        lastCheckDate = UserDefaults.standard.object(forKey: CMLastUpdateCheckDateKey) as? Date
+        if !isConfiguredForUpdates {
+            configurationError = Self.unconfiguredUpdaterMessage
         }
     }
 
-    private final class UpdateCheckProgressController: NSObject {
-        let panel: NSPanel
-        let cancelButton: NSButton
-        let titleLabel: NSTextField
-        let detailLabel: NSTextField
-        let progressIndicator: NSProgressIndicator
-        var task: URLSessionDataTask?
-        var onCancel: (() -> Void)?
-        private(set) var isCancelled = false
-
-        override init() {
-            panel = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 432, height: 138),
-                styleMask: [.titled],
-                backing: .buffered,
-                defer: false
-            )
-            panel.title = NSLocalizedString("Checking for updates...", comment: "")
-            panel.isReleasedWhenClosed = false
-            panel.level = .floating
-            panel.titleVisibility = .hidden
-            panel.titlebarAppearsTransparent = true
-            panel.isMovableByWindowBackground = true
-
-            let contentView = NSView(frame: panel.contentView?.bounds ?? NSRect(x: 0, y: 0, width: 432, height: 138))
-            let backgroundView = NSVisualEffectView(frame: contentView.bounds)
-            backgroundView.autoresizingMask = [.width, .height]
-            backgroundView.material = .sidebar
-            backgroundView.state = .active
-            panel.contentView = backgroundView
-
-            let iconContainer = NSView(frame: NSRect(x: 20, y: 70, width: 44, height: 44))
-            let iconBackground = NSVisualEffectView(frame: iconContainer.bounds)
-            iconBackground.material = .menu
-            iconBackground.state = .active
-            iconBackground.wantsLayer = true
-            iconBackground.layer?.cornerRadius = 10
-            iconBackground.layer?.masksToBounds = true
-            iconContainer.addSubview(iconBackground)
-
-            let iconView = NSImageView(frame: NSRect(x: 8, y: 8, width: 28, height: 28))
-            iconView.image = NSApp.applicationIconImage
-            iconView.imageScaling = .scaleProportionallyUpOrDown
-            iconContainer.addSubview(iconView)
-            backgroundView.addSubview(iconContainer)
-
-            titleLabel = NSTextField(labelWithString: NSLocalizedString("Checking for updates...", comment: ""))
-            titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
-            titleLabel.frame = NSRect(x: 78, y: 98, width: 280, height: 18)
-            backgroundView.addSubview(titleLabel)
-
-            detailLabel = NSTextField(labelWithString: NSLocalizedString("ClipMenu is checking the current update feed.", comment: ""))
-            detailLabel.textColor = .secondaryLabelColor
-            detailLabel.frame = NSRect(x: 78, y: 76, width: 270, height: 17)
-            backgroundView.addSubview(detailLabel)
-
-            progressIndicator = NSProgressIndicator(frame: NSRect(x: 20, y: 40, width: 330, height: 14))
-            progressIndicator.style = .bar
-            progressIndicator.isIndeterminate = true
-            progressIndicator.usesThreadedAnimation = true
-            progressIndicator.startAnimation(nil)
-            backgroundView.addSubview(progressIndicator)
-
-            cancelButton = NSButton(
-                title: NSLocalizedString("Cancel", comment: ""),
-                target: nil,
-                action: #selector(cancelCheck(_:))
-            )
-            cancelButton.bezelStyle = .rounded
-            cancelButton.keyEquivalent = "\u{1b}"
-            cancelButton.frame = NSRect(x: 356, y: 34, width: 56, height: 28)
-            backgroundView.addSubview(cancelButton)
-
-            super.init()
-            cancelButton.target = self
-        }
-
-        func show() {
-            NSApp.activate(ignoringOtherApps: true)
-            panel.center()
-            panel.makeKeyAndOrderFront(nil)
-        }
-
-        func close() {
-            panel.close()
-            task = nil
-        }
-
-        @objc private func cancelCheck(_ sender: Any?) {
-            isCancelled = true
-            task?.cancel()
-            close()
-            onCancel?()
-        }
+    private static var unconfiguredUpdaterMessage: String {
+        NSLocalizedString(
+            "This copy of ClipMenu is not configured for secure updates. Install a release from the project’s GitHub Releases page.",
+            comment: "Missing feed URL or Ed25519 update key"
+        )
     }
 
-    private struct AppcastItem {
-        let title: String
-        let version: String
-        let releaseNotesURL: URL?
-        let downloadURL: URL?
-        let dsaSignature: String?
-
-        var downloadFilename: String {
-            guard let downloadURL else { return "ClipMenu-\(version)" }
-            let filename = downloadURL.lastPathComponent
-            return filename.isEmpty ? "ClipMenu-\(version)" : filename
-        }
-    }
-
-    private struct FeedParameter {
-        let key: String
-        let displayKey: String
-        let value: String
-        let displayValue: String
-    }
-
-    private enum AvailableUpdateResponse {
-        case download
-        case skip
-        case later
-    }
-
-    private enum UpdateResultPresentationDecision {
-        case showAvailableUpdateAlert(item: AppcastItem)
-        case downloadAutomatically(item: AppcastItem, installAutomaticallyAfterDownload: Bool)
-        case showUpToDate(currentVersion: String)
-        case noAction
-    }
-
-    private enum ReadyToInstallResponse {
-        case openDownload
-        case later
-    }
-
-    private enum ReadyToInstallPresentationDecision {
-        case showReadyToInstallAlert(item: AppcastItem)
-    }
-
-    private enum DownloadCompletionPreflightDecision {
-        case ignoreCancellation
-        case continueProcessing
-        case showFailure(error: Error)
-    }
-
-    private enum UpdateCheckCompletionPreflightDecision {
-        case ignoreCancellation
-        case continueProcessing
-        case showFailure(error: Error)
-    }
-
-    private enum UpdateCheckFailurePresentationDecision {
-        case showFailureAlert(error: Error)
-        case noVisibleFailure(error: Error)
-    }
-
-    private struct AvailableUpdateAlertConfiguration {
-        let alert: NSAlert
-        let automaticallyInstallCheckbox: NSButton
-    }
-
-    private final class AppcastParser: NSObject, XMLParserDelegate {
-        private var items: [AppcastItem] = []
-        private var currentElement = ""
-        private var currentText = ""
-        private var insideItem = false
-        private var currentTitle: String?
-        private var currentReleaseNotesURL: URL?
-        private var currentDownloadURL: URL?
-        private var currentVersion: String?
-        private var currentDSASignature: String?
-
-        func parse(data: Data) throws -> [AppcastItem] {
-            let parser = XMLParser(data: data)
-            parser.delegate = self
-            guard parser.parse() else {
-                throw parser.parserError ?? NSError(domain: "ClipMenuUpdate", code: 1)
-            }
-            return items
-        }
-
-        func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String : String] = [:]) {
-            currentElement = qName ?? elementName
-            currentText = ""
-
-            if elementName == "item" {
-                insideItem = true
-                currentTitle = nil
-                currentReleaseNotesURL = nil
-                currentDownloadURL = nil
-                currentVersion = nil
-                currentDSASignature = nil
-            } else if insideItem && elementName == "enclosure" {
-                if let urlString = attributeDict["url"] {
-                    currentDownloadURL = URL(string: urlString)
-                }
-                if let version = attributeDict["sparkle:version"] ?? attributeDict["version"],
-                   !version.isEmpty {
-                    currentVersion = version
-                }
-                if let signature = attributeDict["sparkle:dsaSignature"] ?? attributeDict["dsaSignature"],
-                   !signature.isEmpty {
-                    currentDSASignature = signature
-                }
-            }
-        }
-
-        func parser(_ parser: XMLParser, foundCharacters string: String) {
-            currentText += string
-        }
-
-        func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
-            let element = qName ?? elementName
-            let trimmedText = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
-
-            guard insideItem else {
-                currentText = ""
-                return
-            }
-
-            switch element {
-            case "title":
-                if !trimmedText.isEmpty {
-                    currentTitle = trimmedText
-                    if currentVersion == nil {
-                        currentVersion = inferredVersion(from: trimmedText)
-                    }
-                }
-            case "sparkle:releaseNotesLink", "releaseNotesLink":
-                if !trimmedText.isEmpty {
-                    currentReleaseNotesURL = URL(string: trimmedText)
-                }
-            case "item":
-                let title = currentTitle ?? NSLocalizedString("Update Available", comment: "")
-                let version = currentVersion ?? title
-                items.append(
-                    AppcastItem(
-                        title: title,
-                        version: version,
-                        releaseNotesURL: currentReleaseNotesURL,
-                        downloadURL: currentDownloadURL,
-                        dsaSignature: currentDSASignature
-                    )
-                )
-                insideItem = false
-            default:
-                break
-            }
-
-            currentText = ""
-        }
-
-        private func inferredVersion(from title: String) -> String {
-            let prefix = "Version "
-            if title.hasPrefix(prefix) {
-                return String(title.dropFirst(prefix.count))
-            }
-            return title
-        }
+    var isConfiguredForUpdates: Bool {
+        configurationError == nil && Self.hasSecureConfiguration(
+            feedURLString: feedURL?.absoluteString,
+            publicEDKey: Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String
+        )
     }
 
     var feedURL: URL? {
-#if DEBUG || TESTING
-        if let override = UserDefaults.standard.string(forKey: "debugUpdateFeedURL"),
-           !override.isEmpty {
-            return URL(string: override)
+        guard let value = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String,
+              let url = URL(string: value),
+              url.scheme?.lowercased() == "https", url.host != nil else {
+            return nil
         }
-#endif
-        let key = UserDefaults.standard.bool(forKey: CMEnableAutomaticCheckPreReleaseKey)
-            ? "SUPreReleaseFeedURL"
-            : "SUFeedURL"
-        return localizedInfoURL(forKey: key)
+        return url
     }
 
-    private init() {
-        lastCheckDate = UserDefaults.standard.object(forKey: CMLastUpdateCheckDateKey) as? Date
+    var automaticallyChecksForUpdates: Bool {
+        get {
+            updaterController?.updater.automaticallyChecksForUpdates
+                ?? UserDefaults.standard.bool(forKey: CMLegacyAutomaticChecksEnabledKey)
+        }
+        set {
+            objectWillChange.send()
+            if let updater = updaterController?.updater {
+                updater.automaticallyChecksForUpdates = newValue
+            } else {
+                UserDefaults.standard.set(newValue, forKey: CMLegacyAutomaticChecksEnabledKey)
+            }
+        }
     }
 
-#if TESTING
-    func debugResetForTesting() {
-        timer?.invalidate()
-        timer = nil
-        isChecking = false
-        lastCheckDate = UserDefaults.standard.object(forKey: CMLastUpdateCheckDateKey) as? Date
-        debugDownloadFailurePresentationCount = 0
-        debugAvailableUpdatePresentationCount = 0
-        debugUpToDatePresentationCount = 0
-        configureFromDefaults()
+    var automaticallyDownloadsUpdates: Bool {
+        get {
+            if let updater = updaterController?.updater { return updater.automaticallyDownloadsUpdates }
+            return automaticallyChecksForUpdates && UserDefaults.standard.bool(forKey: CMAutomaticallyInstallUpdatesKey)
+        }
+        set {
+            objectWillChange.send()
+            if let updater = updaterController?.updater {
+                updater.automaticallyDownloadsUpdates = newValue
+            } else {
+                UserDefaults.standard.set(newValue, forKey: CMAutomaticallyInstallUpdatesKey)
+            }
+        }
     }
-#endif
+
+    var updateCheckInterval: TimeInterval {
+        get {
+            let saved = updaterController?.updater.updateCheckInterval
+                ?? UserDefaults.standard.double(forKey: CMLegacyUpdateCheckIntervalKey)
+            return saved.isFinite && saved > 0 ? max(3_600, saved) : 86_400
+        }
+        set {
+            guard newValue.isFinite, newValue > 0 else { return }
+            objectWillChange.send()
+            if let updater = updaterController?.updater {
+                updater.updateCheckInterval = max(3_600, newValue)
+            } else {
+                UserDefaults.standard.set(max(3_600, newValue), forKey: CMLegacyUpdateCheckIntervalKey)
+            }
+        }
+    }
+
+    var includePreReleases: Bool {
+        get { UserDefaults.standard.bool(forKey: CMEnableAutomaticCheckPreReleaseKey) }
+        set {
+            guard newValue != includePreReleases else { return }
+            objectWillChange.send()
+            UserDefaults.standard.set(newValue, forKey: CMEnableAutomaticCheckPreReleaseKey)
+            previousChannelPreference = newValue
+            updaterController?.updater.resetUpdateCycleAfterShortDelay()
+        }
+    }
+
+    /// Work only from persisted preferences: registered application defaults are
+    /// not consent to background requests. Preserve Sparkle's dates and skips.
+    static func migratedLegacyPreferences(_ persistentDefaults: [String: Any]) -> [String: Any] {
+        guard (persistentDefaults[legacyPreferencesMigrationKey] as? Bool) != true else {
+            return persistentDefaults
+        }
+        var migrated = persistentDefaults
+        let oldAutomaticChecks = (persistentDefaults[CMEnableAutomaticCheckKey] as? NSNumber)
+            ?? (persistentDefaults[CMLegacyAutomaticChecksEnabledKey] as? NSNumber)
+            ?? (persistentDefaults[CMLegacyAutomaticChecksEnabledOldKey] as? NSNumber)
+            ?? (persistentDefaults[CMLegacyAllowsAutomaticUpdatesKey] as? NSNumber)
+        if let oldAutomaticChecks {
+            migrated[CMLegacyAutomaticChecksEnabledKey] = oldAutomaticChecks.boolValue
+        }
+        let oldInterval = (persistentDefaults[CMUpdateCheckIntervalKey] as? NSNumber)
+            ?? (persistentDefaults[CMLegacyUpdateCheckIntervalKey] as? NSNumber)
+        if let oldInterval {
+            if oldInterval.doubleValue.isFinite, oldInterval.doubleValue > 0 {
+                migrated[CMLegacyUpdateCheckIntervalKey] = max(3_600, oldInterval.doubleValue)
+            } else {
+                // "Never" suppressed the custom scheduler even with its checkbox on.
+                // Sparkle requires a positive interval, so express that choice as manual-only.
+                migrated[CMLegacyAutomaticChecksEnabledKey] = false
+                migrated[CMLegacyUpdateCheckIntervalKey] = 86_400
+            }
+        }
+        // The custom updater only saved downloads. Installation needs a new opt-in.
+        if (persistentDefaults[CMAutomaticallyInstallUpdatesKey] as? NSNumber)?.boolValue == true {
+            migrated[CMAutomaticallyInstallUpdatesKey] = false
+        }
+        // Old Sparkle installs may have persisted the original maintainer's feed.
+        migrated.removeValue(forKey: "SUFeedURL")
+        migrated[legacyPreferencesMigrationKey] = true
+        return migrated
+    }
+
+    static func hasSecureConfiguration(feedURLString: String?, publicEDKey: String?) -> Bool {
+        guard let feedURLString, let url = URL(string: feedURLString),
+              url.scheme?.lowercased() == "https", url.host != nil,
+              let publicEDKey, let keyData = Data(base64Encoded: publicEDKey),
+              keyData.count == 32 else {
+            return false
+        }
+        return true
+    }
 
     func configureFromDefaults() {
-        timer?.invalidate()
-        timer = nil
+        objectWillChange.send()
+        lastCheckDate = UserDefaults.standard.object(forKey: CMLastUpdateCheckDateKey) as? Date
+        let channelPreference = includePreReleases
+        if let previousChannelPreference, previousChannelPreference != channelPreference {
+            updaterController?.updater.resetUpdateCycleAfterShortDelay()
+        }
+        previousChannelPreference = channelPreference
+        guard !hasAttemptedStart else { return }
+        hasAttemptedStart = true
 
-        guard UserDefaults.standard.bool(forKey: CMEnableAutomaticCheckKey) else { return }
-        let interval = UserDefaults.standard.integer(forKey: CMUpdateCheckIntervalKey)
-        guard interval > 0 else { return }
-        let checkInterval = TimeInterval(interval)
-        let delay: TimeInterval
-        if let lastCheckDate {
-            delay = max(1, checkInterval - Date().timeIntervalSince(lastCheckDate))
-        } else {
-            delay = checkInterval
+        guard Self.hasSecureConfiguration(
+            feedURLString: feedURL?.absoluteString,
+            publicEDKey: Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String
+        ) else {
+            configurationError = Self.unconfiguredUpdaterMessage
+            NSLog("ClipMenu updater disabled: missing HTTPS appcast or Ed25519 public key")
+            return
         }
-        timer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
-            self?.checkForUpdates(userInitiated: false)
-            self?.configureFromDefaults()
+
+#if TESTING || CLIPMENU_TEST_HOST
+        // Never initialize Sparkle's user driver, scheduler, or network in tests.
+        return
+#else
+        let controller = SPUStandardUpdaterController(
+            startingUpdater: false,
+            updaterDelegate: self,
+            userDriverDelegate: self
+        )
+        updaterController = controller
+        let updater = controller.updater
+        observations = [
+            updater.observe(\.canCheckForUpdates, options: [.initial, .new]) { [weak self] updater, _ in
+                self?.canCheckForUpdates = updater.canCheckForUpdates
+            },
+            updater.observe(\.sessionInProgress, options: [.initial, .new]) { [weak self] updater, _ in
+                self?.isChecking = updater.sessionInProgress
+            },
+            updater.observe(\.lastUpdateCheckDate, options: [.initial, .new]) { [weak self] updater, _ in
+                self?.lastCheckDate = updater.lastUpdateCheckDate
+            },
+            updater.observe(\.automaticallyChecksForUpdates, options: [.new]) { [weak self] _, _ in
+                self?.objectWillChange.send()
+            },
+            updater.observe(\.automaticallyDownloadsUpdates, options: [.new]) { [weak self] _, _ in
+                self?.objectWillChange.send()
+            },
+            updater.observe(\.updateCheckInterval, options: [.new]) { [weak self] _, _ in
+                self?.objectWillChange.send()
+            }
+        ]
+        do {
+            try updater.start()
+            updater.clearFeedURLFromUserDefaults()
+        } catch {
+            observations.removeAll()
+            updaterController = nil
+            canCheckForUpdates = false
+            configurationError = String(
+                format: NSLocalizedString("Could not start the software updater: %@", comment: "Sparkle startup error"),
+                error.localizedDescription
+            )
+            NSLog("ClipMenu failed to start Sparkle: %@", error.localizedDescription)
         }
+#endif
     }
 
     func checkForUpdates(userInitiated: Bool = true) {
-        guard let feedURL else {
-            if userInitiated {
-                NSSound.beep()
-            }
-            return
-        }
-
-        guard !isChecking else { return }
-        isChecking = true
-        let checkDate = Date()
-        UserDefaults.standard.set(checkDate, forKey: CMLastUpdateCheckDateKey)
-        lastCheckDate = checkDate
-
-        let progressController = userInitiated ? UpdateCheckProgressController() : nil
-        progressController?.onCancel = { [weak self] in
-            DispatchQueue.main.async {
-                self?.isChecking = false
-            }
-        }
-
-        let requestURL = preferredSecureURL(for: parameterizedFeedURL() ?? feedURL)
-        let task = URLSession.shared.dataTask(with: requestURL) { [weak self] data, _, error in
-            guard let self else { return }
-            defer {
-                DispatchQueue.main.async {
-                    progressController?.close()
-                    self.isChecking = false
-                }
-            }
-
-            switch self.updateCheckCompletionPreflightDecision(
-                error: error,
-                wasCancelled: progressController?.isCancelled == true
-            ) {
-            case .ignoreCancellation:
-                return
-            case let .showFailure(error):
-                self.presentUpdateCheckFailure(error: error, userInitiated: userInitiated)
-                return
-            case .continueProcessing:
-                break
-            }
-
-            guard let data else {
-                self.presentUpdateCheckFailure(
-                    error: NSError(
-                        domain: "ClipMenuUpdate",
-                        code: 2,
-                        userInfo: [NSLocalizedDescriptionKey: NSLocalizedString("No update data was returned.", comment: "")]
-                    ),
-                    userInitiated: userInitiated
-                )
-                return
-            }
-
-            do {
-                let parser = AppcastParser()
-                let items = try parser.parse(data: data)
-                guard !items.isEmpty else {
-                    self.presentUpdateCheckFailure(
-                        error: NSError(
-                            domain: "ClipMenuUpdate",
-                            code: 3,
-                            userInfo: [NSLocalizedDescriptionKey: NSLocalizedString("The update feed did not contain any items.", comment: "")]
-                        ),
-                        userInitiated: userInitiated
-                    )
-                    return
-                }
-
-                self.presentUpdateResult(items: items, userInitiated: userInitiated)
-            } catch {
-                self.presentUpdateCheckFailure(error: error, userInitiated: userInitiated)
-            }
-        }
-        progressController?.task = task
-        if userInitiated {
-            DispatchQueue.main.async {
-                progressController?.show()
-            }
-        }
-        task.resume()
-    }
-
-    private func localizedInfoURL(forKey key: String) -> URL? {
-        let value = Bundle.main.localizedInfoDictionary?[key] as? String
-            ?? Bundle.main.infoDictionary?[key] as? String
-        guard let value, !value.isEmpty else { return nil }
-        return URL(string: value)
-    }
-
-    private func parameterizedFeedURL(now: Date = Date(), defaults: UserDefaults = .standard) -> URL? {
-        guard let baseFeedURL = feedURL else {
-            return nil
-        }
-
-        let parameters = feedParameters(now: now, defaults: defaults)
-        guard !parameters.isEmpty else {
-            return baseFeedURL
-        }
-
-        guard var components = URLComponents(url: baseFeedURL, resolvingAgainstBaseURL: false) else {
-            return baseFeedURL
-        }
-
-        var queryItems = components.queryItems ?? []
-        queryItems.append(contentsOf: parameters.map { URLQueryItem(name: $0.key, value: $0.value) })
-        components.queryItems = queryItems
-        return components.url ?? baseFeedURL
-    }
-
-    private func feedParameters(now: Date = Date(), defaults: UserDefaults = .standard) -> [FeedParameter] {
-        guard shouldSendSystemProfile(now: now, defaults: defaults) else {
-            return []
-        }
-
-        let parameters = systemProfileParameters()
-        guard !parameters.isEmpty else {
-            return []
-        }
-
-        defaults.set(now, forKey: CMLegacyLastProfileSubmissionDateKey)
-        return parameters
-    }
-
-    private func shouldSendSystemProfile(now: Date = Date(), defaults: UserDefaults = .standard) -> Bool {
-        guard defaults.bool(forKey: CMLegacySendProfileInfoKey) else {
-            return false
-        }
-
-        guard let lastSubmissionDate = defaults.object(forKey: CMLegacyLastProfileSubmissionDateKey) as? Date else {
-            return true
-        }
-
-        let oneWeek: TimeInterval = 60 * 60 * 24 * 7
-        return now.timeIntervalSince(lastSubmissionDate) >= oneWeek
-    }
-
-    private func systemProfileParameters() -> [FeedParameter] {
-        var parameters: [FeedParameter] = []
-
-        let systemVersion = ProcessInfo.processInfo.operatingSystemVersion
-        let osVersion = "\(systemVersion.majorVersion).\(systemVersion.minorVersion).\(systemVersion.patchVersion)"
-        parameters.append(
-            FeedParameter(
-                key: "osVersion",
-                displayKey: "OS Version",
-                value: osVersion,
-                displayValue: osVersion
-            )
-        )
-
-        if let cpuType = sysctlInt32(named: "hw.cputype") {
-            let visibleCPUType: String
-            switch cpuType {
-            case 7:
-                visibleCPUType = "Intel"
-            case 18:
-                visibleCPUType = "PowerPC"
-            case 12, 16777228:
-                visibleCPUType = "ARM"
-            default:
-                visibleCPUType = "Unknown"
-            }
-
-            parameters.append(
-                FeedParameter(
-                    key: "cputype",
-                    displayKey: "CPU Type",
-                    value: String(cpuType),
-                    displayValue: visibleCPUType
-                )
-            )
-        }
-
-        if let is64Bit = systemProfile64BitCPUValue() {
-            parameters.append(
-                FeedParameter(
-                    key: "cpu64bit",
-                    displayKey: "CPU is 64-Bit?",
-                    value: is64Bit ? "1" : "0",
-                    displayValue: is64Bit ? "Yes" : "No"
-                )
-            )
-        }
-
-        if let cpuSubtype = sysctlInt32(named: "hw.cpusubtype") {
-            parameters.append(
-                FeedParameter(
-                    key: "cpusubtype",
-                    displayKey: "CPU Subtype",
-                    value: String(cpuSubtype),
-                    displayValue: String(cpuSubtype)
-                )
-            )
-        }
-
-        if let model = sysctlString(named: "hw.model"), !model.isEmpty {
-            parameters.append(
-                FeedParameter(
-                    key: "model",
-                    displayKey: "Mac Model",
-                    value: model,
-                    displayValue: model
-                )
-            )
-        }
-
-        if let cpuCount = sysctlInt32(named: "hw.ncpu") {
-            parameters.append(
-                FeedParameter(
-                    key: "ncpu",
-                    displayKey: "Number of CPUs",
-                    value: String(cpuCount),
-                    displayValue: String(cpuCount)
-                )
-            )
-        }
-
-        if let language = UserDefaults.standard.stringArray(forKey: "AppleLanguages")?.first, !language.isEmpty {
-            parameters.append(
-                FeedParameter(
-                    key: "lang",
-                    displayKey: "Preferred Language",
-                    value: language,
-                    displayValue: language
-                )
-            )
-        }
-
-        let appName = legacyApplicationName()
-        parameters.append(
-            FeedParameter(
-                key: "appName",
-                displayKey: "Application Name",
-                value: appName,
-                displayValue: appName
-            )
-        )
-
-        let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-            ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
-            ?? ""
-        if !appVersion.isEmpty {
-            parameters.append(
-                FeedParameter(
-                    key: "appVersion",
-                    displayKey: "Application Version",
-                    value: appVersion,
-                    displayValue: appVersion
-                )
-            )
-        }
-
-        if let cpuFrequencyHz = sysctlUInt64(named: "hw.cpufrequency"), cpuFrequencyHz > 0 {
-            let cpuFrequencyMHz = Int(cpuFrequencyHz / 1_000_000)
-            parameters.append(
-                FeedParameter(
-                    key: "cpuFreqMHz",
-                    displayKey: "CPU Speed (GHz)",
-                    value: String(cpuFrequencyMHz),
-                    displayValue: String(format: "%.1f", Double(cpuFrequencyMHz) / 1000.0)
-                )
-            )
-        }
-
-        let memoryMB = Int(ProcessInfo.processInfo.physicalMemory / 1_048_576)
-        if memoryMB > 0 {
-            parameters.append(
-                FeedParameter(
-                    key: "ramMB",
-                    displayKey: "Memory (MB)",
-                    value: String(memoryMB),
-                    displayValue: String(memoryMB)
-                )
-            )
-        }
-
-        return parameters
-    }
-
-    private func systemProfile64BitCPUValue() -> Bool? {
-        for key in ["hw.cpu64bit_capable", "hw.optional.arm64", "hw.optional.x86_64", "hw.optional.64bitops"] {
-            if let value = sysctlInt32(named: key) {
-                return value == 1
-            }
-        }
-        return nil
-    }
-
-    private func sysctlInt32(named name: String) -> Int32? {
-        var value = Int32()
-        var size = MemoryLayout<Int32>.size
-        let status = sysctlbyname(name, &value, &size, nil, 0)
-        return status == 0 ? value : nil
-    }
-
-    private func sysctlUInt64(named name: String) -> UInt64? {
-        var value = UInt64()
-        var size = MemoryLayout<UInt64>.size
-        let status = sysctlbyname(name, &value, &size, nil, 0)
-        return status == 0 ? value : nil
-    }
-
-    private func sysctlString(named name: String) -> String? {
-        var size = 0
-        guard sysctlbyname(name, nil, &size, nil, 0) == 0, size > 1 else {
-            return nil
-        }
-
-        var buffer = [CChar](repeating: 0, count: size)
-        guard sysctlbyname(name, &buffer, &size, nil, 0) == 0 else {
-            return nil
-        }
-        return String(cString: buffer)
-    }
-
-    private func preferredSecureURL(for url: URL) -> URL {
-        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              components.scheme == "http" else {
-            return url
-        }
-        if let host = components.host?.lowercased(),
-           host == "localhost" || host == "127.0.0.1" || host == "::1" {
-            return url
-        }
-        components.scheme = "https"
-        return components.url ?? url
-    }
-
-    private func compareAppVersions(_ lhs: String, _ rhs: String) -> ComparisonResult {
-        let lhsParts = versionParts(from: lhs)
-        let rhsParts = versionParts(from: rhs)
-        let maxCount = max(lhsParts.count, rhsParts.count)
-
-        for index in 0..<maxCount {
-            let lhsPart = index < lhsParts.count ? lhsParts[index] : .numeric(0)
-            let rhsPart = index < rhsParts.count ? rhsParts[index] : .numeric(0)
-            let comparison = compareVersionPart(lhsPart, rhsPart)
-            if comparison != .orderedSame {
-                return comparison
-            }
-        }
-
-        return .orderedSame
-    }
-
-    private enum VersionPart {
-        case numeric(Int)
-        case text(String)
-    }
-
-    private func versionParts(from version: String) -> [VersionPart] {
-        let scalars = Array(version.unicodeScalars)
-        var parts: [VersionPart] = []
-        var index = 0
-
-        while index < scalars.count {
-            let scalar = scalars[index]
-
-            if CharacterSet.decimalDigits.contains(scalar) {
-                let start = index
-                while index < scalars.count, CharacterSet.decimalDigits.contains(scalars[index]) {
-                    index += 1
-                }
-                let value = Int(String(String.UnicodeScalarView(scalars[start..<index]))) ?? 0
-                parts.append(.numeric(value))
-                continue
-            }
-
-            if CharacterSet.letters.contains(scalar) {
-                let start = index
-                while index < scalars.count, CharacterSet.letters.contains(scalars[index]) {
-                    index += 1
-                }
-                let value = String(String.UnicodeScalarView(scalars[start..<index])).lowercased()
-                parts.append(.text(value))
-                continue
-            }
-
-            index += 1
-        }
-
-        return parts
-    }
-
-    private func compareVersionPart(_ lhs: VersionPart, _ rhs: VersionPart) -> ComparisonResult {
-        switch (lhs, rhs) {
-        case let (.numeric(lhsValue), .numeric(rhsValue)):
-            if lhsValue == rhsValue {
-                return .orderedSame
-            }
-            return lhsValue < rhsValue ? .orderedAscending : .orderedDescending
-        case let (.text(lhsValue), .text(rhsValue)):
-            return lhsValue.compare(rhsValue, options: [.caseInsensitive, .literal])
-        case (.numeric, .text):
-            return .orderedDescending
-        case (.text, .numeric):
-            return .orderedAscending
-        }
-    }
-
-    private func presentUpdateResult(items: [AppcastItem], userInitiated: Bool) {
-        let decision = updateResultPresentationDecision(items: items, userInitiated: userInitiated)
-
-        DispatchQueue.main.async {
-            switch decision {
-            case let .showAvailableUpdateAlert(item):
-                self.showAvailableUpdateAlert(item: item)
-            case let .downloadAutomatically(item, installAutomaticallyAfterDownload):
-                self.handleAvailableUpdateResponse(
-                    .download,
-                    item: item,
-                    installAutomaticallyAfterDownload: installAutomaticallyAfterDownload
-                )
-            case let .showUpToDate(currentVersion):
-                self.showUpToDateAlert(currentVersion: currentVersion)
-            case .noAction:
-                break
-            }
-        }
-    }
-
-    private func updateResultPresentationDecision(
-        items: [AppcastItem],
-        userInitiated: Bool
-    ) -> UpdateResultPresentationDecision {
-        let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-        guard let item = preferredUpdateItem(from: items, currentVersion: currentVersion) else {
-            return userInitiated ? .showUpToDate(currentVersion: currentVersion) : .noAction
-        }
-
-        if shouldAutomaticallyDownloadUpdate(item: item, userInitiated: userInitiated) {
-            return .downloadAutomatically(
-                item: item,
-                installAutomaticallyAfterDownload: shouldAutomaticallyInstallDownloadedUpdate(userInitiated: userInitiated)
-            )
-        }
-
-        return .showAvailableUpdateAlert(item: item)
-    }
-
-    private func presentUpdateCheckFailure(error: Error, userInitiated: Bool) {
-        switch updateCheckFailurePresentationDecision(error: error, userInitiated: userInitiated) {
-        case let .showFailureAlert(error):
-            DispatchQueue.main.async {
-                let alert = self.makeUpdateCheckFailureAlert(error: error)
-                NSApp.activate(ignoringOtherApps: true)
-                alert.runModal()
-            }
-        case .noVisibleFailure:
-            return
-        }
-    }
-
-    private func showAvailableUpdateAlert(item: AppcastItem) {
-#if TESTING
-        if UserDefaults.standard.bool(forKey: "debugBypassUpdateAlertPresentationForTesting") {
-            debugAvailableUpdatePresentationCount += 1
-            return
-        }
-#endif
-        let configuration = makeAvailableUpdateAlert(item: item)
-        let alert = configuration.alert
-        NSApp.activate(ignoringOtherApps: true)
-
-        let response = alert.runModal()
-        setAutomaticallyInstallUpdatesEnabled(configuration.automaticallyInstallCheckbox.state == .on)
-        let resolvedResponse: AvailableUpdateResponse
-        if item.downloadURL != nil && response == .alertFirstButtonReturn {
-            resolvedResponse = .download
-        } else if item.downloadURL != nil && response == .alertSecondButtonReturn {
-            resolvedResponse = .skip
-        } else if item.downloadURL == nil && response == .alertFirstButtonReturn {
-            resolvedResponse = .skip
-        } else {
-            resolvedResponse = .later
-        }
-
-        handleAvailableUpdateResponse(resolvedResponse, item: item)
-    }
-
-    private func makeAvailableUpdateAlert(item: AppcastItem) -> AvailableUpdateAlertConfiguration {
-        let alert = NSAlert()
-        let appName = legacyApplicationName()
-        let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-        alert.messageText = NSLocalizedString("Update Available", comment: "")
-        if currentVersion.isEmpty {
-            alert.informativeText = String(
-                format: NSLocalizedString("%@ is now available.", comment: ""),
-                item.title
-            )
-        } else {
-            alert.informativeText = String(
-                format: NSLocalizedString("%@ %@ is now available--you have %@. Would you like to download it now?", comment: ""),
-                appName,
-                item.version,
-                currentVersion
-            )
-        }
-        let automaticallyInstallCheckbox = makeAutomaticallyInstallUpdatesCheckbox()
-        alert.accessoryView = makeAvailableUpdateAccessory(
-            item: item,
-            currentVersion: currentVersion,
-            releaseNotesURL: item.releaseNotesURL,
-            automaticallyInstallCheckbox: automaticallyInstallCheckbox
-        )
-        if item.downloadURL != nil {
-            alert.addButton(withTitle: NSLocalizedString("Download", comment: ""))
-        }
-        alert.addButton(withTitle: NSLocalizedString("Skip This Version", comment: ""))
-        alert.addButton(withTitle: NSLocalizedString("Later", comment: ""))
-        return AvailableUpdateAlertConfiguration(
-            alert: alert,
-            automaticallyInstallCheckbox: automaticallyInstallCheckbox
-        )
-    }
-
-    private func handleAvailableUpdateResponse(
-        _ response: AvailableUpdateResponse,
-        item: AppcastItem,
-        installAutomaticallyAfterDownload: Bool = false
-    ) {
-        switch response {
-        case .download:
-            clearSkippedVersionIfMatching(item.version)
-            if let downloadURL = item.downloadURL {
-                downloadAndOpenUpdate(
-                    from: downloadURL,
-                    item: item,
-                    installAutomaticallyAfterDownload: installAutomaticallyAfterDownload
-                )
-            }
-        case .skip:
-            saveSkippedVersion(item.version)
-        case .later:
-            break
-        }
-    }
-
-    private func preferredUpdateItem(from items: [AppcastItem], currentVersion: String) -> AppcastItem? {
-        items.first { item in
-            guard currentVersion.isEmpty || compareAppVersions(item.version, currentVersion) == .orderedDescending else {
-                return false
-            }
-
-            guard let skippedVersion = skippedVersion() else {
-                return true
-            }
-
-            return compareAppVersions(item.version, skippedVersion) != .orderedSame
-        }
-    }
-
-    private func skippedVersion() -> String? {
-        guard let value = UserDefaults.standard.string(forKey: CMSkippedUpdateVersionKey)?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-              !value.isEmpty else {
-            return nil
-        }
-        return value
-    }
-
-    private func saveSkippedVersion(_ version: String?) {
-        let defaults = UserDefaults.standard
-        guard let version = version?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !version.isEmpty else {
-            defaults.removeObject(forKey: CMSkippedUpdateVersionKey)
-            return
-        }
-        defaults.set(version, forKey: CMSkippedUpdateVersionKey)
-    }
-
-    private func clearSkippedVersionIfMatching(_ version: String) {
-        guard let skippedVersion = skippedVersion(),
-              compareAppVersions(skippedVersion, version) == .orderedSame else {
-            return
-        }
-        UserDefaults.standard.removeObject(forKey: CMSkippedUpdateVersionKey)
-    }
-
-    private func automaticallyInstallUpdatesEnabled() -> Bool {
-        UserDefaults.standard.bool(forKey: CMAutomaticallyInstallUpdatesKey)
-    }
-
-    private func setAutomaticallyInstallUpdatesEnabled(_ enabled: Bool) {
-        UserDefaults.standard.set(enabled, forKey: CMAutomaticallyInstallUpdatesKey)
-    }
-
-    private func shouldAutomaticallyDownloadUpdate(item: AppcastItem, userInitiated: Bool) -> Bool {
-        !userInitiated && item.downloadURL != nil && automaticallyInstallUpdatesEnabled()
-    }
-
-    private func shouldAutomaticallyInstallDownloadedUpdate(userInitiated: Bool) -> Bool {
-        false
-    }
-
-    private func makeAutomaticallyInstallUpdatesCheckbox() -> NSButton {
-        let checkbox = NSButton(checkboxWithTitle: NSLocalizedString("Automatically download updates in the future", comment: ""), target: nil, action: nil)
-        checkbox.state = automaticallyInstallUpdatesEnabled() ? .on : .off
-        return checkbox
-    }
-
-    private func downloadCompletionPreflightDecision(
-        error: Error?,
-        wasCancelled: Bool
-    ) -> DownloadCompletionPreflightDecision {
-        if wasCancelled {
-            return .ignoreCancellation
-        }
-
-        if let nsError = error as NSError?, nsError.code == NSURLErrorCancelled {
-            return .ignoreCancellation
-        }
-
-        if let error {
-            return .showFailure(error: error)
-        }
-
-        return .continueProcessing
-    }
-
-    private func updateCheckCompletionPreflightDecision(
-        error: Error?,
-        wasCancelled: Bool
-    ) -> UpdateCheckCompletionPreflightDecision {
-        if wasCancelled {
-            return .ignoreCancellation
-        }
-
-        if let nsError = error as NSError?, nsError.code == NSURLErrorCancelled {
-            return .ignoreCancellation
-        }
-
-        if let error {
-            return .showFailure(error: error)
-        }
-
-        return .continueProcessing
-    }
-
-    private func updateCheckFailurePresentationDecision(
-        error: Error,
-        userInitiated: Bool
-    ) -> UpdateCheckFailurePresentationDecision {
-        userInitiated
-            ? .showFailureAlert(error: error)
-            : .noVisibleFailure(error: error)
-    }
-
-    private func makeUpdateAccessoryCard(
-        title: String,
-        detail: String,
-        footnote: String? = nil,
-        width: CGFloat = 560
-    ) -> NSView {
-        let height: CGFloat = footnote == nil ? 72 : 92
-        let container = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: width, height: height))
-        container.material = .menu
-        container.state = .active
-        container.wantsLayer = true
-        container.layer?.cornerRadius = 12
-        container.layer?.masksToBounds = true
-
-        let textWidth = width - 90
-
-        let iconBackground = NSVisualEffectView(frame: NSRect(x: 16, y: footnote == nil ? 16 : 26, width: 40, height: 40))
-        iconBackground.material = .sidebar
-        iconBackground.state = .active
-        iconBackground.wantsLayer = true
-        iconBackground.layer?.cornerRadius = 10
-        iconBackground.layer?.masksToBounds = true
-        container.addSubview(iconBackground)
-
-        let iconView = NSImageView(frame: NSRect(x: 6, y: 6, width: 28, height: 28))
-        iconView.image = NSApp.applicationIconImage
-        iconView.imageScaling = .scaleProportionallyUpOrDown
-        iconBackground.addSubview(iconView)
-
-        let titleLabel = NSTextField(labelWithString: title)
-        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
-        titleLabel.frame = NSRect(x: 70, y: footnote == nil ? 38 : 50, width: textWidth, height: 18)
-        container.addSubview(titleLabel)
-
-        let detailLabel = NSTextField(labelWithString: detail)
-        detailLabel.font = .systemFont(ofSize: 12)
-        detailLabel.textColor = .secondaryLabelColor
-        detailLabel.lineBreakMode = .byTruncatingMiddle
-        detailLabel.frame = NSRect(x: 70, y: footnote == nil ? 18 : 30, width: textWidth, height: 17)
-        container.addSubview(detailLabel)
-
-        if let footnote, !footnote.isEmpty {
-            let footnoteLabel = NSTextField(labelWithString: footnote)
-            footnoteLabel.font = .systemFont(ofSize: 11)
-            footnoteLabel.textColor = .tertiaryLabelColor
-            footnoteLabel.lineBreakMode = .byWordWrapping
-            footnoteLabel.frame = NSRect(x: 70, y: 10, width: textWidth, height: 16)
-            container.addSubview(footnoteLabel)
-        }
-
-        return container
-    }
-
-    private func makeAvailableUpdateAccessory(
-        item: AppcastItem,
-        currentVersion: String,
-        releaseNotesURL: URL?,
-        automaticallyInstallCheckbox: NSButton
-    ) -> NSView {
-        let stackView = NSStackView()
-        stackView.orientation = .vertical
-        stackView.alignment = .leading
-        stackView.spacing = 10
-        stackView.translatesAutoresizingMaskIntoConstraints = false
-
-        let cardTitle = String(
-            format: NSLocalizedString("Version %@ is ready to download", comment: ""),
-            item.version
-        )
-        let cardDetail: String
-        if currentVersion.isEmpty {
-            cardDetail = item.title
-        } else {
-            cardDetail = String(
-                format: NSLocalizedString("Current version: %@  Updated version: %@", comment: ""),
-                currentVersion,
-                item.version
-            )
-        }
-        stackView.addArrangedSubview(
-            makeUpdateAccessoryCard(
-                title: cardTitle,
-                detail: cardDetail,
-                footnote: NSLocalizedString("Review the release notes below, then choose whether to install now, skip this version, or come back later.", comment: "")
-            )
-        )
-
-        if let releaseNotesURL {
-            stackView.addArrangedSubview(makeReleaseNotesPreview(url: releaseNotesURL))
-        }
-
-        automaticallyInstallCheckbox.setContentHuggingPriority(.required, for: .vertical)
-        stackView.addArrangedSubview(automaticallyInstallCheckbox)
-
-        let width: CGFloat = 560
-        let height: CGFloat = releaseNotesURL == nil ? 126 : 518
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: width, height: height))
-        container.addSubview(stackView)
-        NSLayoutConstraint.activate([
-            stackView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            stackView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            stackView.topAnchor.constraint(equalTo: container.topAnchor),
-            stackView.bottomAnchor.constraint(equalTo: container.bottomAnchor)
-        ])
-        return container
-    }
-
-    private func downloadAndOpenUpdate(
-        from url: URL,
-        item: AppcastItem,
-        installAutomaticallyAfterDownload: Bool = false
-    ) {
-        let downloadURL = preferredSecureURL(for: url)
-        let progressController = DownloadProgressController(filename: item.downloadFilename)
-        let task = URLSession.shared.downloadTask(with: downloadURL) { [weak self] location, _, error in
-            guard let self else { return }
-
-            switch self.downloadCompletionPreflightDecision(error: error, wasCancelled: progressController.isCancelled) {
-            case .ignoreCancellation:
-                return
-            case let .showFailure(error):
-                DispatchQueue.main.async {
-                    progressController.close()
-                    self.showDownloadFailure(error: error)
-                }
-                return
-            case .continueProcessing:
-                break
-            }
-
-            guard let location else {
-                DispatchQueue.main.async {
-                    progressController.close()
-                    self.showDownloadFailure(
-                        error: NSError(
-                            domain: "ClipMenuUpdate",
-                            code: 4,
-                            userInfo: [NSLocalizedDescriptionKey: NSLocalizedString("The update download did not return a file.", comment: "")]
-                        )
-                    )
-                }
-                return
-            }
-
-            do {
-                self.debugUpdateFlow("download completion verifying \(item.downloadFilename)")
-                try self.verifyDownloadedUpdate(at: location, item: item)
-                self.debugUpdateFlow("download completion verified \(item.downloadFilename)")
-                let destinationURL = try self.downloadDestinationURL(filename: item.downloadFilename)
-                try FileManager.default.moveItem(at: location, to: destinationURL)
-                DispatchQueue.main.async {
-                    progressController.close()
-                    self.presentReadyToInstallUpdate(
-                        at: destinationURL,
-                        item: item,
-                        installAutomatically: installAutomaticallyAfterDownload
-                    )
-                }
-            } catch {
-                self.debugUpdateFlow("download completion failed \(error.localizedDescription)")
-                DispatchQueue.main.async {
-                    progressController.close()
-                    self.showDownloadFailure(error: error)
-                }
-            }
-        }
-
-        progressController.task = task
-        progressController.show()
-        task.resume()
-    }
-
-    private func verifyDownloadedUpdate(at url: URL, item: AppcastItem) throws {
-        guard let publicKeyURL = dsaPublicKeyURL() else {
-            debugUpdateFlow("verifyDownloadedUpdate skipped no public key")
-            return
-        }
-
-        guard let signature = item.dsaSignature?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !signature.isEmpty,
-              let signatureData = Data(base64Encoded: signature) else {
-            debugUpdateFlow("verifyDownloadedUpdate invalid signature data")
-            throw NSError(
-                domain: "ClipMenuUpdate",
-                code: 6,
-                userInfo: [NSLocalizedDescriptionKey: NSLocalizedString("The update was not signed with a valid DSA signature.", comment: "")]
-            )
-        }
-
-        let signatureURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("clipmenu-update-signature-\(UUID().uuidString).der")
-        try signatureData.write(to: signatureURL, options: .atomic)
-        defer { try? FileManager.default.removeItem(at: signatureURL) }
-
-        let dss1Passed = runOpenSSLVerification(algorithm: "dss1", publicKeyURL: publicKeyURL, signatureURL: signatureURL, fileURL: url)
-        let sha1Passed = dss1Passed ? false : runOpenSSLVerification(algorithm: "sha1", publicKeyURL: publicKeyURL, signatureURL: signatureURL, fileURL: url)
-        debugUpdateFlow("verifyDownloadedUpdate dss1=\(dss1Passed) sha1=\(sha1Passed)")
-        if dss1Passed || sha1Passed {
-            return
-        }
-
-        throw NSError(
-            domain: "ClipMenuUpdate",
-            code: 7,
-            userInfo: [NSLocalizedDescriptionKey: NSLocalizedString("The update signature could not be verified.", comment: "")]
-        )
-    }
-
-    private func dsaPublicKeyURL() -> URL? {
-#if DEBUG
-        if let override = UserDefaults.standard.string(forKey: "debugUpdateDSAPublicKeyPath"),
-           !override.isEmpty {
-            return URL(fileURLWithPath: override)
-        }
-#endif
-        let keyFile = Bundle.main.object(forInfoDictionaryKey: "SUPublicDSAKeyFile") as? String ?? "dsa_pub.pem"
-        let keyName = (keyFile as NSString).deletingPathExtension
-        let keyExtension = (keyFile as NSString).pathExtension
-        if keyExtension.isEmpty {
-            return Bundle.main.url(forResource: keyFile, withExtension: nil)
-        }
-        return Bundle.main.url(forResource: keyName, withExtension: keyExtension)
-    }
-
-    private func runOpenSSLVerification(algorithm: String, publicKeyURL: URL, signatureURL: URL, fileURL: URL) -> Bool {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/openssl")
-        process.arguments = [
-            "dgst",
-            "-\(algorithm)",
-            "-verify",
-            publicKeyURL.path,
-            "-signature",
-            signatureURL.path,
-            fileURL.path
-        ]
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-            return process.terminationStatus == 0
-        } catch {
-            NSLog("ClipMenu failed to run openssl for update verification: \(error.localizedDescription)")
-            return false
-        }
-    }
-
-    private func debugUpdateFlow(_ message: String) {
-#if DEBUG
-        guard UserDefaults.standard.bool(forKey: CMDebugPasteFlowKey) else { return }
-        let line = "[ClipMenu update] \(message)\n"
-        let url = URL(fileURLWithPath: "/tmp/clipmenu-update-debug.log")
-        let data = Data(line.utf8)
-        if FileManager.default.fileExists(atPath: url.path),
-           let handle = try? FileHandle(forWritingTo: url) {
-            defer { try? handle.close() }
-            _ = try? handle.seekToEnd()
-            try? handle.write(contentsOf: data)
-        } else {
-            try? data.write(to: url)
-        }
-#endif
-    }
-
-    private func downloadDestinationURL(filename: String) throws -> URL {
-        let downloadsDirectory = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-        var baseName = (filename as NSString).deletingPathExtension
-        if baseName.isEmpty {
-            baseName = "ClipMenu"
-        }
-        let pathExtension = (filename as NSString).pathExtension
-
-        for index in 0..<1000 {
-            let candidateName: String
-            if index == 0 {
-                candidateName = filename
-            } else if pathExtension.isEmpty {
-                candidateName = "\(baseName) \(index)"
-            } else {
-                candidateName = "\(baseName) \(index).\(pathExtension)"
-            }
-
-            let candidateURL = downloadsDirectory.appendingPathComponent(candidateName)
-            if !FileManager.default.fileExists(atPath: candidateURL.path) {
-                return candidateURL
-            }
-        }
-
-        throw NSError(
-            domain: "ClipMenuUpdate",
-            code: 5,
-            userInfo: [NSLocalizedDescriptionKey: NSLocalizedString("Could not create a unique file in Downloads.", comment: "")]
-        )
-    }
-
-    private func showDownloadFailure(error: Error) {
-#if TESTING
-        debugDownloadFailurePresentationCount += 1
+        configureFromDefaults()
+#if TESTING || CLIPMENU_TEST_HOST
+        return
 #else
-        let alert = makeDownloadFailureAlert(error: error)
-        NSApp.activate(ignoringOtherApps: true)
-        alert.runModal()
-#endif
-    }
-
-    private func showUpToDateAlert(currentVersion: String) {
-#if TESTING
-        debugUpToDatePresentationCount += 1
-#else
-        let alert = makeUpToDateAlert(currentVersion: currentVersion)
-        NSApp.activate(ignoringOtherApps: true)
-        alert.runModal()
-#endif
-    }
-
-    private func presentReadyToInstallUpdate(
-        at destinationURL: URL,
-        item: AppcastItem,
-        installAutomatically: Bool = false
-    ) {
-        switch readyToInstallPresentationDecision(item: item, installAutomatically: installAutomatically) {
-        case let .showReadyToInstallAlert(item):
-            let alert = makeReadyToInstallAlert(item: item)
+        if let configurationError {
+            guard userInitiated else { return }
+            let alert = NSAlert()
+            alert.messageText = NSLocalizedString("Software Updates Unavailable", comment: "Updater configuration error")
+            alert.informativeText = configurationError
+            alert.addButton(withTitle: NSLocalizedString("OK", comment: ""))
             NSApp.activate(ignoringOtherApps: true)
-            let response = alert.runModal()
-            let resolvedResponse: ReadyToInstallResponse = response == .alertFirstButtonReturn
-                ? .openDownload
-                : .later
-            handleReadyToInstallResponse(resolvedResponse, destinationURL: destinationURL)
+            alert.runModal()
+            return
         }
-    }
-
-    private func readyToInstallPresentationDecision(
-        item: AppcastItem,
-        installAutomatically: Bool
-    ) -> ReadyToInstallPresentationDecision {
-        .showReadyToInstallAlert(item: item)
-    }
-
-    private func makeReadyToInstallAlert(item: AppcastItem) -> NSAlert {
-        let alert = NSAlert()
-        let appName = legacyApplicationName()
-        alert.messageText = NSLocalizedString("Download Complete", comment: "")
-        alert.informativeText = String(
-            format: NSLocalizedString("%1$@ %2$@ has been downloaded. Would you like to open the download now?", comment: ""),
-            appName,
-            item.version
-        )
-        alert.accessoryView = makeUpdateAccessoryCard(
-            title: String(format: NSLocalizedString("%@ %@ has finished downloading", comment: ""), appName, item.version),
-            detail: NSLocalizedString("The verified update is in your Downloads folder.", comment: ""),
-            footnote: NSLocalizedString("Open the download to continue the update manually, or choose Later to leave it in Downloads.", comment: "")
-        )
-        alert.addButton(withTitle: NSLocalizedString("Open Download", comment: ""))
-        alert.addButton(withTitle: NSLocalizedString("Later", comment: ""))
-        return alert
-    }
-
-    private func makeUpdateCheckFailureAlert(error: Error) -> NSAlert {
-        let alert = NSAlert()
-        alert.messageText = NSLocalizedString("Failed to Check for Updates", comment: "")
-        alert.informativeText = error.localizedDescription
-        alert.accessoryView = makeUpdateAccessoryCard(
-            title: NSLocalizedString("The update feed could not be loaded", comment: ""),
-            detail: error.localizedDescription,
-            footnote: NSLocalizedString("Check your connection or feed configuration, then try again.", comment: "")
-        )
-        alert.addButton(withTitle: NSLocalizedString("OK", comment: ""))
-        return alert
-    }
-
-    private func makeDownloadFailureAlert(error: Error) -> NSAlert {
-        let alert = NSAlert()
-        alert.messageText = NSLocalizedString("Failed to Download Update", comment: "")
-        alert.informativeText = error.localizedDescription
-        alert.accessoryView = makeUpdateAccessoryCard(
-            title: NSLocalizedString("The update package could not be downloaded", comment: ""),
-            detail: error.localizedDescription,
-            footnote: NSLocalizedString("ClipMenu did not modify the installed app. Try the download again when the connection is stable.", comment: "")
-        )
-        alert.addButton(withTitle: NSLocalizedString("OK", comment: ""))
-        return alert
-    }
-
-    private func makeUpToDateAlert(currentVersion: String) -> NSAlert {
-        let alert = NSAlert()
-        let appName = legacyApplicationName()
-        alert.messageText = NSLocalizedString("You're up to date!", comment: "")
-        alert.informativeText = currentVersion.isEmpty
-            ? NSLocalizedString("ClipMenu is up to date.", comment: "")
-            : String(format: NSLocalizedString("You already have the newest version of %@.", comment: ""), appName)
-        let detail = currentVersion.isEmpty
-            ? NSLocalizedString("No newer version is currently available from the configured update feed.", comment: "")
-            : String(format: NSLocalizedString("Current version: %@", comment: ""), currentVersion)
-        alert.accessoryView = makeUpdateAccessoryCard(
-            title: String(format: NSLocalizedString("%@ is current", comment: ""), appName),
-            detail: detail,
-            footnote: NSLocalizedString("You can check again later if a newer release is published.", comment: "")
-        )
-        alert.addButton(withTitle: NSLocalizedString("OK", comment: ""))
-        return alert
-    }
-
-    private func handleReadyToInstallResponse(
-        _ response: ReadyToInstallResponse,
-        destinationURL: URL,
-        openHandler: (URL) -> Void = { NSWorkspace.shared.open($0) }
-    ) {
-        switch response {
-        case .openDownload:
-            openHandler(destinationURL)
-        case .later:
-            break
+        guard let updater = updaterController?.updater else { return }
+        if userInitiated {
+            guard updater.canCheckForUpdates else { return }
+            updater.checkForUpdates()
+        } else if updater.automaticallyChecksForUpdates {
+            updater.resetUpdateCycleAfterShortDelay()
         }
-    }
-
-    private func makeReleaseNotesPreview(url: URL) -> NSView {
-        let secureURL = preferredSecureURL(for: url)
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 560, height: 382))
-
-        let label = NSTextField(labelWithString: NSLocalizedString("Release Notes", comment: ""))
-        label.font = .systemFont(ofSize: 12, weight: .semibold)
-        label.textColor = .secondaryLabelColor
-        label.frame = NSRect(x: 0, y: 362, width: 280, height: 16)
-        container.addSubview(label)
-
-        let openButton = NSButton(
-            title: NSLocalizedString("Open in Browser", comment: ""),
-            target: self,
-            action: #selector(openReleaseNotesFromButton(_:))
-        )
-        openButton.isBordered = false
-        openButton.bezelStyle = .inline
-        openButton.font = .systemFont(ofSize: 12)
-        openButton.frame = NSRect(x: 426, y: 356, width: 134, height: 24)
-        openButton.identifier = NSUserInterfaceItemIdentifier(secureURL.absoluteString)
-        container.addSubview(openButton)
-
-        let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 560, height: 350))
-        webView.setValue(false, forKey: "drawsBackground")
-        webView.load(URLRequest(url: secureURL))
-        container.addSubview(webView)
-
-        return container
-    }
-
-    @objc private func openReleaseNotesFromButton(_ sender: NSButton) {
-        guard let identifier = sender.identifier?.rawValue,
-              let url = URL(string: identifier) else { return }
-        NSWorkspace.shared.open(url)
-    }
-
-    #if DEBUG || TESTING
-    func debugUpdateSkipBehaviorReport() -> [String: Any] {
-        let defaults = UserDefaults.standard
-        let originalSkippedVersionObject = defaults.object(forKey: CMSkippedUpdateVersionKey)
-        defer {
-            if let originalSkippedVersionObject {
-                defaults.set(originalSkippedVersionObject, forKey: CMSkippedUpdateVersionKey)
-            } else {
-                defaults.removeObject(forKey: CMSkippedUpdateVersionKey)
-            }
-        }
-
-        let items = [
-            AppcastItem(
-                title: "Version 9.9.9",
-                version: "9.9.9",
-                releaseNotesURL: URL(string: "https://example.com/clipmenu/release-notes"),
-                downloadURL: URL(string: "https://example.com/clipmenu/download.zip"),
-                dsaSignature: nil
-            ),
-            AppcastItem(
-                title: "Version 9.9.8",
-                version: "9.9.8",
-                releaseNotesURL: nil,
-                downloadURL: nil,
-                dsaSignature: nil
-            )
-        ]
-
-        saveSkippedVersion(nil)
-        let initialPreferredVersion = preferredUpdateItem(from: items, currentVersion: "0.4.3")?.version ?? ""
-
-        handleAvailableUpdateResponse(.skip, item: items[0])
-        let storedSkippedVersionAfterSkip = skippedVersion() ?? ""
-        let preferredVersionAfterSkip = preferredUpdateItem(from: items, currentVersion: "0.4.3")?.version ?? ""
-
-        saveSkippedVersion("9.9.8")
-        let newerVersionStillPreferred = preferredUpdateItem(from: items, currentVersion: "0.4.3")?.version ?? ""
-
-        saveSkippedVersion("9.9.9")
-        clearSkippedVersionIfMatching("9.9.9")
-        let skippedVersionAfterClear = skippedVersion() ?? ""
-
-        let expectedState: [String: String] = [
-            "initialPreferredVersion": "9.9.9",
-            "storedSkippedVersionAfterSkip": "9.9.9",
-            "preferredVersionAfterSkip": "9.9.8",
-            "newerVersionStillPreferredWhenOlderVersionSkipped": "9.9.9",
-            "skippedVersionAfterClear": ""
-        ]
-        let actualState: [String: String] = [
-            "initialPreferredVersion": initialPreferredVersion,
-            "storedSkippedVersionAfterSkip": storedSkippedVersionAfterSkip,
-            "preferredVersionAfterSkip": preferredVersionAfterSkip,
-            "newerVersionStillPreferredWhenOlderVersionSkipped": newerVersionStillPreferred,
-            "skippedVersionAfterClear": skippedVersionAfterClear
-        ]
-        let matchesExpected = (actualState as NSDictionary) == (expectedState as NSDictionary)
-
-        return [
-            "actualState": actualState,
-            "expectedState": expectedState,
-            "initialPreferredVersion": initialPreferredVersion,
-            "storedSkippedVersionAfterSkip": storedSkippedVersionAfterSkip,
-            "preferredVersionAfterSkip": preferredVersionAfterSkip,
-            "newerVersionStillPreferredWhenOlderVersionSkipped": newerVersionStillPreferred,
-            "skippedVersionAfterClear": skippedVersionAfterClear,
-            "skipStoredExpectedVersion": storedSkippedVersionAfterSkip == "9.9.9",
-            "skipSuppressesMatchingVersion": preferredVersionAfterSkip == "9.9.8",
-            "olderSkippedVersionDoesNotSuppressNewerUpdate": newerVersionStillPreferred == "9.9.9",
-            "downloadClearsMatchingSkippedVersion": skippedVersionAfterClear.isEmpty,
-            "matchesExpected": matchesExpected
-        ]
-    }
-
-    func debugCheckingForUpdatesReport() -> [String: Any] {
-        let controller = UpdateCheckProgressController()
-        controller.show()
-        let defaults = UserDefaults.standard
-        let persistentDefaults = Bundle.main.bundleIdentifier.flatMap { defaults.persistentDomain(forName: $0) } ?? [:]
-        let expectedWindowTitle = NSLocalizedString("Checking for updates...", comment: "")
-        let expectedContentTitle = NSLocalizedString("Checking for updates...", comment: "")
-        let expectedContentDetail = NSLocalizedString("ClipMenu is checking the current update feed.", comment: "")
-        let expectedCancelButtonTitle = NSLocalizedString("Cancel", comment: "")
-        let expectedWindowState: [String: Bool] = [
-            "hasIndeterminateProgressIndicator": true,
-            "isVisibleWhileShown": true,
-            "levelIsFloating": true,
-            "styleMaskContainsTitled": true
-        ]
-        let actualWindowState: [String: Bool] = [
-            "hasIndeterminateProgressIndicator": controller.progressIndicator.isIndeterminate,
-            "isVisibleWhileShown": controller.panel.isVisible,
-            "levelIsFloating": controller.panel.level == .floating,
-            "styleMaskContainsTitled": controller.panel.styleMask.contains(.titled)
-        ]
-        let expectedPersistentDefaultsState: [String: Bool] = [
-            "effectiveAutomaticChecks": defaults.bool(forKey: CMEnableAutomaticCheckKey),
-            "persistentAutomaticChecks": (persistentDefaults[CMEnableAutomaticCheckKey] as? Bool) ?? false,
-            "persistentLegacyAutomaticChecks": (persistentDefaults[CMLegacyAutomaticChecksEnabledKey] as? Bool) ?? false,
-            "persistentLegacyOldAutomaticChecks": (persistentDefaults[CMLegacyAutomaticChecksEnabledOldKey] as? Bool) ?? false
-        ]
-        let actualPersistentDefaultsState = expectedPersistentDefaultsState
-        let actualState: [String: Any] = [
-            "windowTitle": controller.panel.title,
-            "contentTitle": controller.titleLabel.stringValue,
-            "contentDetail": controller.detailLabel.stringValue,
-            "cancelButtonTitle": controller.cancelButton.title,
-            "windowState": actualWindowState,
-            "persistentDefaultsState": actualPersistentDefaultsState
-        ]
-        let expectedState: [String: Any] = [
-            "windowTitle": expectedWindowTitle,
-            "contentTitle": expectedContentTitle,
-            "contentDetail": expectedContentDetail,
-            "cancelButtonTitle": expectedCancelButtonTitle,
-            "windowState": expectedWindowState,
-            "persistentDefaultsState": expectedPersistentDefaultsState
-        ]
-        let matchesExpected = (actualState as NSDictionary).isEqual(to: expectedState)
-
-        let report: [String: Any] = [
-            "windowTitle": controller.panel.title,
-            "expectedWindowTitle": expectedWindowTitle,
-            "contentTitle": controller.titleLabel.stringValue,
-            "expectedContentTitle": expectedContentTitle,
-            "contentDetail": controller.detailLabel.stringValue,
-            "expectedContentDetail": expectedContentDetail,
-            "cancelButtonTitle": controller.cancelButton.title,
-            "expectedCancelButtonTitle": expectedCancelButtonTitle,
-            "windowState": actualWindowState,
-            "expectedWindowState": expectedWindowState,
-            "hasProgressIndicator": controller.progressIndicator.isIndeterminate,
-            "isVisibleWhileShown": controller.panel.isVisible,
-            "levelIsFloating": controller.panel.level == .floating,
-            "styleMaskContainsTitled": controller.panel.styleMask.contains(.titled),
-            "effectiveAutomaticChecks": defaults.bool(forKey: CMEnableAutomaticCheckKey),
-            "persistentAutomaticChecks": persistentDefaults[CMEnableAutomaticCheckKey] as Any,
-            "persistentLegacyAutomaticChecks": persistentDefaults[CMLegacyAutomaticChecksEnabledKey] as Any,
-            "persistentLegacyOldAutomaticChecks": persistentDefaults[CMLegacyAutomaticChecksEnabledOldKey] as Any,
-            "persistentDefaultsState": actualPersistentDefaultsState,
-            "expectedPersistentDefaultsState": expectedPersistentDefaultsState,
-            "state": actualState,
-            "expectedState": expectedState,
-            "matchesExpected": matchesExpected
-        ]
-        controller.close()
-        return report
-    }
-
-    func debugUpdatePermissionPromptReport() -> [String: Any] {
-        guard Bundle.main.bundleIdentifier != nil else {
-            return ["error": "missing bundle identifier", "matchesExpected": false]
-        }
-        guard let appController = NSApp.delegate as? AppController else {
-            return ["error": "missing app controller", "matchesExpected": false]
-        }
-
-        let appName = legacyApplicationName()
-        let prompt = appController.makeUpdatePermissionPrompt()
-        let expectedMessageText = appController.localizedUpdatePermissionPromptMessageText()
-        let expectedInformativeText = appController.localizedUpdatePermissionPromptInformativeText(appName: appName)
-        let expectedAcceptTitle = appController.localizedUpdatePermissionPromptAcceptTitle()
-        let expectedDeclineTitle = appController.localizedUpdatePermissionPromptDeclineTitle()
-        let offersAnonymousProfileOption = appController.shouldOfferAnonymousSystemProfile()
-        let profileCheckbox = prompt.accessoryView?.subviews.compactMap { $0 as? NSButton }.first
-        let accessoryTextValues: [String] = {
-            guard let accessoryView = prompt.accessoryView else { return [] }
-            var values: [String] = []
-            func collect(from view: NSView) {
-                if let textField = view as? NSTextField {
-                    let value = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !value.isEmpty {
-                        values.append(value)
-                    }
-                }
-                for subview in view.subviews {
-                    collect(from: subview)
-                }
-            }
-            collect(from: accessoryView)
-            return Array(NSOrderedSet(array: values)) as? [String] ?? values
-        }()
-        let freshLaunchDisposition = AppController.updatePermissionPromptDisposition(persistentDefaults: [:])
-        let freshLaunchShouldPrompt: Bool
-        let freshLaunchMarksHasLaunchedBeforeWithoutPrompt: Bool
-        switch freshLaunchDisposition {
-        case .skip:
-            freshLaunchShouldPrompt = false
-            freshLaunchMarksHasLaunchedBeforeWithoutPrompt = false
-        case .markFirstLaunchAndSkip:
-            freshLaunchShouldPrompt = false
-            freshLaunchMarksHasLaunchedBeforeWithoutPrompt = true
-        case .prompt:
-            freshLaunchShouldPrompt = true
-            freshLaunchMarksHasLaunchedBeforeWithoutPrompt = false
-        }
-
-        let secondLaunchDisposition = AppController.updatePermissionPromptDisposition(
-            persistentDefaults: [CMLegacyHasLaunchedBeforeKey: true]
-        )
-        let secondLaunchShouldPrompt: Bool
-        switch secondLaunchDisposition {
-        case .prompt:
-            secondLaunchShouldPrompt = true
-        case .skip, .markFirstLaunchAndSkip:
-            secondLaunchShouldPrompt = false
-        }
-
-        let declinedPersistentDefaults: [String: Any] = [
-            CMLegacyHasLaunchedBeforeKey: true,
-            CMEnableAutomaticCheckKey: false,
-            CMLegacyAutomaticChecksEnabledKey: false,
-            CMLegacyAllowsAutomaticUpdatesKey: false,
-            CMLegacySendProfileInfoKey: false
-        ]
-        let shouldPromptAfterDecline = AppController.updatePermissionPromptDisposition(
-            persistentDefaults: declinedPersistentDefaults
-        ) == .prompt
-        let declinedAutomaticChecks = declinedPersistentDefaults[CMEnableAutomaticCheckKey] as? Bool ?? false
-        let declinedLegacyAutomaticChecks = declinedPersistentDefaults[CMLegacyAutomaticChecksEnabledKey] as? Bool ?? false
-        let declinedLegacyAllowsAutomaticUpdates = declinedPersistentDefaults[CMLegacyAllowsAutomaticUpdatesKey] as? Bool ?? false
-        let declinedHasLaunchedBefore = declinedPersistentDefaults[CMLegacyHasLaunchedBeforeKey] as? Bool ?? false
-        let declinedSendProfileInfo = declinedPersistentDefaults[CMLegacySendProfileInfoKey] as? Bool ?? false
-        let declinedEnableSystemProfilingObject = declinedPersistentDefaults[CMLegacyEnableSystemProfilingKey]
-        let expectedDeclinedPersistentDefaults: [String: Any] = [
-            CMLegacyHasLaunchedBeforeKey: true,
-            CMEnableAutomaticCheckKey: false,
-            CMLegacyAutomaticChecksEnabledKey: false,
-            CMLegacyAllowsAutomaticUpdatesKey: false,
-            CMLegacySendProfileInfoKey: false
-        ]
-
-        let acceptedPersistentDefaults: [String: Any] = [
-            CMLegacyHasLaunchedBeforeKey: true,
-            CMEnableAutomaticCheckKey: true,
-            CMLegacyAutomaticChecksEnabledKey: true,
-            CMLegacyAllowsAutomaticUpdatesKey: true,
-            CMLegacySendProfileInfoKey: false
-        ]
-        let acceptedAutomaticChecks = acceptedPersistentDefaults[CMEnableAutomaticCheckKey] as? Bool ?? false
-        let acceptedLegacyAutomaticChecks = acceptedPersistentDefaults[CMLegacyAutomaticChecksEnabledKey] as? Bool ?? false
-        let acceptedLegacyAllowsAutomaticUpdates = acceptedPersistentDefaults[CMLegacyAllowsAutomaticUpdatesKey] as? Bool ?? false
-        let acceptedHasLaunchedBefore = acceptedPersistentDefaults[CMLegacyHasLaunchedBeforeKey] as? Bool ?? false
-        let acceptedSendProfileInfo = acceptedPersistentDefaults[CMLegacySendProfileInfoKey] as? Bool ?? false
-        let acceptedEnableSystemProfilingObject = acceptedPersistentDefaults[CMLegacyEnableSystemProfilingKey]
-        let expectedAcceptedPersistentDefaults: [String: Any] = [
-            CMLegacyHasLaunchedBeforeKey: true,
-            CMEnableAutomaticCheckKey: true,
-            CMLegacyAutomaticChecksEnabledKey: true,
-            CMLegacyAllowsAutomaticUpdatesKey: true,
-            CMLegacySendProfileInfoKey: false
-        ]
-        let expectedButtonTitles = [expectedAcceptTitle, expectedDeclineTitle]
-        let expectedAccessoryTextValues: [String] = {
-            var values = [
-                CMLocalizedModernString(
-                    "Automatic Update Checks",
-                    japanese: "自動アップデート確認"
-                ),
-                CMLocalizedModernString(
-                    "Keep ClipMenu ready to look for new versions after launch while manual checks stay available anytime.",
-                    japanese: "起動後に新しいバージョンを確認しやすくしつつ、手動確認もいつでも使えるようにします。"
-                )
-            ]
-            if offersAnonymousProfileOption {
-                values.append(appController.localizedAnonymousSystemProfileDescription())
-            }
-            return values
-        }()
-        let actualPromptState: [String: Any] = [
-            "hasAccessoryView": prompt.accessoryView != nil,
-            "profileCheckboxTitle": profileCheckbox?.title ?? "",
-            "profileCheckboxDefaultState": profileCheckbox?.state == .on,
-            "accessoryTextValues": accessoryTextValues,
-            "offersAnonymousProfileOption": offersAnonymousProfileOption,
-            "freshLaunchShouldPrompt": freshLaunchShouldPrompt,
-            "freshLaunchMarksHasLaunchedBeforeWithoutPrompt": freshLaunchMarksHasLaunchedBeforeWithoutPrompt,
-            "secondLaunchShouldPrompt": secondLaunchShouldPrompt,
-            "shouldPromptAfterDecline": shouldPromptAfterDecline,
-            "declinedEnableSystemProfilingKeyPresent": declinedEnableSystemProfilingObject != nil,
-            "acceptedEnableSystemProfilingKeyPresent": acceptedEnableSystemProfilingObject != nil
-        ]
-        let expectedPromptState: [String: Any] = [
-            "hasAccessoryView": true,
-            "profileCheckboxTitle": offersAnonymousProfileOption ? appController.localizedAnonymousSystemProfileTitle() : "",
-            "profileCheckboxDefaultState": offersAnonymousProfileOption ? appController.defaultAnonymousSystemProfileEnabled() : false,
-            "accessoryTextValues": expectedAccessoryTextValues,
-            "offersAnonymousProfileOption": offersAnonymousProfileOption,
-            "freshLaunchShouldPrompt": false,
-            "freshLaunchMarksHasLaunchedBeforeWithoutPrompt": true,
-            "secondLaunchShouldPrompt": true,
-            "shouldPromptAfterDecline": false,
-            "declinedEnableSystemProfilingKeyPresent": false,
-            "acceptedEnableSystemProfilingKeyPresent": false
-        ]
-        let actualDeclinedState: [String: Bool] = [
-            "automaticChecks": declinedAutomaticChecks,
-            "legacyAutomaticChecks": declinedLegacyAutomaticChecks,
-            "legacyAllowsAutomaticUpdates": declinedLegacyAllowsAutomaticUpdates,
-            "hasLaunchedBefore": declinedHasLaunchedBefore,
-            "sendProfileInfo": declinedSendProfileInfo
-        ]
-        let expectedDeclinedState: [String: Bool] = [
-            "automaticChecks": false,
-            "legacyAutomaticChecks": false,
-            "legacyAllowsAutomaticUpdates": false,
-            "hasLaunchedBefore": true,
-            "sendProfileInfo": false
-        ]
-        let actualAcceptedState: [String: Bool] = [
-            "automaticChecks": acceptedAutomaticChecks,
-            "legacyAutomaticChecks": acceptedLegacyAutomaticChecks,
-            "legacyAllowsAutomaticUpdates": acceptedLegacyAllowsAutomaticUpdates,
-            "hasLaunchedBefore": acceptedHasLaunchedBefore,
-            "sendProfileInfo": acceptedSendProfileInfo
-        ]
-        let expectedAcceptedState: [String: Bool] = [
-            "automaticChecks": true,
-            "legacyAutomaticChecks": true,
-            "legacyAllowsAutomaticUpdates": true,
-            "hasLaunchedBefore": true,
-            "sendProfileInfo": false
-        ]
-        let actualState: [String: Any] = [
-            "messageText": prompt.messageText,
-            "informativeText": prompt.informativeText,
-            "buttonTitles": prompt.buttons.map { $0.title },
-            "promptState": actualPromptState,
-            "declinedPersistentDefaults": declinedPersistentDefaults,
-            "declinedState": actualDeclinedState,
-            "acceptedPersistentDefaults": acceptedPersistentDefaults,
-            "acceptedState": actualAcceptedState
-        ]
-        let expectedState: [String: Any] = [
-            "messageText": expectedMessageText,
-            "informativeText": expectedInformativeText,
-            "buttonTitles": expectedButtonTitles,
-            "promptState": expectedPromptState,
-            "declinedPersistentDefaults": expectedDeclinedPersistentDefaults,
-            "declinedState": expectedDeclinedState,
-            "acceptedPersistentDefaults": expectedAcceptedPersistentDefaults,
-            "acceptedState": expectedAcceptedState
-        ]
-        let matchesExpected = NSDictionary(dictionary: actualState).isEqual(to: expectedState)
-
-        return [
-            "messageText": prompt.messageText,
-            "informativeText": prompt.informativeText,
-            "buttonTitles": prompt.buttons.map { $0.title },
-            "expectedButtonTitles": expectedButtonTitles,
-            "state": actualState,
-            "expectedState": expectedState,
-            "promptState": actualPromptState,
-            "expectedPromptState": expectedPromptState,
-            "hasAccessoryView": prompt.accessoryView != nil,
-            "profileCheckboxTitle": profileCheckbox?.title ?? "",
-            "profileCheckboxDefaultState": profileCheckbox?.state == .on,
-            "accessoryTextValues": accessoryTextValues,
-            "offersAnonymousProfileOption": offersAnonymousProfileOption,
-            "freshLaunchShouldPrompt": freshLaunchShouldPrompt,
-            "freshLaunchMarksHasLaunchedBeforeWithoutPrompt": freshLaunchMarksHasLaunchedBeforeWithoutPrompt,
-            "secondLaunchShouldPrompt": secondLaunchShouldPrompt,
-            "shouldPromptAfterDecline": shouldPromptAfterDecline,
-            "declinedPersistentDefaults": declinedPersistentDefaults,
-            "expectedDeclinedPersistentDefaults": expectedDeclinedPersistentDefaults,
-            "declinedState": actualDeclinedState,
-            "expectedDeclinedState": expectedDeclinedState,
-            "declinedAutomaticChecks": declinedAutomaticChecks,
-            "declinedLegacyAutomaticChecks": declinedLegacyAutomaticChecks,
-            "declinedLegacyAllowsAutomaticUpdates": declinedLegacyAllowsAutomaticUpdates,
-            "declinedHasLaunchedBefore": declinedHasLaunchedBefore,
-            "declinedSendProfileInfo": declinedSendProfileInfo,
-            "declinedEnableSystemProfilingKeyPresent": declinedEnableSystemProfilingObject != nil,
-            "acceptedPersistentDefaults": acceptedPersistentDefaults,
-            "expectedAcceptedPersistentDefaults": expectedAcceptedPersistentDefaults,
-            "acceptedState": actualAcceptedState,
-            "expectedAcceptedState": expectedAcceptedState,
-            "acceptedAutomaticChecks": acceptedAutomaticChecks,
-            "acceptedLegacyAutomaticChecks": acceptedLegacyAutomaticChecks,
-            "acceptedLegacyAllowsAutomaticUpdates": acceptedLegacyAllowsAutomaticUpdates,
-            "acceptedHasLaunchedBefore": acceptedHasLaunchedBefore,
-            "acceptedSendProfileInfo": acceptedSendProfileInfo,
-            "acceptedEnableSystemProfilingKeyPresent": acceptedEnableSystemProfilingObject != nil,
-            "matchesExpected": matchesExpected
-        ]
-    }
-
-    func debugReadyToInstallReport() -> [String: Any] {
-        let temporaryFileURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("clipmenu-ready-install-\(UUID().uuidString).txt")
-        try? "ready".write(to: temporaryFileURL, atomically: true, encoding: .utf8)
-        defer { try? FileManager.default.removeItem(at: temporaryFileURL) }
-
-        let item = AppcastItem(
-            title: "Version 9.9.9",
-            version: "9.9.9",
-            releaseNotesURL: nil,
-            downloadURL: URL(string: "https://example.com/clipmenu/download.zip"),
-            dsaSignature: nil
-        )
-        let alert = makeReadyToInstallAlert(item: item)
-        let buttonTitles = alert.buttons.map(\.title)
-        let expectedInstallAndRelaunchTitle = NSLocalizedString("Open Download", comment: "")
-        let expectedLaterTitle = NSLocalizedString("Later", comment: "")
-        let expectedMessageText = NSLocalizedString("Download Complete", comment: "")
-        let expectedInformativeText = String(
-            format: NSLocalizedString("%1$@ %2$@ has been downloaded. Would you like to open the download now?", comment: ""),
-            legacyApplicationName(),
-            item.version
-        )
-        let expectedButtonTitles = [
-            expectedInstallAndRelaunchTitle,
-            expectedLaterTitle
-        ]
-
-        var installOpenedURL: String = ""
-        handleReadyToInstallResponse(.openDownload, destinationURL: temporaryFileURL) { url in
-            installOpenedURL = url.path
-        }
-
-        var laterOpenedURL: String = ""
-        handleReadyToInstallResponse(.later, destinationURL: temporaryFileURL) { url in
-            laterOpenedURL = url.path
-        }
-
-        let actualState: [String: Any] = [
-            "messageText": alert.messageText,
-            "informativeText": alert.informativeText,
-            "buttonTitles": buttonTitles,
-            "hasAccessoryView": alert.accessoryView != nil,
-            "installOpenedPath": installOpenedURL,
-            "laterOpenedPath": laterOpenedURL,
-            "temporaryFileStillExists": FileManager.default.fileExists(atPath: temporaryFileURL.path)
-        ]
-        let expectedState: [String: Any] = [
-            "messageText": expectedMessageText,
-            "informativeText": expectedInformativeText,
-            "buttonTitles": expectedButtonTitles,
-            "hasAccessoryView": true,
-            "installOpenedPath": temporaryFileURL.path,
-            "laterOpenedPath": "",
-            "temporaryFileStillExists": true
-        ]
-        let matchesExpected = (actualState as NSDictionary).isEqual(to: expectedState)
-
-        return [
-            "messageText": alert.messageText,
-            "informativeText": alert.informativeText,
-            "buttonTitles": buttonTitles,
-            "expectedButtonTitles": expectedButtonTitles,
-            "expectedMessageText": expectedMessageText,
-            "expectedInformativeText": expectedInformativeText,
-            "hasAccessoryView": alert.accessoryView != nil,
-            "expectedTemporaryFilePath": temporaryFileURL.path,
-            "installOpenedPath": installOpenedURL,
-            "laterOpenedPath": laterOpenedURL,
-            "installOpenedExpectedFile": installOpenedURL == temporaryFileURL.path,
-            "laterDidNotOpenFile": laterOpenedURL.isEmpty,
-            "temporaryFileStillExists": FileManager.default.fileExists(atPath: temporaryFileURL.path),
-            "state": actualState,
-            "expectedState": expectedState,
-            "matchesExpected": matchesExpected
-        ]
-    }
-
-    func debugReadyToInstallPresentationPolicyReport() -> [String: Any] {
-        let temporaryFileURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("clipmenu-ready-install-policy-\(UUID().uuidString).txt")
-        try? "ready".write(to: temporaryFileURL, atomically: true, encoding: .utf8)
-        defer { try? FileManager.default.removeItem(at: temporaryFileURL) }
-
-        let item = AppcastItem(
-            title: "Version 9.9.9",
-            version: "9.9.9",
-            releaseNotesURL: nil,
-            downloadURL: URL(string: "https://example.com/clipmenu/download.zip"),
-            dsaSignature: nil
-        )
-
-        let interactiveDecision = readyToInstallPresentationDecision(item: item, installAutomatically: false)
-        let automaticDecision = readyToInstallPresentationDecision(item: item, installAutomatically: true)
-
-        let interactiveState: [String: Any]
-        switch interactiveDecision {
-        case .showReadyToInstallAlert:
-            let alert = makeReadyToInstallAlert(item: item)
-            interactiveState = [
-                "decision": "showReadyToInstallAlert",
-                "messageText": alert.messageText,
-                "informativeText": alert.informativeText,
-                "buttonTitles": alert.buttons.map(\.title),
-                "hasAccessoryView": alert.accessoryView != nil
-            ]
-        }
-
-        let automaticState: [String: Any]
-        switch automaticDecision {
-        case .showReadyToInstallAlert:
-            automaticState = [
-                "decision": "showReadyToInstallAlert",
-                "openedPath": "",
-                "temporaryFileStillExists": FileManager.default.fileExists(atPath: temporaryFileURL.path)
-            ]
-        }
-
-        let expectedInteractiveState: [String: Any] = [
-            "decision": "showReadyToInstallAlert",
-            "messageText": NSLocalizedString("Download Complete", comment: ""),
-            "informativeText": String(
-                format: NSLocalizedString("%1$@ %2$@ has been downloaded. Would you like to open the download now?", comment: ""),
-                legacyApplicationName(),
-                item.version
-            ),
-            "buttonTitles": [
-                NSLocalizedString("Open Download", comment: ""),
-                NSLocalizedString("Later", comment: "")
-            ],
-            "hasAccessoryView": true
-        ]
-        let expectedAutomaticState: [String: Any] = [
-            "decision": "showReadyToInstallAlert",
-            "openedPath": "",
-            "temporaryFileStillExists": true
-        ]
-
-        let actualState: [String: Any] = [
-            "interactiveState": interactiveState,
-            "automaticState": automaticState
-        ]
-        let expectedState: [String: Any] = [
-            "interactiveState": expectedInteractiveState,
-            "automaticState": expectedAutomaticState
-        ]
-        let matchesExpected = (actualState as NSDictionary).isEqual(to: expectedState)
-
-        return [
-            "state": actualState,
-            "expectedState": expectedState,
-            "matchesExpected": matchesExpected
-        ]
-    }
-
-    func debugAvailableUpdateAlertReport() -> [String: Any] {
-        let defaults = UserDefaults.standard
-        let originalAutomaticInstallObject = defaults.object(forKey: CMAutomaticallyInstallUpdatesKey)
-        defer {
-            if let originalAutomaticInstallObject {
-                defaults.set(originalAutomaticInstallObject, forKey: CMAutomaticallyInstallUpdatesKey)
-            } else {
-                defaults.removeObject(forKey: CMAutomaticallyInstallUpdatesKey)
-            }
-        }
-
-        setAutomaticallyInstallUpdatesEnabled(true)
-        let item = AppcastItem(
-            title: "Version 9.9.9",
-            version: "9.9.9",
-            releaseNotesURL: URL(string: "https://example.com/clipmenu/release-notes"),
-            downloadURL: URL(string: "https://example.com/clipmenu/download.zip"),
-            dsaSignature: nil
-        )
-        let expectedInstallTitle = NSLocalizedString("Download", comment: "")
-        let expectedSkipTitle = NSLocalizedString("Skip This Version", comment: "")
-        let expectedLaterTitle = NSLocalizedString("Later", comment: "")
-        let expectedButtonTitles = [
-            expectedInstallTitle,
-            expectedSkipTitle,
-            expectedLaterTitle
-        ]
-        let expectedMessageText = NSLocalizedString("Update Available", comment: "")
-        let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-        let expectedInformativeText = currentVersion.isEmpty
-            ? String(format: NSLocalizedString("%@ is now available.", comment: ""), item.title)
-            : String(
-                format: NSLocalizedString("%@ %@ is now available--you have %@. Would you like to download it now?", comment: ""),
-                legacyApplicationName(),
-                item.version,
-                currentVersion
-            )
-
-        func captureState(automaticInstallEnabled: Bool) -> [String: Any] {
-            setAutomaticallyInstallUpdatesEnabled(automaticInstallEnabled)
-            let configuration = makeAvailableUpdateAlert(item: item)
-            let alert = configuration.alert
-            return [
-                "messageText": alert.messageText,
-                "informativeText": alert.informativeText,
-                "buttonTitles": alert.buttons.map(\.title),
-                "hasAccessoryView": alert.accessoryView != nil,
-                "automaticInstallCheckboxState": configuration.automaticallyInstallCheckbox.state == .on
-            ]
-        }
-
-        let offState = captureState(automaticInstallEnabled: false)
-        let onState = captureState(automaticInstallEnabled: true)
-        let expectedOffState: [String: Any] = [
-            "messageText": expectedMessageText,
-            "informativeText": expectedInformativeText,
-            "buttonTitles": expectedButtonTitles,
-            "hasAccessoryView": true,
-            "automaticInstallCheckboxState": false
-        ]
-        let expectedOnState: [String: Any] = [
-            "messageText": expectedMessageText,
-            "informativeText": expectedInformativeText,
-            "buttonTitles": expectedButtonTitles,
-            "hasAccessoryView": true,
-            "automaticInstallCheckboxState": true
-        ]
-        let actualState: [String: Any] = [
-            "offState": offState,
-            "onState": onState
-        ]
-        let expectedState: [String: Any] = [
-            "offState": expectedOffState,
-            "onState": expectedOnState
-        ]
-        let matchesExpected = (actualState as NSDictionary).isEqual(to: expectedState)
-
-        return [
-            "messageText": onState["messageText"] as Any,
-            "informativeText": onState["informativeText"] as Any,
-            "buttonTitles": onState["buttonTitles"] as Any,
-            "expectedButtonTitles": expectedButtonTitles,
-            "expectedMessageText": expectedMessageText,
-            "expectedInformativeText": expectedInformativeText,
-            "hasAccessoryView": onState["hasAccessoryView"] as Any,
-            "expectedHasAccessoryView": true,
-            "automaticInstallCheckboxState": onState["automaticInstallCheckboxState"] as Any,
-            "expectedAutomaticInstallCheckboxState": true,
-            "offState": offState,
-            "expectedOffState": expectedOffState,
-            "onState": onState,
-            "expectedOnState": expectedOnState,
-            "state": actualState,
-            "expectedState": expectedState,
-            "primaryButtonMatchesSparkle": (onState["buttonTitles"] as? [String])?.first == expectedInstallTitle,
-            "buttonOrderMatchesExpected": (onState["buttonTitles"] as? [String]) == expectedButtonTitles,
-            "matchesExpected": matchesExpected
-        ]
-    }
-
-    private func debugFirstView<T: NSView>(ofType type: T.Type, in root: NSView?) -> T? {
-        guard let root else { return nil }
-        if let typedRoot = root as? T {
-            return typedRoot
-        }
-        for subview in root.subviews {
-            if let match = debugFirstView(ofType: type, in: subview) {
-                return match
-            }
-        }
-        return nil
-    }
-
-    private func debugAllViews<T: NSView>(ofType type: T.Type, in root: NSView?) -> [T] {
-        guard let root else { return [] }
-        var matches: [T] = []
-        if let typedRoot = root as? T {
-            matches.append(typedRoot)
-        }
-        for subview in root.subviews {
-            matches.append(contentsOf: debugAllViews(ofType: type, in: subview))
-        }
-        return matches
-    }
-
-    func debugAvailableUpdateAccessoryReport() -> [String: Any] {
-        let defaults = UserDefaults.standard
-        let originalAutomaticInstallObject = defaults.object(forKey: CMAutomaticallyInstallUpdatesKey)
-        defer {
-            if let originalAutomaticInstallObject {
-                defaults.set(originalAutomaticInstallObject, forKey: CMAutomaticallyInstallUpdatesKey)
-            } else {
-                defaults.removeObject(forKey: CMAutomaticallyInstallUpdatesKey)
-            }
-        }
-
-        setAutomaticallyInstallUpdatesEnabled(false)
-        let releaseNotesURL = URL(string: "http://example.com/clipmenu/release-notes")!
-        let secureReleaseNotesURL = preferredSecureURL(for: releaseNotesURL)
-        let itemWithReleaseNotes = AppcastItem(
-            title: "Version 9.9.9",
-            version: "9.9.9",
-            releaseNotesURL: releaseNotesURL,
-            downloadURL: URL(string: "https://example.com/clipmenu/download.zip"),
-            dsaSignature: nil
-        )
-        let itemWithoutReleaseNotes = AppcastItem(
-            title: "Version 9.9.9",
-            version: "9.9.9",
-            releaseNotesURL: nil,
-            downloadURL: URL(string: "https://example.com/clipmenu/download.zip"),
-            dsaSignature: nil
-        )
-
-        func captureState(item: AppcastItem) -> [String: Any] {
-            let checkbox = makeAutomaticallyInstallUpdatesCheckbox()
-            let accessory = makeAvailableUpdateAccessory(
-                item: item,
-                currentVersion: "0.4.3",
-                releaseNotesURL: item.releaseNotesURL,
-                automaticallyInstallCheckbox: checkbox
-            )
-            let stackView = debugFirstView(ofType: NSStackView.self, in: accessory)
-            let labelTexts = debugAllViews(ofType: NSTextField.self, in: accessory).map(\.stringValue)
-            let buttons = debugAllViews(ofType: NSButton.self, in: accessory)
-            let webViews = debugAllViews(ofType: WKWebView.self, in: accessory)
-            let openInBrowserButton = buttons.first { $0.title == NSLocalizedString("Open in Browser", comment: "") }
-            return [
-                "containerHeight": Int(accessory.frame.height),
-                "arrangedSubviewCount": stackView?.arrangedSubviews.count ?? 0,
-                "hasReleaseNotesPreview": !webViews.isEmpty,
-                "releaseNotesLabelPresent": labelTexts.contains(NSLocalizedString("Release Notes", comment: "")),
-                "openInBrowserButtonTitle": openInBrowserButton?.title ?? "",
-                "openInBrowserButtonIdentifier": openInBrowserButton?.identifier?.rawValue ?? "",
-                "checkboxTitle": checkbox.title,
-                "checkboxState": checkbox.state == .on
-            ]
-        }
-
-        let withReleaseNotesState = captureState(item: itemWithReleaseNotes)
-        let withoutReleaseNotesState = captureState(item: itemWithoutReleaseNotes)
-        let expectedWithReleaseNotesState: [String: Any] = [
-            "containerHeight": 518,
-            "arrangedSubviewCount": 3,
-            "hasReleaseNotesPreview": true,
-            "releaseNotesLabelPresent": true,
-            "openInBrowserButtonTitle": NSLocalizedString("Open in Browser", comment: ""),
-            "openInBrowserButtonIdentifier": secureReleaseNotesURL.absoluteString,
-            "checkboxTitle": NSLocalizedString("Automatically download updates in the future", comment: ""),
-            "checkboxState": false
-        ]
-        let expectedWithoutReleaseNotesState: [String: Any] = [
-            "containerHeight": 126,
-            "arrangedSubviewCount": 2,
-            "hasReleaseNotesPreview": false,
-            "releaseNotesLabelPresent": false,
-            "openInBrowserButtonTitle": "",
-            "openInBrowserButtonIdentifier": "",
-            "checkboxTitle": NSLocalizedString("Automatically download updates in the future", comment: ""),
-            "checkboxState": false
-        ]
-        let actualState: [String: Any] = [
-            "withReleaseNotesState": withReleaseNotesState,
-            "withoutReleaseNotesState": withoutReleaseNotesState
-        ]
-        let expectedState: [String: Any] = [
-            "withReleaseNotesState": expectedWithReleaseNotesState,
-            "withoutReleaseNotesState": expectedWithoutReleaseNotesState
-        ]
-        let matchesExpected = (actualState as NSDictionary).isEqual(to: expectedState)
-
-        return [
-            "state": actualState,
-            "expectedState": expectedState,
-            "matchesExpected": matchesExpected
-        ]
-    }
-
-    func debugDownloadProgressReport() -> [String: Any] {
-        let filename = "ClipMenu 9.9.9.zip"
-        let controller = DownloadProgressController(filename: filename)
-        let placeholderTask = URLSession.shared.downloadTask(with: URL(string: "https://example.com/clipmenu/download.zip")!)
-        controller.task = placeholderTask
-        controller.show()
-
-        let cancelButton = debugAllViews(ofType: NSButton.self, in: controller.panel.contentView)
-            .first { $0.title == NSLocalizedString("Cancel Update", comment: "") }
-
-        let windowStateBeforeCancel: [String: Bool] = [
-            "hasIndeterminateProgressIndicator": controller.progressIndicator.isIndeterminate,
-            "isVisibleWhileShown": controller.panel.isVisible,
-            "levelIsFloating": controller.panel.level == .floating,
-            "styleMaskContainsTitled": controller.panel.styleMask.contains(.titled),
-            "titleHidden": controller.panel.titleVisibility == .hidden,
-            "titlebarTransparent": controller.panel.titlebarAppearsTransparent,
-            "movableByBackground": controller.panel.isMovableByWindowBackground
-        ]
-        let stateBeforeCancel: [String: Any] = [
-            "windowTitle": controller.panel.title,
-            "contentTitle": controller.titleLabel.stringValue,
-            "contentDetail": controller.detailLabel.stringValue,
-            "cancelButtonTitle": cancelButton?.title ?? "",
-            "windowState": windowStateBeforeCancel
-        ]
-
-        cancelButton?.performClick(nil)
-
-        let stateAfterCancel: [String: Any] = [
-            "isCancelled": controller.isCancelled,
-            "taskCleared": controller.task == nil,
-            "panelVisible": controller.panel.isVisible
-        ]
-
-        let expectedStateBeforeCancel: [String: Any] = [
-            "windowTitle": NSLocalizedString("Downloading update...", comment: ""),
-            "contentTitle": NSLocalizedString("Downloading update...", comment: ""),
-            "contentDetail": String(
-                format: NSLocalizedString("Downloading %@.", comment: ""),
-                filename
-            ),
-            "cancelButtonTitle": NSLocalizedString("Cancel Update", comment: ""),
-            "windowState": [
-                "hasIndeterminateProgressIndicator": true,
-                "isVisibleWhileShown": true,
-                "levelIsFloating": true,
-                "styleMaskContainsTitled": true,
-                "titleHidden": true,
-                "titlebarTransparent": true,
-                "movableByBackground": true
-            ]
-        ]
-        let expectedStateAfterCancel: [String: Any] = [
-            "isCancelled": true,
-            "taskCleared": true,
-            "panelVisible": false
-        ]
-
-        let actualState: [String: Any] = [
-            "beforeCancel": stateBeforeCancel,
-            "afterCancel": stateAfterCancel
-        ]
-        let expectedState: [String: Any] = [
-            "beforeCancel": expectedStateBeforeCancel,
-            "afterCancel": expectedStateAfterCancel
-        ]
-        let matchesExpected = (actualState as NSDictionary).isEqual(to: expectedState)
-
-        placeholderTask.cancel()
-
-        return [
-            "state": actualState,
-            "expectedState": expectedState,
-            "matchesExpected": matchesExpected
-        ]
-    }
-
-    func debugDownloadFailurePolicyReport() -> [String: Any] {
-        let cancelledTransportError = NSError(
-            domain: NSURLErrorDomain,
-            code: NSURLErrorCancelled,
-            userInfo: [NSLocalizedDescriptionKey: "cancelled"]
-        )
-        let transportError = NSError(
-            domain: "ClipMenuUpdate",
-            code: 99,
-            userInfo: [NSLocalizedDescriptionKey: "Sample update transport error."]
-        )
-
-        func state(error: Error?, wasCancelled: Bool) -> [String: Any] {
-            let decision = downloadCompletionPreflightDecision(error: error, wasCancelled: wasCancelled)
-            switch decision {
-            case .ignoreCancellation:
-                return [
-                    "action": "ignoreCancellation",
-                    "errorDescription": (error as NSError?)?.localizedDescription ?? "",
-                    "wasCancelled": wasCancelled
-                ]
-            case .continueProcessing:
-                return [
-                    "action": "continueProcessing",
-                    "errorDescription": "",
-                    "wasCancelled": wasCancelled
-                ]
-            case let .showFailure(error):
-                return [
-                    "action": "showFailure",
-                    "errorDescription": error.localizedDescription,
-                    "failureAlertTitle": makeDownloadFailureAlert(error: error).messageText,
-                    "wasCancelled": wasCancelled
-                ]
-            }
-        }
-
-        let userCancelledState = state(error: nil, wasCancelled: true)
-        let networkCancelledState = state(error: cancelledTransportError, wasCancelled: false)
-        let transportFailureState = state(error: transportError, wasCancelled: false)
-        let successState = state(error: nil, wasCancelled: false)
-
-        let actualState: [String: Any] = [
-            "userCancelledState": userCancelledState,
-            "networkCancelledState": networkCancelledState,
-            "transportFailureState": transportFailureState,
-            "successState": successState
-        ]
-        let expectedState: [String: Any] = [
-            "userCancelledState": [
-                "action": "ignoreCancellation",
-                "errorDescription": "",
-                "wasCancelled": true
-            ],
-            "networkCancelledState": [
-                "action": "ignoreCancellation",
-                "errorDescription": "cancelled",
-                "wasCancelled": false
-            ],
-            "transportFailureState": [
-                "action": "showFailure",
-                "errorDescription": "Sample update transport error.",
-                "failureAlertTitle": NSLocalizedString("Failed to Download Update", comment: ""),
-                "wasCancelled": false
-            ],
-            "successState": [
-                "action": "continueProcessing",
-                "errorDescription": "",
-                "wasCancelled": false
-            ]
-        ]
-        let matchesExpected = (actualState as NSDictionary).isEqual(to: expectedState)
-
-        return [
-            "state": actualState,
-            "expectedState": expectedState,
-            "matchesExpected": matchesExpected
-        ]
-    }
-
-    func debugUpdateFeedSelectionReport() -> [String: Any] {
-        let defaults = UserDefaults.standard
-        let originalPreReleasesObject = defaults.object(forKey: CMEnableAutomaticCheckPreReleaseKey)
-        let originalFeedOverride = defaults.object(forKey: "debugUpdateFeedURL")
-        defer {
-            if let originalPreReleasesObject {
-                defaults.set(originalPreReleasesObject, forKey: CMEnableAutomaticCheckPreReleaseKey)
-            } else {
-                defaults.removeObject(forKey: CMEnableAutomaticCheckPreReleaseKey)
-            }
-
-            if let originalFeedOverride {
-                defaults.set(originalFeedOverride, forKey: "debugUpdateFeedURL")
-            } else {
-                defaults.removeObject(forKey: "debugUpdateFeedURL")
-            }
-        }
-
-        defaults.removeObject(forKey: "debugUpdateFeedURL")
-        let stableFeedURL = localizedInfoURL(forKey: "SUFeedURL")?.absoluteString ?? ""
-        let preReleaseFeedURL = localizedInfoURL(forKey: "SUPreReleaseFeedURL")?.absoluteString ?? ""
-
-        func state(preReleasesEnabled: Bool) -> [String: Any] {
-            defaults.set(preReleasesEnabled, forKey: CMEnableAutomaticCheckPreReleaseKey)
-            let feedURL = self.feedURL?.absoluteString ?? ""
-            let paneSnapshot = CMUpdatesPreferencesSnapshotForDebug()
-            let states = paneSnapshot["states"] as? [String: Any] ?? [:]
-            let workflowStages = paneSnapshot["workflowStages"] as? [[String: String]] ?? []
-            let channelStage = workflowStages.first { $0["title"] == NSLocalizedString("Channel", comment: "") } ?? [:]
-            return [
-                "preReleasesEnabled": preReleasesEnabled,
-                "feedURL": feedURL,
-                "feedStatusTitle": states["feedStatusTitle"] as? String ?? "",
-                "channelStageValue": channelStage["value"] ?? "",
-                "channelStageDetail": channelStage["detail"] ?? ""
-            ]
-        }
-
-        let stableState = state(preReleasesEnabled: false)
-        let preReleaseState = state(preReleasesEnabled: true)
-        let actualState: [String: Any] = [
-            "stableState": stableState,
-            "preReleaseState": preReleaseState
-        ]
-        let expectedState: [String: Any] = [
-            "stableState": [
-                "preReleasesEnabled": false,
-                "feedURL": stableFeedURL,
-                "feedStatusTitle": NSLocalizedString("Stable", comment: ""),
-                "channelStageValue": NSLocalizedString("Stable", comment: ""),
-                "channelStageDetail": NSLocalizedString("Stable releases only.", comment: "")
-            ],
-            "preReleaseState": [
-                "preReleasesEnabled": true,
-                "feedURL": preReleaseFeedURL,
-                "feedStatusTitle": NSLocalizedString("Pre-release", comment: ""),
-                "channelStageValue": NSLocalizedString("Pre-release", comment: ""),
-                "channelStageDetail": NSLocalizedString("Pre-release updates are included.", comment: "")
-            ]
-        ]
-        let matchesExpected = (actualState as NSDictionary).isEqual(to: expectedState)
-
-        return [
-            "state": actualState,
-            "expectedState": expectedState,
-            "matchesExpected": matchesExpected
-        ]
-    }
-
-    func debugUpdateCheckFailurePolicyReport() -> [String: Any] {
-        let cancelledTransportError = NSError(
-            domain: NSURLErrorDomain,
-            code: NSURLErrorCancelled,
-            userInfo: [NSLocalizedDescriptionKey: "cancelled"]
-        )
-        let transportError = NSError(
-            domain: "ClipMenuUpdate",
-            code: 98,
-            userInfo: [NSLocalizedDescriptionKey: "Sample update check transport error."]
-        )
-
-        func state(error: Error?, wasCancelled: Bool, userInitiated: Bool) -> [String: Any] {
-            let decision = updateCheckCompletionPreflightDecision(error: error, wasCancelled: wasCancelled)
-            switch decision {
-            case .ignoreCancellation:
-                return [
-                    "action": "ignoreCancellation",
-                    "errorDescription": (error as NSError?)?.localizedDescription ?? "",
-                    "userInitiated": userInitiated,
-                    "wasCancelled": wasCancelled
-                ]
-            case .continueProcessing:
-                return [
-                    "action": "continueProcessing",
-                    "errorDescription": "",
-                    "userInitiated": userInitiated,
-                    "wasCancelled": wasCancelled
-                ]
-            case let .showFailure(error):
-                return [
-                    "action": userInitiated ? "showFailureAlert" : "noVisibleFailure",
-                    "errorDescription": error.localizedDescription,
-                    "failureAlertTitle": userInitiated ? makeUpdateCheckFailureAlert(error: error).messageText : "",
-                    "userInitiated": userInitiated,
-                    "wasCancelled": wasCancelled
-                ]
-            }
-        }
-
-        let userCancelledState = state(error: nil, wasCancelled: true, userInitiated: true)
-        let networkCancelledState = state(error: cancelledTransportError, wasCancelled: false, userInitiated: true)
-        let manualFailureState = state(error: transportError, wasCancelled: false, userInitiated: true)
-        let backgroundFailureState = state(error: transportError, wasCancelled: false, userInitiated: false)
-        let successState = state(error: nil, wasCancelled: false, userInitiated: true)
-
-        let actualState: [String: Any] = [
-            "userCancelledState": userCancelledState,
-            "networkCancelledState": networkCancelledState,
-            "manualFailureState": manualFailureState,
-            "backgroundFailureState": backgroundFailureState,
-            "successState": successState
-        ]
-        let expectedState: [String: Any] = [
-            "userCancelledState": [
-                "action": "ignoreCancellation",
-                "errorDescription": "",
-                "userInitiated": true,
-                "wasCancelled": true
-            ],
-            "networkCancelledState": [
-                "action": "ignoreCancellation",
-                "errorDescription": "cancelled",
-                "userInitiated": true,
-                "wasCancelled": false
-            ],
-            "manualFailureState": [
-                "action": "showFailureAlert",
-                "errorDescription": "Sample update check transport error.",
-                "failureAlertTitle": NSLocalizedString("Failed to Check for Updates", comment: ""),
-                "userInitiated": true,
-                "wasCancelled": false
-            ],
-            "backgroundFailureState": [
-                "action": "noVisibleFailure",
-                "errorDescription": "Sample update check transport error.",
-                "failureAlertTitle": "",
-                "userInitiated": false,
-                "wasCancelled": false
-            ],
-            "successState": [
-                "action": "continueProcessing",
-                "errorDescription": "",
-                "userInitiated": true,
-                "wasCancelled": false
-            ]
-        ]
-        let matchesExpected = (actualState as NSDictionary).isEqual(to: expectedState)
-
-        return [
-            "state": actualState,
-            "expectedState": expectedState,
-            "matchesExpected": matchesExpected
-        ]
-    }
-
-    func debugUpdateCheckNetworkExerciseReport() -> [String: Any] {
-        let defaults = UserDefaults.standard
-        let originalFeedOverride = defaults.object(forKey: "debugUpdateFeedURL")
-        let originalLastCheckDate = defaults.object(forKey: CMLastUpdateCheckDateKey)
-        let originalIsChecking = isChecking
-        let originalLastCheckDateProperty = lastCheckDate
-
-        defer {
-            if let originalFeedOverride {
-                defaults.set(originalFeedOverride, forKey: "debugUpdateFeedURL")
-            } else {
-                defaults.removeObject(forKey: "debugUpdateFeedURL")
-            }
-            if let originalLastCheckDate {
-                defaults.set(originalLastCheckDate, forKey: CMLastUpdateCheckDateKey)
-            } else {
-                defaults.removeObject(forKey: CMLastUpdateCheckDateKey)
-            }
-            isChecking = originalIsChecking
-            lastCheckDate = originalLastCheckDateProperty
-        }
-
-        defaults.set("http://127.0.0.1:9/clipmenu-appcast.xml", forKey: "debugUpdateFeedURL")
-        defaults.removeObject(forKey: CMLastUpdateCheckDateKey)
-        isChecking = false
-        lastCheckDate = nil
-
-        checkForUpdates(userInitiated: false)
-
-        let deadline = Date(timeIntervalSinceNow: 3.0)
-        while isChecking && Date() < deadline {
-            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
-        }
-
-        let storedLastCheckDate = defaults.object(forKey: CMLastUpdateCheckDateKey) as? Date
-        let actualState: [String: Any] = [
-            "startedCheck": storedLastCheckDate != nil,
-            "finishedCheck": !isChecking,
-            "feedOverride": feedURL?.absoluteString ?? ""
-        ]
-        let expectedState: [String: Any] = [
-            "startedCheck": true,
-            "finishedCheck": true,
-            "feedOverride": "http://127.0.0.1:9/clipmenu-appcast.xml"
-        ]
-        let matchesExpected = (actualState["startedCheck"] as? Bool) == true
-            && (actualState["feedOverride"] as? String) == expectedState["feedOverride"] as? String
-
-        return [
-            "state": actualState,
-            "expectedState": expectedState,
-            "matchesExpected": matchesExpected
-        ]
-    }
-
-    func debugAppcastParsingAndDownloadNamingReport() -> [String: Any] {
-        let appcast = """
-        <?xml version="1.0" encoding="utf-8"?>
-        <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
-          <channel>
-            <item>
-              <title>Version 2.0.1</title>
-              <sparkle:releaseNotesLink>https://example.com/release-notes.html</sparkle:releaseNotesLink>
-              <enclosure url="https://example.com/downloads/ClipMenu-2.0.1.zip" sparkle:version="2.0.1" sparkle:dsaSignature="signature-value" />
-            </item>
-            <item>
-              <title>Nightly Build</title>
-              <releaseNotesLink>https://example.com/nightly.html</releaseNotesLink>
-              <enclosure url="https://example.com/downloads/" version="nightly" dsaSignature="nightly-signature" />
-            </item>
-          </channel>
-        </rss>
-        """
-
-        let parser = AppcastParser()
-        let items = (try? parser.parse(data: Data(appcast.utf8))) ?? []
-        let first = items.first
-        let second = items.dropFirst().first
-        let emptyFilenameDestination = try? downloadDestinationURL(filename: "")
-        let archiveDestination = try? downloadDestinationURL(filename: first?.downloadFilename ?? "ClipMenu.zip")
-        let actualState: [String: Any] = [
-            "itemCount": items.count,
-            "firstTitle": first?.title ?? "",
-            "firstVersion": first?.version ?? "",
-            "firstDownloadFilename": first?.downloadFilename ?? "",
-            "firstReleaseNotes": first?.releaseNotesURL?.absoluteString ?? "",
-            "firstSignature": first?.dsaSignature ?? "",
-            "secondTitle": second?.title ?? "",
-            "secondVersion": second?.version ?? "",
-            "secondDownloadFilename": second?.downloadFilename ?? "",
-            "emptyFilenameBasename": emptyFilenameDestination?.lastPathComponent.hasPrefix("ClipMenu") == true,
-            "archiveDestinationFilename": archiveDestination?.lastPathComponent.hasPrefix("ClipMenu-2.0.1") == true
-        ]
-        let expectedState: [String: Any] = [
-            "itemCount": 2,
-            "firstTitle": "Version 2.0.1",
-            "firstVersion": "2.0.1",
-            "firstDownloadFilename": "ClipMenu-2.0.1.zip",
-            "firstReleaseNotes": "https://example.com/release-notes.html",
-            "firstSignature": "signature-value",
-            "secondTitle": "Nightly Build",
-            "secondVersion": "nightly",
-            "secondDownloadFilename": "downloads",
-            "emptyFilenameBasename": true,
-            "archiveDestinationFilename": true
-        ]
-
-        return [
-            "state": actualState,
-            "expectedState": expectedState,
-            "matchesExpected": (actualState as NSDictionary).isEqual(to: expectedState)
-        ]
-    }
-
-#if TESTING
-    func debugDownloadedUpdateVerificationReport() -> [String: Any] {
-        let fileURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ClipMenuUpdateVerification-\(UUID().uuidString).zip")
-        defer { try? FileManager.default.removeItem(at: fileURL) }
-        try? Data("update".utf8).write(to: fileURL, options: .atomic)
-
-        let unsignedItem = AppcastItem(
-            title: "Unsigned",
-            version: "1.0",
-            releaseNotesURL: nil,
-            downloadURL: nil,
-            dsaSignature: nil
-        )
-        let invalidSignatureItem = AppcastItem(
-            title: "Invalid",
-            version: "1.1",
-            releaseNotesURL: nil,
-            downloadURL: nil,
-            dsaSignature: "not base64"
-        )
-        let bogusSignatureItem = AppcastItem(
-            title: "Bogus",
-            version: "1.2",
-            releaseNotesURL: nil,
-            downloadURL: nil,
-            dsaSignature: Data("bogus".utf8).base64EncodedString()
-        )
-
-        let unsignedAccepted = (try? verifyDownloadedUpdate(at: fileURL, item: unsignedItem)) != nil
-        let invalidSignatureCode: Int = {
-            do {
-                try verifyDownloadedUpdate(at: fileURL, item: invalidSignatureItem)
-                return 0
-            } catch {
-                return (error as NSError).code
-            }
-        }()
-        let bogusSignatureCode: Int = {
-            do {
-                try verifyDownloadedUpdate(at: fileURL, item: bogusSignatureItem)
-                return 0
-            } catch {
-                return (error as NSError).code
-            }
-        }()
-        let hasPublicKey = dsaPublicKeyURL() != nil
-        let actualState: [String: Any] = [
-            "hasPublicKey": hasPublicKey,
-            "unsignedAccepted": unsignedAccepted,
-            "invalidSignatureCode": invalidSignatureCode,
-            "bogusSignatureCode": bogusSignatureCode
-        ]
-        return [
-            "state": actualState,
-            "expectedState": actualState,
-            "matchesExpected": unsignedAccepted
-                && [0, 6].contains(invalidSignatureCode)
-                && [0, 7].contains(bogusSignatureCode)
-        ]
-    }
-
-    func debugDownloadAndOpenFailureExerciseReport() -> [String: Any] {
-        let originalFailureCount = debugDownloadFailurePresentationCount
-        let item = AppcastItem(
-            title: "Version 9.9.9",
-            version: "9.9.9",
-            releaseNotesURL: nil,
-            downloadURL: URL(string: "http://127.0.0.1:9/ClipMenu-9.9.9.zip"),
-            dsaSignature: nil
-        )
-
-        downloadAndOpenUpdate(
-            from: URL(string: "http://127.0.0.1:9/ClipMenu-9.9.9.zip")!,
-            item: item,
-            installAutomaticallyAfterDownload: false
-        )
-
-        let deadline = Date(timeIntervalSinceNow: 3.0)
-        while debugDownloadFailurePresentationCount == originalFailureCount && Date() < deadline {
-            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
-        }
-
-        let actualState: [String: Any] = [
-            "failurePresented": debugDownloadFailurePresentationCount > originalFailureCount,
-            "downloadFilename": item.downloadFilename
-        ]
-        let expectedState: [String: Any] = [
-            "failurePresented": true,
-            "downloadFilename": "ClipMenu-9.9.9.zip"
-        ]
-        return [
-            "state": actualState,
-            "expectedState": expectedState,
-            "matchesExpected": actualState["downloadFilename"] as? String == expectedState["downloadFilename"] as? String
-        ]
-    }
-
-    func debugUpdatePresentationDispatchReport() -> [String: Any] {
-        let defaults = UserDefaults.standard
-        let originalBypass = defaults.object(forKey: "debugBypassUpdateAlertPresentationForTesting")
-        let originalAutomaticInstall = defaults.object(forKey: CMAutomaticallyInstallUpdatesKey)
-        let originalAvailableCount = debugAvailableUpdatePresentationCount
-        let originalUpToDateCount = debugUpToDatePresentationCount
-        defer {
-            if let originalBypass {
-                defaults.set(originalBypass, forKey: "debugBypassUpdateAlertPresentationForTesting")
-            } else {
-                defaults.removeObject(forKey: "debugBypassUpdateAlertPresentationForTesting")
-            }
-            if let originalAutomaticInstall {
-                defaults.set(originalAutomaticInstall, forKey: CMAutomaticallyInstallUpdatesKey)
-            } else {
-                defaults.removeObject(forKey: CMAutomaticallyInstallUpdatesKey)
-            }
-            debugAvailableUpdatePresentationCount = originalAvailableCount
-            debugUpToDatePresentationCount = originalUpToDateCount
-        }
-
-        defaults.set(true, forKey: "debugBypassUpdateAlertPresentationForTesting")
-        defaults.set(false, forKey: CMAutomaticallyInstallUpdatesKey)
-        let updateItem = AppcastItem(
-            title: "Version 9.9.9",
-            version: "9.9.9",
-            releaseNotesURL: URL(string: "https://example.com/clipmenu/release-notes"),
-            downloadURL: URL(string: "https://example.com/clipmenu/download.zip"),
-            dsaSignature: nil
-        )
-        let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-        let currentItem = AppcastItem(
-            title: "Version \(currentVersion)",
-            version: currentVersion,
-            releaseNotesURL: nil,
-            downloadURL: nil,
-            dsaSignature: nil
-        )
-
-        presentUpdateResult(items: [updateItem], userInitiated: true)
-        presentUpdateResult(items: [currentItem], userInitiated: true)
-
-        let deadline = Date(timeIntervalSinceNow: 1.0)
-        while (debugAvailableUpdatePresentationCount == originalAvailableCount
-               || debugUpToDatePresentationCount == originalUpToDateCount)
-            && Date() < deadline {
-            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02))
-        }
-
-        let actualState: [String: Any] = [
-            "availablePresented": debugAvailableUpdatePresentationCount > originalAvailableCount,
-            "upToDatePresented": debugUpToDatePresentationCount > originalUpToDateCount
-        ]
-        let expectedState: [String: Any] = [
-            "availablePresented": true,
-            "upToDatePresented": true
-        ]
-        return [
-            "state": actualState,
-            "expectedState": expectedState,
-            "matchesExpected": (actualState as NSDictionary).isEqual(to: expectedState)
-        ]
-    }
 #endif
-
-    func debugUpdateCheckPayloadFailureReport() -> [String: Any] {
-        let noDataError = NSError(
-            domain: "ClipMenuUpdate",
-            code: 2,
-            userInfo: [NSLocalizedDescriptionKey: NSLocalizedString("No update data was returned.", comment: "")]
-        )
-        let emptyFeedError = NSError(
-            domain: "ClipMenuUpdate",
-            code: 3,
-            userInfo: [NSLocalizedDescriptionKey: NSLocalizedString("The update feed did not contain any items.", comment: "")]
-        )
-        let parseError = NSError(
-            domain: "ClipMenuUpdate",
-            code: 4,
-            userInfo: [NSLocalizedDescriptionKey: "Sample appcast parse failure."]
-        )
-
-        func state(error: Error, userInitiated: Bool) -> [String: Any] {
-            let decision = updateCheckFailurePresentationDecision(error: error, userInitiated: userInitiated)
-            switch decision {
-            case let .showFailureAlert(error):
-                return [
-                    "action": "showFailureAlert",
-                    "errorDescription": error.localizedDescription,
-                    "failureAlertTitle": makeUpdateCheckFailureAlert(error: error).messageText,
-                    "userInitiated": userInitiated
-                ]
-            case let .noVisibleFailure(error):
-                return [
-                    "action": "noVisibleFailure",
-                    "errorDescription": error.localizedDescription,
-                    "failureAlertTitle": "",
-                    "userInitiated": userInitiated
-                ]
-            }
-        }
-
-        let actualState: [String: Any] = [
-            "manualNoDataState": state(error: noDataError, userInitiated: true),
-            "backgroundNoDataState": state(error: noDataError, userInitiated: false),
-            "manualEmptyFeedState": state(error: emptyFeedError, userInitiated: true),
-            "backgroundEmptyFeedState": state(error: emptyFeedError, userInitiated: false),
-            "manualParseFailureState": state(error: parseError, userInitiated: true),
-            "backgroundParseFailureState": state(error: parseError, userInitiated: false)
-        ]
-        let expectedFailureTitle = NSLocalizedString("Failed to Check for Updates", comment: "")
-        let expectedState: [String: Any] = [
-            "manualNoDataState": [
-                "action": "showFailureAlert",
-                "errorDescription": NSLocalizedString("No update data was returned.", comment: ""),
-                "failureAlertTitle": expectedFailureTitle,
-                "userInitiated": true
-            ],
-            "backgroundNoDataState": [
-                "action": "noVisibleFailure",
-                "errorDescription": NSLocalizedString("No update data was returned.", comment: ""),
-                "failureAlertTitle": "",
-                "userInitiated": false
-            ],
-            "manualEmptyFeedState": [
-                "action": "showFailureAlert",
-                "errorDescription": NSLocalizedString("The update feed did not contain any items.", comment: ""),
-                "failureAlertTitle": expectedFailureTitle,
-                "userInitiated": true
-            ],
-            "backgroundEmptyFeedState": [
-                "action": "noVisibleFailure",
-                "errorDescription": NSLocalizedString("The update feed did not contain any items.", comment: ""),
-                "failureAlertTitle": "",
-                "userInitiated": false
-            ],
-            "manualParseFailureState": [
-                "action": "showFailureAlert",
-                "errorDescription": "Sample appcast parse failure.",
-                "failureAlertTitle": expectedFailureTitle,
-                "userInitiated": true
-            ],
-            "backgroundParseFailureState": [
-                "action": "noVisibleFailure",
-                "errorDescription": "Sample appcast parse failure.",
-                "failureAlertTitle": "",
-                "userInitiated": false
-            ]
-        ]
-        let matchesExpected = (actualState as NSDictionary).isEqual(to: expectedState)
-
-        return [
-            "state": actualState,
-            "expectedState": expectedState,
-            "matchesExpected": matchesExpected
-        ]
     }
 
-    func debugUpdatePassiveAlertsReport() -> [String: Any] {
-        let sampleError = NSError(
-            domain: "ClipMenuUpdate",
-            code: 99,
-            userInfo: [NSLocalizedDescriptionKey: "Sample update transport error."]
-        )
-        let checkAlert = makeUpdateCheckFailureAlert(error: sampleError)
-        let downloadAlert = makeDownloadFailureAlert(error: sampleError)
-        let upToDateAlert = makeUpToDateAlert(currentVersion: "0.4.3")
-        let expectedCheckFailureTitle = NSLocalizedString("Failed to Check for Updates", comment: "")
-        let expectedDownloadFailureTitle = NSLocalizedString("Failed to Download Update", comment: "")
-        let expectedUpToDateTitle = NSLocalizedString("You're up to date!", comment: "")
-        let expectedCheckFailureInformativeText = sampleError.localizedDescription
-        let expectedDownloadFailureInformativeText = sampleError.localizedDescription
-        let expectedUpToDateInformativeText = String(
-            format: NSLocalizedString("You already have the newest version of %@.", comment: ""),
-            legacyApplicationName()
-        )
-        let expectedOKButtonTitles = [NSLocalizedString("OK", comment: "")]
-        let actualState: [String: Any] = [
-            "checkFailure": [
-                "messageText": checkAlert.messageText,
-                "informativeText": checkAlert.informativeText,
-                "buttonTitles": checkAlert.buttons.map(\.title),
-                "hasAccessoryView": checkAlert.accessoryView != nil
-            ],
-            "downloadFailure": [
-                "messageText": downloadAlert.messageText,
-                "informativeText": downloadAlert.informativeText,
-                "buttonTitles": downloadAlert.buttons.map(\.title),
-                "hasAccessoryView": downloadAlert.accessoryView != nil
-            ],
-            "upToDate": [
-                "messageText": upToDateAlert.messageText,
-                "informativeText": upToDateAlert.informativeText,
-                "buttonTitles": upToDateAlert.buttons.map(\.title),
-                "hasAccessoryView": upToDateAlert.accessoryView != nil
-            ]
-        ]
-        let expectedState: [String: Any] = [
-            "checkFailure": [
-                "messageText": expectedCheckFailureTitle,
-                "informativeText": expectedCheckFailureInformativeText,
-                "buttonTitles": expectedOKButtonTitles,
-                "hasAccessoryView": true
-            ],
-            "downloadFailure": [
-                "messageText": expectedDownloadFailureTitle,
-                "informativeText": expectedDownloadFailureInformativeText,
-                "buttonTitles": expectedOKButtonTitles,
-                "hasAccessoryView": true
-            ],
-            "upToDate": [
-                "messageText": expectedUpToDateTitle,
-                "informativeText": expectedUpToDateInformativeText,
-                "buttonTitles": expectedOKButtonTitles,
-                "hasAccessoryView": true
-            ]
-        ]
-        let matchesExpected = (actualState as NSDictionary).isEqual(to: expectedState)
+    var supportsGentleScheduledUpdateReminders: Bool { true }
 
-        return [
-            "checkFailureMessageText": checkAlert.messageText,
-            "checkFailureInformativeText": checkAlert.informativeText,
-            "expectedCheckFailureMessageText": expectedCheckFailureTitle,
-            "expectedCheckFailureInformativeText": expectedCheckFailureInformativeText,
-            "checkFailureHasAccessoryView": checkAlert.accessoryView != nil,
-            "checkFailureButtonTitles": checkAlert.buttons.map(\.title),
-            "expectedCheckFailureButtonTitles": expectedOKButtonTitles,
-            "downloadFailureMessageText": downloadAlert.messageText,
-            "downloadFailureInformativeText": downloadAlert.informativeText,
-            "expectedDownloadFailureMessageText": expectedDownloadFailureTitle,
-            "expectedDownloadFailureInformativeText": expectedDownloadFailureInformativeText,
-            "downloadFailureHasAccessoryView": downloadAlert.accessoryView != nil,
-            "downloadFailureButtonTitles": downloadAlert.buttons.map(\.title),
-            "expectedDownloadFailureButtonTitles": expectedOKButtonTitles,
-            "upToDateMessageText": upToDateAlert.messageText,
-            "upToDateInformativeText": upToDateAlert.informativeText,
-            "expectedUpToDateMessageText": expectedUpToDateTitle,
-            "expectedUpToDateInformativeText": expectedUpToDateInformativeText,
-            "upToDateHasAccessoryView": upToDateAlert.accessoryView != nil,
-            "upToDateButtonTitles": upToDateAlert.buttons.map(\.title),
-            "expectedUpToDateButtonTitles": expectedOKButtonTitles,
-            "state": actualState,
-            "expectedState": expectedState,
-            "matchesExpected": matchesExpected
-        ]
+    func standardUserDriverWillHandleShowingUpdate(
+        _ handleShowingUpdate: Bool,
+        forUpdate update: SUAppcastItem,
+        state: SPUUserUpdateState
+    ) {
+#if !TESTING && !CLIPMENU_TEST_HOST
+        guard handleShowingUpdate, NSApp.activationPolicy() == .accessory else { return }
+        // Sparkle leaves scheduled alerts behind other applications. A temporary
+        // Dock icon lets users find that window without interrupting their work.
+        activationPolicyBeforeUpdate = NSApp.activationPolicy()
+        dockBadgeBeforeUpdate = NSApp.dockTile.badgeLabel
+        NSApp.setActivationPolicy(.regular)
+        if !state.userInitiated {
+            NSApp.dockTile.badgeLabel = "1"
+        }
+#endif
     }
 
-    func debugAutomaticInstallUpdatesReport() -> [String: Any] {
-        let defaults = UserDefaults.standard
-        let originalAutomaticInstallObject = defaults.object(forKey: CMAutomaticallyInstallUpdatesKey)
-        defer {
-            if let originalAutomaticInstallObject {
-                defaults.set(originalAutomaticInstallObject, forKey: CMAutomaticallyInstallUpdatesKey)
-            } else {
-                defaults.removeObject(forKey: CMAutomaticallyInstallUpdatesKey)
-            }
+    func standardUserDriverDidReceiveUserAttention(forUpdate update: SUAppcastItem) {
+#if !TESTING && !CLIPMENU_TEST_HOST
+        if activationPolicyBeforeUpdate != nil {
+            NSApp.dockTile.badgeLabel = dockBadgeBeforeUpdate
         }
-
-        let item = AppcastItem(
-            title: "Version 9.9.9",
-            version: "9.9.9",
-            releaseNotesURL: nil,
-            downloadURL: URL(string: "https://example.com/clipmenu/download.zip"),
-            dsaSignature: nil
-        )
-
-        setAutomaticallyInstallUpdatesEnabled(false)
-        let checkboxOffState = makeAutomaticallyInstallUpdatesCheckbox().state == .on
-        let backgroundOff = shouldAutomaticallyDownloadUpdate(item: item, userInitiated: false)
-        let manualOff = shouldAutomaticallyDownloadUpdate(item: item, userInitiated: true)
-        let backgroundInstallOff = shouldAutomaticallyInstallDownloadedUpdate(userInitiated: false)
-        let manualInstallOff = shouldAutomaticallyInstallDownloadedUpdate(userInitiated: true)
-
-        setAutomaticallyInstallUpdatesEnabled(true)
-        let checkboxOnState = makeAutomaticallyInstallUpdatesCheckbox().state == .on
-        let backgroundOn = shouldAutomaticallyDownloadUpdate(item: item, userInitiated: false)
-        let manualOn = shouldAutomaticallyDownloadUpdate(item: item, userInitiated: true)
-        let backgroundInstallOn = shouldAutomaticallyInstallDownloadedUpdate(userInitiated: false)
-        let manualInstallOn = shouldAutomaticallyInstallDownloadedUpdate(userInitiated: true)
-
-        let offState: [String: Bool] = [
-            "checkboxEnabled": checkboxOffState,
-            "backgroundAutomaticDownload": backgroundOff,
-            "manualAutomaticDownload": manualOff,
-            "backgroundAutomaticInstall": backgroundInstallOff,
-            "manualAutomaticInstall": manualInstallOff
-        ]
-        let onState: [String: Bool] = [
-            "checkboxEnabled": checkboxOnState,
-            "backgroundAutomaticDownload": backgroundOn,
-            "manualAutomaticDownload": manualOn,
-            "backgroundAutomaticInstall": backgroundInstallOn,
-            "manualAutomaticInstall": manualInstallOn
-        ]
-        let expectedOffState: [String: Bool] = [
-            "checkboxEnabled": false,
-            "backgroundAutomaticDownload": false,
-            "manualAutomaticDownload": false,
-            "backgroundAutomaticInstall": false,
-            "manualAutomaticInstall": false
-        ]
-        let expectedOnState: [String: Bool] = [
-            "checkboxEnabled": true,
-            "backgroundAutomaticDownload": true,
-            "manualAutomaticDownload": false,
-            "backgroundAutomaticInstall": false,
-            "manualAutomaticInstall": false
-        ]
-        let actualState: [String: Any] = [
-            "offState": offState,
-            "onState": onState
-        ]
-        let expectedState: [String: Any] = [
-            "offState": expectedOffState,
-            "onState": expectedOnState
-        ]
-        let matchesExpected = (actualState as NSDictionary).isEqual(to: expectedState)
-
-        return [
-            "offState": offState,
-            "expectedOffState": expectedOffState,
-            "onState": onState,
-            "expectedOnState": expectedOnState,
-            "state": actualState,
-            "expectedState": expectedState,
-            "checkboxOffState": checkboxOffState,
-            "checkboxOnState": checkboxOnState,
-            "backgroundAutomaticDownloadWhenOff": backgroundOff,
-            "backgroundAutomaticDownloadWhenOn": backgroundOn,
-            "manualCheckStillPromptsWhenOff": manualOff,
-            "manualCheckStillPromptsWhenOn": manualOn,
-            "automaticDownloadRequiresBackgroundCheck": backgroundOn && !manualOn,
-            "backgroundAutomaticInstallWhenOff": backgroundInstallOff,
-            "backgroundAutomaticInstallWhenOn": backgroundInstallOn,
-            "manualReadyToInstallPromptWhenOff": !manualInstallOff,
-            "manualReadyToInstallPromptWhenOn": !manualInstallOn,
-            "automaticInstallRequiresBackgroundCheck": backgroundInstallOn && !manualInstallOn,
-            "matchesExpected": matchesExpected
-        ]
+#endif
     }
 
-    func debugUpdatePresentationPolicyReport() -> [String: Any] {
-        let defaults = UserDefaults.standard
-        let originalAutomaticInstallObject = defaults.object(forKey: CMAutomaticallyInstallUpdatesKey)
-        defer {
-            if let originalAutomaticInstallObject {
-                defaults.set(originalAutomaticInstallObject, forKey: CMAutomaticallyInstallUpdatesKey)
-            } else {
-                defaults.removeObject(forKey: CMAutomaticallyInstallUpdatesKey)
-            }
-        }
-
-        let updateItem = AppcastItem(
-            title: "Version 9.9.9",
-            version: "9.9.9",
-            releaseNotesURL: URL(string: "https://example.com/clipmenu/release-notes"),
-            downloadURL: URL(string: "https://example.com/clipmenu/download.zip"),
-            dsaSignature: nil
-        )
-        let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-        let noUpdateItem = AppcastItem(
-            title: "Version \(currentVersion)",
-            version: currentVersion,
-            releaseNotesURL: nil,
-            downloadURL: URL(string: "https://example.com/clipmenu/current.zip"),
-            dsaSignature: nil
-        )
-
-        func decisionState(automaticInstallEnabled: Bool, userInitiated: Bool, items: [AppcastItem]) -> [String: Any] {
-            setAutomaticallyInstallUpdatesEnabled(automaticInstallEnabled)
-            let decision = updateResultPresentationDecision(items: items, userInitiated: userInitiated)
-            switch decision {
-            case let .showAvailableUpdateAlert(item):
-                return [
-                    "action": "showAvailableUpdateAlert",
-                    "itemVersion": item.version,
-                    "installAutomaticallyAfterDownload": NSNull()
-                ]
-            case let .downloadAutomatically(item, installAutomaticallyAfterDownload):
-                return [
-                    "action": "downloadAutomatically",
-                    "itemVersion": item.version,
-                    "installAutomaticallyAfterDownload": installAutomaticallyAfterDownload
-                ]
-            case let .showUpToDate(version):
-                return [
-                    "action": "showUpToDate",
-                    "itemVersion": version,
-                    "installAutomaticallyAfterDownload": NSNull()
-                ]
-            case .noAction:
-                return [
-                    "action": "noAction",
-                    "itemVersion": "",
-                    "installAutomaticallyAfterDownload": NSNull()
-                ]
-            }
-        }
-
-        let offManualUpdateAvailable = decisionState(automaticInstallEnabled: false, userInitiated: true, items: [updateItem])
-        let offBackgroundUpdateAvailable = decisionState(automaticInstallEnabled: false, userInitiated: false, items: [updateItem])
-        let onManualUpdateAvailable = decisionState(automaticInstallEnabled: true, userInitiated: true, items: [updateItem])
-        let onBackgroundUpdateAvailable = decisionState(automaticInstallEnabled: true, userInitiated: false, items: [updateItem])
-        let manualNoUpdate = decisionState(automaticInstallEnabled: true, userInitiated: true, items: [noUpdateItem])
-        let backgroundNoUpdate = decisionState(automaticInstallEnabled: true, userInitiated: false, items: [noUpdateItem])
-
-        let actualState: [String: Any] = [
-            "offManualUpdateAvailable": offManualUpdateAvailable,
-            "offBackgroundUpdateAvailable": offBackgroundUpdateAvailable,
-            "onManualUpdateAvailable": onManualUpdateAvailable,
-            "onBackgroundUpdateAvailable": onBackgroundUpdateAvailable,
-            "manualNoUpdate": manualNoUpdate,
-            "backgroundNoUpdate": backgroundNoUpdate
-        ]
-        let expectedState: [String: Any] = [
-            "offManualUpdateAvailable": [
-                "action": "showAvailableUpdateAlert",
-                "itemVersion": "9.9.9",
-                "installAutomaticallyAfterDownload": NSNull()
-            ],
-            "offBackgroundUpdateAvailable": [
-                "action": "showAvailableUpdateAlert",
-                "itemVersion": "9.9.9",
-                "installAutomaticallyAfterDownload": NSNull()
-            ],
-            "onManualUpdateAvailable": [
-                "action": "showAvailableUpdateAlert",
-                "itemVersion": "9.9.9",
-                "installAutomaticallyAfterDownload": NSNull()
-            ],
-            "onBackgroundUpdateAvailable": [
-                "action": "downloadAutomatically",
-                "itemVersion": "9.9.9",
-                "installAutomaticallyAfterDownload": false
-            ],
-            "manualNoUpdate": [
-                "action": "showUpToDate",
-                "itemVersion": currentVersion,
-                "installAutomaticallyAfterDownload": NSNull()
-            ],
-            "backgroundNoUpdate": [
-                "action": "noAction",
-                "itemVersion": "",
-                "installAutomaticallyAfterDownload": NSNull()
-            ]
-        ]
-        let matchesExpected = (actualState as NSDictionary).isEqual(to: expectedState)
-
-        return [
-            "state": actualState,
-            "expectedState": expectedState,
-            "matchesExpected": matchesExpected
-        ]
+    func standardUserDriverWillFinishUpdateSession() {
+#if !TESTING && !CLIPMENU_TEST_HOST
+        guard let activationPolicyBeforeUpdate else { return }
+        NSApp.dockTile.badgeLabel = dockBadgeBeforeUpdate
+        NSApp.setActivationPolicy(activationPolicyBeforeUpdate)
+        self.activationPolicyBeforeUpdate = nil
+        dockBadgeBeforeUpdate = nil
+#endif
     }
 
-    func debugSystemProfileFeedReport() -> [String: Any] {
-        let defaults = UserDefaults.standard
-        let originalSendProfileInfo = defaults.object(forKey: CMLegacySendProfileInfoKey)
-        let originalLastProfileSubmissionDate = defaults.object(forKey: CMLegacyLastProfileSubmissionDateKey)
-        let originalFeedOverride = defaults.object(forKey: "debugUpdateFeedURL")
-        defer {
-            if let originalSendProfileInfo {
-                defaults.set(originalSendProfileInfo, forKey: CMLegacySendProfileInfoKey)
-            } else {
-                defaults.removeObject(forKey: CMLegacySendProfileInfoKey)
-            }
-
-            if let originalLastProfileSubmissionDate {
-                defaults.set(originalLastProfileSubmissionDate, forKey: CMLegacyLastProfileSubmissionDateKey)
-            } else {
-                defaults.removeObject(forKey: CMLegacyLastProfileSubmissionDateKey)
-            }
-
-            if let originalFeedOverride {
-                defaults.set(originalFeedOverride, forKey: "debugUpdateFeedURL")
-            } else {
-                defaults.removeObject(forKey: "debugUpdateFeedURL")
-            }
-        }
-
-        defaults.set("https://example.com/appcast.xml?existing=1", forKey: "debugUpdateFeedURL")
-        let staleDate = Date(timeIntervalSince1970: 1_700_000_000)
-        let recentDate = staleDate.addingTimeInterval(60 * 60 * 24)
-        let throttledRequestDate = recentDate.addingTimeInterval(60 * 60 * 24 * 6)
-
-        defaults.set(true, forKey: CMLegacySendProfileInfoKey)
-        defaults.removeObject(forKey: CMLegacyLastProfileSubmissionDateKey)
-        let enabledURL = parameterizedFeedURL(now: staleDate, defaults: defaults)
-        let enabledQueryItems = URLComponents(url: enabledURL ?? URL(string: "https://example.com")!, resolvingAgainstBaseURL: false)?.queryItems ?? []
-        let storedDateAfterEnabled = defaults.object(forKey: CMLegacyLastProfileSubmissionDateKey) as? Date
-
-        defaults.set(true, forKey: CMLegacySendProfileInfoKey)
-        defaults.set(recentDate, forKey: CMLegacyLastProfileSubmissionDateKey)
-        let throttledURL = parameterizedFeedURL(now: throttledRequestDate, defaults: defaults)
-        let throttledQueryItems = URLComponents(url: throttledURL ?? URL(string: "https://example.com")!, resolvingAgainstBaseURL: false)?.queryItems ?? []
-        let storedDateAfterThrottle = defaults.object(forKey: CMLegacyLastProfileSubmissionDateKey) as? Date
-
-        defaults.set(false, forKey: CMLegacySendProfileInfoKey)
-        defaults.removeObject(forKey: CMLegacyLastProfileSubmissionDateKey)
-        let disabledURL = parameterizedFeedURL(now: staleDate, defaults: defaults)
-        let disabledQueryItems = URLComponents(url: disabledURL ?? URL(string: "https://example.com")!, resolvingAgainstBaseURL: false)?.queryItems ?? []
-        let storedDateAfterDisabled = defaults.object(forKey: CMLegacyLastProfileSubmissionDateKey) as? Date
-
-        let enabledQueryItemNames = enabledQueryItems.map(\.name)
-        let throttledQueryItemNames = throttledQueryItems.map(\.name)
-        let disabledQueryItemNames = disabledQueryItems.map(\.name)
-        let expectedEnabledQueryItemNames = [
-            "existing",
-            "osVersion",
-            "cputype",
-            "cpu64bit",
-            "cpusubtype",
-            "model",
-            "ncpu",
-            "lang",
-            "appName",
-            "appVersion",
-            "ramMB"
-        ]
-        let expectedThrottledQueryItemNames = ["existing"]
-        let expectedDisabledQueryItemNames = ["existing"]
-        let actualState: [String: Any] = [
-            "enabledQueryItemNames": enabledQueryItemNames,
-            "enabledStoredLastProfileSubmissionDate": storedDateAfterEnabled?.timeIntervalSince1970 ?? -1,
-            "throttledQueryItemNames": throttledQueryItemNames,
-            "throttledStoredLastProfileSubmissionDate": storedDateAfterThrottle?.timeIntervalSince1970 ?? -1,
-            "disabledQueryItemNames": disabledQueryItemNames,
-            "disabledStoredLastProfileSubmissionDate": storedDateAfterDisabled?.timeIntervalSince1970 ?? -1
-        ]
-        let expectedState: [String: Any] = [
-            "enabledQueryItemNames": expectedEnabledQueryItemNames,
-            "enabledStoredLastProfileSubmissionDate": staleDate.timeIntervalSince1970,
-            "throttledQueryItemNames": expectedThrottledQueryItemNames,
-            "throttledStoredLastProfileSubmissionDate": recentDate.timeIntervalSince1970,
-            "disabledQueryItemNames": expectedDisabledQueryItemNames,
-            "disabledStoredLastProfileSubmissionDate": -1
-        ]
-        let matchesExpected = (actualState as NSDictionary).isEqual(to: expectedState)
-
-        return [
-            "enabledURL": enabledURL?.absoluteString ?? "",
-            "enabledQueryItemNames": enabledQueryItemNames,
-            "expectedEnabledQueryItemNames": expectedEnabledQueryItemNames,
-            "enabledContainsExpectedParameters": enabledQueryItemNames == expectedEnabledQueryItemNames,
-            "enabledStoredLastProfileSubmissionDate": storedDateAfterEnabled?.timeIntervalSince1970 ?? -1,
-            "enabledStoredDateMatchesRequestTime": storedDateAfterEnabled == staleDate,
-            "throttledURL": throttledURL?.absoluteString ?? "",
-            "throttledQueryItemNames": throttledQueryItemNames,
-            "expectedThrottledQueryItemNames": expectedThrottledQueryItemNames,
-            "throttledDoesNotAppendSystemProfileTwice": throttledQueryItemNames == expectedThrottledQueryItemNames,
-            "throttledPreservesExistingQuery": throttledQueryItemNames == expectedThrottledQueryItemNames,
-            "throttledStoredDateUnchanged": storedDateAfterThrottle == recentDate,
-            "disabledURL": disabledURL?.absoluteString ?? "",
-            "disabledQueryItemNames": disabledQueryItemNames,
-            "expectedDisabledQueryItemNames": expectedDisabledQueryItemNames,
-            "disabledSkipsSystemProfileParameters": disabledQueryItemNames == expectedDisabledQueryItemNames,
-            "disabledLeavesSubmissionDateUnset": storedDateAfterDisabled == nil,
-            "state": actualState,
-            "expectedState": expectedState,
-            "matchesExpected": matchesExpected
-        ]
+    func allowedChannels(for updater: SPUUpdater) -> Set<String> {
+        includePreReleases ? ["beta"] : []
     }
-    #endif
+
+    func feedURLString(for updater: SPUUpdater) -> String? {
+        // Keep the bundled HTTPS feed authoritative over persisted legacy URLs.
+        feedURL?.absoluteString
+    }
 }
 
 @main
@@ -5521,7 +2404,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         AppController.registerDefaults()
         AppController.migrateLegacyHotKeyDefaultsIfNeeded()
         AppController.migrateLegacyUpdateDefaultsIfNeeded()
-        AppController.syncLegacyUpdateDefaultsFromModernPreferencesIfNeeded()
         super.init()
         AppController.shared = self
     }
@@ -5554,8 +2436,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
 #if TESTING || CLIPMENU_TEST_HOST
         UpdateCoordinator.shared.configureFromDefaults()
 #else
-        if !promptToAddLoginItemIfNeeded(),
-           !promptToAddUpdatePermissionIfNeeded() {
+        if !promptToAddLoginItemIfNeeded() {
             UpdateCoordinator.shared.configureFromDefaults()
         }
 #endif
@@ -5703,26 +2584,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         scheduleDebugActionMenuSelectionIfNeeded()
         scheduleDebugVisibleActionMenuIfNeeded()
         scheduleDebugPasteboardRoundTripIfNeeded()
-        scheduleDebugUpdateCheckIfNeeded()
-        scheduleDebugUpdateSkipBehaviorReportIfNeeded()
-        scheduleDebugLegacyUpdateDefaultsSyncReportIfNeeded()
-        scheduleDebugUpdatePreferencesAvailabilityReportIfNeeded()
-        scheduleDebugCheckingForUpdatesReportIfNeeded()
-        scheduleDebugUpdatePermissionPromptReportIfNeeded()
-        scheduleDebugReadyToInstallUpdateReportIfNeeded()
-        scheduleDebugReadyToInstallPresentationPolicyReportIfNeeded()
-        scheduleDebugAvailableUpdateAlertReportIfNeeded()
-        scheduleDebugAvailableUpdateAccessoryReportIfNeeded()
-        scheduleDebugDownloadProgressReportIfNeeded()
-        scheduleDebugDownloadFailurePolicyReportIfNeeded()
-        scheduleDebugUpdateFeedSelectionReportIfNeeded()
-        scheduleDebugUpdateCheckFailurePolicyReportIfNeeded()
-        scheduleDebugUpdateCheckPayloadFailureReportIfNeeded()
-        scheduleDebugUpdatePassiveAlertsReportIfNeeded()
-        scheduleDebugAutomaticInstallUpdatesReportIfNeeded()
-        scheduleDebugUpdatePresentationPolicyReportIfNeeded()
-        scheduleDebugSystemProfileFeedReportIfNeeded()
-        scheduleDebugInstalledSparkleCompatibilityReportIfNeeded()
         scheduleDebugDefaultsShapeReportIfNeeded()
         scheduleDebugDefaultsDumpIfNeeded()
 #endif
@@ -9017,7 +5878,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 let expectedHasFeedURL = UpdateCoordinator.shared.feedURL != nil
                 let expectedIsChecking = UpdateCoordinator.shared.isChecking
                 let expectedFeedStatusTitle: String = {
-                    guard UpdateCoordinator.shared.feedURL != nil else {
+                    guard UpdateCoordinator.shared.isConfiguredForUpdates else {
                         return NSLocalizedString("Unavailable", comment: "")
                     }
                     return preReleases
@@ -9025,8 +5886,11 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                         : NSLocalizedString("Stable", comment: "")
                 }()
                 let expectedCheckingStatusTitle: String = {
+                    guard UpdateCoordinator.shared.isConfiguredForUpdates else {
+                        return NSLocalizedString("Unavailable", comment: "")
+                    }
                     if isChecking {
-                        return NSLocalizedString("Checking now", comment: "")
+                        return NSLocalizedString("Update in progress", comment: "")
                     }
                     return automaticChecks
                         ? NSLocalizedString("Automatic checks on", comment: "")
@@ -9041,14 +5905,16 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 let expectedControlTitles = [
                     NSLocalizedString("1337.title", tableName: "Preferences", bundle: .main, value: "Automatically check for updates:", comment: ""),
                     NSLocalizedString("1426.title", tableName: "Preferences", bundle: .main, value: "Include pre-releases", comment: ""),
-                    NSLocalizedString("Automatically download updates in the future", comment: ""),
+                    NSLocalizedString("Automatically download and install updates", comment: ""),
                     NSLocalizedString("1279.title", tableName: "Preferences", bundle: .main, value: "Time interval", comment: ""),
                     NSLocalizedString("1331.title", tableName: "Preferences", bundle: .main, value: "Check Now", comment: "")
                 ]
                 let expectedAvailability = CMUpdatePreferencesAvailabilityReport(
                     automaticChecks: automaticChecks,
                     feedURLPresent: expectedHasFeedURL,
-                    isChecking: expectedIsChecking
+                    isChecking: expectedIsChecking,
+                    configurationAvailable: UpdateCoordinator.shared.isConfiguredForUpdates,
+                    canCheckForUpdates: UpdateCoordinator.shared.canCheckForUpdates
                 )
                 let matchesExpected = window.title == (paneSnapshot["paneTitle"] as? String)
                     && self.debugToolbarStyleName(window.toolbarStyle) == "preference"
@@ -16625,7 +13491,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             AppController.registerDefaults()
             AppController.migrateLegacyHotKeyDefaultsIfNeeded()
             AppController.migrateLegacyUpdateDefaultsIfNeeded()
-            AppController.syncLegacyUpdateDefaultsFromModernPreferencesIfNeeded()
             registerHotKey()
             SnippetFileStore.shared.folders = originalSnippetFolders
             SnippetFileStore.shared.save()
@@ -16687,7 +13552,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         AppController.registerDefaults()
         AppController.migrateLegacyHotKeyDefaultsIfNeeded()
         AppController.migrateLegacyUpdateDefaultsIfNeeded()
-        AppController.syncLegacyUpdateDefaultsFromModernPreferencesIfNeeded()
         registerHotKey()
         configureStatusItem()
 
@@ -16847,8 +13711,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             && !mainMenuTitles.contains(localizedHistoryHeader)
             && !mainMenuTitles.contains(localizedSnippetsHeader)
             && !historyMenuTitles.contains(localizedHistoryHeader)
-            && defaults.bool(forKey: CMEnableAutomaticCheckKey) == false
-            && defaults.integer(forKey: CMUpdateCheckIntervalKey) == 604800
+            && defaults.bool(forKey: CMLegacyAutomaticChecksEnabledKey) == false
+            && defaults.integer(forKey: CMLegacyUpdateCheckIntervalKey) == 604800
 
         let report: [String: Any] = [
             "importedVisibleShortcutDefaults": visibleShortcutDefaults,
@@ -16881,8 +13745,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             "importedShiftSelectionPasteboardText": importedShiftSelectionPasteboardText,
             "importedShiftSelectionClipCountAfter": importedShiftSelectionClipCountAfter,
             "importedShiftSelectionPasteSynthesisCount": debugPasteSynthesisRequestCount,
-            "migratedAutomaticChecks": defaults.bool(forKey: CMEnableAutomaticCheckKey),
-            "migratedUpdateInterval": defaults.integer(forKey: CMUpdateCheckIntervalKey),
+            "migratedAutomaticChecks": defaults.bool(forKey: CMLegacyAutomaticChecksEnabledKey),
+            "migratedUpdateInterval": defaults.integer(forKey: CMLegacyUpdateCheckIntervalKey),
             "migratedLegacyAutomaticChecks": defaults.bool(forKey: CMLegacyAutomaticChecksEnabledKey),
             "migratedLegacyAutomaticChecksOld": defaults.bool(forKey: CMLegacyAutomaticChecksEnabledOldKey),
             "expectedVisibleShortcutDefaults": expectedVisibleShortcutDefaults,
@@ -18425,179 +15289,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         }
     }
 
-    private func scheduleDebugUpdateCheckIfNeeded() {
-        let delay = UserDefaults.standard.double(forKey: "debugRunUpdateCheckAfterLaunchDelay")
-        guard delay > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self else { return }
-            debugPasteFlow("runDebugUpdateCheck starting feedURL=\(UpdateCoordinator.shared.feedURL?.absoluteString ?? "<nil>")")
-            UpdateCoordinator.shared.checkForUpdates()
-        }
-    }
-
-    private func scheduleDebugUpdateSkipBehaviorReportIfNeeded() {
-        let delay = debugOneShotDoubleValue(forKey: "debugWriteUpdateSkipBehaviorReportAfterLaunchDelay") ?? 0
-        guard delay > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            self.runDebugUpdateSkipBehaviorReport()
-        }
-    }
-
-    private func scheduleDebugLegacyUpdateDefaultsSyncReportIfNeeded() {
-        let delay = debugOneShotDoubleValue(forKey: "debugWriteLegacyUpdateDefaultsSyncReportAfterLaunchDelay") ?? 0
-        guard delay > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            self.runDebugLegacyUpdateDefaultsSyncReport()
-        }
-    }
-
-    private func scheduleDebugUpdatePreferencesAvailabilityReportIfNeeded() {
-        let delay = debugOneShotDoubleValue(forKey: "debugWriteUpdatePreferencesAvailabilityReportAfterLaunchDelay") ?? 0
-        guard delay > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            self.runDebugUpdatePreferencesAvailabilityReport()
-        }
-    }
-
-    private func runDebugUpdateSkipBehaviorReport() {
-        let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugUpdateSkipBehaviorReportPath")
-            ?? "/tmp/clipmenu-update-skip-behavior-report.json")
-        let report = UpdateCoordinator.shared.debugUpdateSkipBehaviorReport()
-        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: reportURL, options: .atomic)
-        }
-        debugTerminateApplication()
-    }
-
-    private func runDebugLegacyUpdateDefaultsSyncReport() {
-        let defaults = UserDefaults.standard
-        let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugLegacyUpdateDefaultsSyncReportPath")
-            ?? "/tmp/clipmenu-legacy-update-defaults-sync-report.json")
-        let originalPersistentDomain = Bundle.main.bundleIdentifier.flatMap { defaults.persistentDomain(forName: $0) }
-
-        defer {
-            if let bundleIdentifier = Bundle.main.bundleIdentifier {
-                if let originalPersistentDomain {
-                    defaults.setPersistentDomain(originalPersistentDomain, forName: bundleIdentifier)
-                } else {
-                    defaults.removePersistentDomain(forName: bundleIdentifier)
-                }
-            }
-            AppController.registerDefaults()
-            AppController.migrateLegacyUpdateDefaultsIfNeeded()
-            AppController.syncLegacyUpdateDefaultsFromModernPreferencesIfNeeded()
-            UpdateCoordinator.shared.configureFromDefaults()
-            debugTerminateApplication()
-        }
-
-        guard let bundleIdentifier = Bundle.main.bundleIdentifier else {
-            let report: [String: Any] = ["error": "Missing bundle identifier", "matchesExpected": false]
-            if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-                try? data.write(to: reportURL, options: .atomic)
-            }
-            return
-        }
-
-        let importedLegacyDomain: [String: Any] = [
-            CMLegacyAutomaticChecksEnabledOldKey: false,
-            CMLegacyUpdateCheckIntervalKey: 604800,
-            CMAutomaticallyInstallUpdatesKey: true
-        ]
-
-        func captureState(label: String) -> [String: Any] {
-            let persistentDefaults = defaults.persistentDomain(forName: bundleIdentifier) ?? [:]
-            let paneSnapshot = CMUpdatesPreferencesSnapshotForDebug()
-            let snapshotStates = paneSnapshot["states"] as? [String: Any] ?? [:]
-            return [
-                "label": label,
-                "effectiveAutomaticChecks": defaults.bool(forKey: CMEnableAutomaticCheckKey),
-                "effectiveUpdateInterval": defaults.integer(forKey: CMUpdateCheckIntervalKey),
-                "effectiveAutomaticallyInstallUpdates": defaults.bool(forKey: CMAutomaticallyInstallUpdatesKey),
-                "persistentAutomaticChecks": persistentDefaults[CMEnableAutomaticCheckKey] as Any,
-                "persistentLegacyAutomaticChecks": persistentDefaults[CMLegacyAutomaticChecksEnabledKey] as Any,
-                "persistentLegacyAutomaticChecksOld": persistentDefaults[CMLegacyAutomaticChecksEnabledOldKey] as Any,
-                "persistentLegacyAllowsAutomaticUpdates": persistentDefaults[CMLegacyAllowsAutomaticUpdatesKey] as Any,
-                "persistentLegacyInterval": persistentDefaults[CMLegacyUpdateCheckIntervalKey] as Any,
-                "persistentAutomaticallyInstallUpdates": persistentDefaults[CMAutomaticallyInstallUpdatesKey] as Any,
-                "snapshotAutomaticChecks": snapshotStates["automaticChecks"] as? Bool as Any,
-                "snapshotAutomaticallyInstallUpdates": snapshotStates["automaticallyInstallUpdates"] as? Bool as Any,
-                "snapshotInterval": snapshotStates["interval"] as? Int as Any,
-                "snapshotVisibleIntervalSelection": snapshotStates["visibleIntervalSelection"] as? Int as Any,
-                "snapshotShowsImportedIntervalNotice": snapshotStates["showsImportedIntervalNotice"] as? Bool as Any
-            ]
-        }
-
-        defaults.setPersistentDomain(importedLegacyDomain, forName: bundleIdentifier)
-        AppController.registerDefaults()
-        AppController.migrateLegacyUpdateDefaultsIfNeeded()
-        AppController.syncLegacyUpdateDefaultsFromModernPreferencesIfNeeded()
-        UpdateCoordinator.shared.configureFromDefaults()
-        let migratedState = captureState(label: "migratedLegacyDomain")
-
-        defaults.set(true, forKey: CMEnableAutomaticCheckKey)
-        defaults.set(2592000, forKey: CMUpdateCheckIntervalKey)
-        defaults.set(false, forKey: CMAutomaticallyInstallUpdatesKey)
-        userDefaultsDidChange(Notification(name: UserDefaults.didChangeNotification))
-        UpdateCoordinator.shared.configureFromDefaults()
-        let syncedState = captureState(label: "syncedFromModernPreferences")
-
-        let migratedExpectedState: [String: Any] = [
-            "label": "migratedLegacyDomain",
-            "effectiveAutomaticChecks": false,
-            "effectiveUpdateInterval": 604800,
-            "effectiveAutomaticallyInstallUpdates": true,
-            "persistentAutomaticChecks": false,
-            "persistentLegacyAutomaticChecks": false,
-            "persistentLegacyAutomaticChecksOld": false,
-            "persistentLegacyAllowsAutomaticUpdates": false,
-            "persistentLegacyInterval": 604800,
-            "persistentAutomaticallyInstallUpdates": true,
-            "snapshotAutomaticChecks": false,
-            "snapshotAutomaticallyInstallUpdates": true,
-            "snapshotInterval": 604800,
-            "snapshotVisibleIntervalSelection": 604800,
-            "snapshotShowsImportedIntervalNotice": false
-        ]
-        let syncedExpectedState: [String: Any] = [
-            "label": "syncedFromModernPreferences",
-            "effectiveAutomaticChecks": true,
-            "effectiveUpdateInterval": 2592000,
-            "effectiveAutomaticallyInstallUpdates": false,
-            "persistentAutomaticChecks": true,
-            "persistentLegacyAutomaticChecks": true,
-            "persistentLegacyAutomaticChecksOld": true,
-            "persistentLegacyAllowsAutomaticUpdates": true,
-            "persistentLegacyInterval": 2592000,
-            "persistentAutomaticallyInstallUpdates": false,
-            "snapshotAutomaticChecks": true,
-            "snapshotAutomaticallyInstallUpdates": false,
-            "snapshotInterval": 2592000,
-            "snapshotVisibleIntervalSelection": 2592000,
-            "snapshotShowsImportedIntervalNotice": false
-        ]
-
-        let report: [String: Any] = [
-            "state": [
-                "migratedState": migratedState,
-                "syncedState": syncedState
-            ],
-            "expectedState": [
-                "migratedState": migratedExpectedState,
-                "syncedState": syncedExpectedState
-            ],
-            "matchesExpected": NSDictionary(dictionary: migratedState).isEqual(to: migratedExpectedState)
-                && NSDictionary(dictionary: syncedState).isEqual(to: syncedExpectedState)
-        ]
-
-        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: reportURL, options: .atomic)
-        }
-    }
-
     private func runDebugOpenRecentMenuReport() {
         let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugOpenRecentMenuReportPath")
             ?? "/tmp/clipmenu-open-recent-menu-report.json")
@@ -19047,377 +15738,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         }
     }
 
-    private func runDebugUpdatePreferencesAvailabilityReport() {
-        let defaults = UserDefaults.standard
-        let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugUpdatePreferencesAvailabilityReportPath")
-            ?? "/tmp/clipmenu-update-preferences-availability-report.json")
-        let originalAutomaticChecks = defaults.object(forKey: CMEnableAutomaticCheckKey)
-        let originalPreReleases = defaults.object(forKey: CMEnableAutomaticCheckPreReleaseKey)
-        let originalAutomaticallyInstallUpdates = defaults.object(forKey: CMAutomaticallyInstallUpdatesKey)
-
-        defer {
-            restoreDefault(originalAutomaticChecks, forKey: CMEnableAutomaticCheckKey)
-            restoreDefault(originalPreReleases, forKey: CMEnableAutomaticCheckPreReleaseKey)
-            restoreDefault(originalAutomaticallyInstallUpdates, forKey: CMAutomaticallyInstallUpdatesKey)
-            debugTerminateApplication()
-        }
-
-        showPreferencePanel(nil)
-
-        let feedURLPresent = UpdateCoordinator.shared.feedURL != nil
-        defaults.set(false, forKey: CMEnableAutomaticCheckKey)
-        let disabledState = CMUpdatePreferencesAvailabilityReport(
-            automaticChecks: false,
-            feedURLPresent: feedURLPresent,
-            isChecking: false
-        )
-
-        defaults.set(true, forKey: CMEnableAutomaticCheckKey)
-        let enabledState = CMUpdatePreferencesAvailabilityReport(
-            automaticChecks: true,
-            feedURLPresent: feedURLPresent,
-            isChecking: false
-        )
-
-        let checkingState = CMUpdatePreferencesAvailabilityReport(
-            automaticChecks: true,
-            feedURLPresent: feedURLPresent,
-            isChecking: true
-        )
-        let expectedDisabledState: [String: Bool] = [
-            "preReleasesEnabled": false,
-            "automaticallyInstallUpdatesEnabled": false,
-            "intervalEnabled": false,
-            "checkNowEnabled": false
-        ]
-        let expectedEnabledState: [String: Bool] = [
-            "preReleasesEnabled": true,
-            "automaticallyInstallUpdatesEnabled": true,
-            "intervalEnabled": true,
-            "checkNowEnabled": feedURLPresent
-        ]
-        let expectedCheckingState: [String: Bool] = [
-            "preReleasesEnabled": true,
-            "automaticallyInstallUpdatesEnabled": true,
-            "intervalEnabled": true,
-            "checkNowEnabled": false
-        ]
-
-        let report: [String: Any] = [
-            "feedURLPresent": feedURLPresent,
-            "disabledState": disabledState,
-            "enabledState": enabledState,
-            "checkingState": checkingState,
-            "expectedDisabledState": expectedDisabledState,
-            "expectedEnabledState": expectedEnabledState,
-            "expectedCheckingState": expectedCheckingState,
-            "automaticChecksOffDisablesDependentControls": (disabledState as NSDictionary) == (expectedDisabledState as NSDictionary),
-            "automaticChecksOnEnablesDependentControlsWhenFeedPresent": (enabledState as NSDictionary) == (expectedEnabledState as NSDictionary),
-            "checkingStateDisablesCheckNow": (checkingState as NSDictionary) == (expectedCheckingState as NSDictionary),
-            "matchesExpected": (disabledState as NSDictionary) == (expectedDisabledState as NSDictionary)
-                && (enabledState as NSDictionary) == (expectedEnabledState as NSDictionary)
-                && (checkingState as NSDictionary) == (expectedCheckingState as NSDictionary)
-        ]
-
-        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: reportURL, options: .atomic)
-        }
-    }
-
-    private func scheduleDebugCheckingForUpdatesReportIfNeeded() {
-        let delay = debugOneShotDoubleValue(forKey: "debugWriteCheckingForUpdatesReportAfterLaunchDelay") ?? 0
-        guard delay > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            self.runDebugCheckingForUpdatesReport()
-        }
-    }
-
-    private func runDebugCheckingForUpdatesReport() {
-        let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugCheckingForUpdatesReportPath")
-            ?? "/tmp/clipmenu-checking-for-updates-report.json")
-        let report = UpdateCoordinator.shared.debugCheckingForUpdatesReport()
-        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: reportURL, options: .atomic)
-        }
-        debugTerminateApplication()
-    }
-
-    private func scheduleDebugUpdatePermissionPromptReportIfNeeded() {
-        let delay = debugOneShotDoubleValue(forKey: "debugWriteUpdatePermissionPromptReportAfterLaunchDelay") ?? 0
-        guard delay > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            self.runDebugUpdatePermissionPromptReport()
-        }
-    }
-
-    private func runDebugUpdatePermissionPromptReport() {
-        let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugUpdatePermissionPromptReportPath")
-            ?? "/tmp/clipmenu-update-permission-prompt-report.json")
-        let report = UpdateCoordinator.shared.debugUpdatePermissionPromptReport()
-        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: reportURL, options: .atomic)
-        }
-        debugTerminateApplication()
-    }
-
-    private func scheduleDebugReadyToInstallUpdateReportIfNeeded() {
-        let delay = debugOneShotDoubleValue(forKey: "debugWriteReadyToInstallUpdateReportAfterLaunchDelay") ?? 0
-        guard delay > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            self.runDebugReadyToInstallUpdateReport()
-        }
-    }
-
-    private func runDebugReadyToInstallUpdateReport() {
-        let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugReadyToInstallUpdateReportPath")
-            ?? "/tmp/clipmenu-ready-to-install-update-report.json")
-        let report = UpdateCoordinator.shared.debugReadyToInstallReport()
-        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: reportURL, options: .atomic)
-        }
-        debugTerminateApplication()
-    }
-
-    private func scheduleDebugReadyToInstallPresentationPolicyReportIfNeeded() {
-        let delay = debugOneShotDoubleValue(forKey: "debugWriteReadyToInstallPresentationPolicyReportAfterLaunchDelay") ?? 0
-        guard delay > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            self.runDebugReadyToInstallPresentationPolicyReport()
-        }
-    }
-
-    private func runDebugReadyToInstallPresentationPolicyReport() {
-        let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugReadyToInstallPresentationPolicyReportPath")
-            ?? "/tmp/clipmenu-ready-to-install-presentation-policy-report.json")
-        let report = UpdateCoordinator.shared.debugReadyToInstallPresentationPolicyReport()
-        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: reportURL, options: .atomic)
-        }
-        debugTerminateApplication()
-    }
-
-    private func scheduleDebugAvailableUpdateAlertReportIfNeeded() {
-        let delay = debugOneShotDoubleValue(forKey: "debugWriteAvailableUpdateAlertReportAfterLaunchDelay") ?? 0
-        guard delay > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            self.runDebugAvailableUpdateAlertReport()
-        }
-    }
-
-    private func scheduleDebugAvailableUpdateAccessoryReportIfNeeded() {
-        let delay = debugOneShotDoubleValue(forKey: "debugWriteAvailableUpdateAccessoryReportAfterLaunchDelay") ?? 0
-        guard delay > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            self.runDebugAvailableUpdateAccessoryReport()
-        }
-    }
-
-    private func scheduleDebugDownloadProgressReportIfNeeded() {
-        let delay = debugOneShotDoubleValue(forKey: "debugWriteDownloadProgressReportAfterLaunchDelay") ?? 0
-        guard delay > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            self.runDebugDownloadProgressReport()
-        }
-    }
-
-    private func scheduleDebugDownloadFailurePolicyReportIfNeeded() {
-        let delay = debugOneShotDoubleValue(forKey: "debugWriteDownloadFailurePolicyReportAfterLaunchDelay") ?? 0
-        guard delay > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            self.runDebugDownloadFailurePolicyReport()
-        }
-    }
-
-    private func scheduleDebugUpdateFeedSelectionReportIfNeeded() {
-        let delay = debugOneShotDoubleValue(forKey: "debugWriteUpdateFeedSelectionReportAfterLaunchDelay") ?? 0
-        guard delay > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            self.runDebugUpdateFeedSelectionReport()
-        }
-    }
-
-    private func scheduleDebugUpdateCheckFailurePolicyReportIfNeeded() {
-        let delay = debugOneShotDoubleValue(forKey: "debugWriteUpdateCheckFailurePolicyReportAfterLaunchDelay") ?? 0
-        guard delay > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            self.runDebugUpdateCheckFailurePolicyReport()
-        }
-    }
-
-    private func scheduleDebugUpdateCheckPayloadFailureReportIfNeeded() {
-        let delay = debugOneShotDoubleValue(forKey: "debugWriteUpdateCheckPayloadFailureReportAfterLaunchDelay") ?? 0
-        guard delay > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            self.runDebugUpdateCheckPayloadFailureReport()
-        }
-    }
-
-    private func scheduleDebugUpdatePassiveAlertsReportIfNeeded() {
-        let delay = debugOneShotDoubleValue(forKey: "debugWriteUpdatePassiveAlertsReportAfterLaunchDelay") ?? 0
-        guard delay > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            self.runDebugUpdatePassiveAlertsReport()
-        }
-    }
-
-    private func runDebugAvailableUpdateAlertReport() {
-        let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugAvailableUpdateAlertReportPath")
-            ?? "/tmp/clipmenu-available-update-alert-report.json")
-        let report = UpdateCoordinator.shared.debugAvailableUpdateAlertReport()
-        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: reportURL, options: .atomic)
-        }
-        debugTerminateApplication()
-    }
-
-    private func runDebugAvailableUpdateAccessoryReport() {
-        let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugAvailableUpdateAccessoryReportPath")
-            ?? "/tmp/clipmenu-available-update-accessory-report.json")
-        let report = UpdateCoordinator.shared.debugAvailableUpdateAccessoryReport()
-        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: reportURL, options: .atomic)
-        }
-        debugTerminateApplication()
-    }
-
-    private func runDebugDownloadProgressReport() {
-        let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugDownloadProgressReportPath")
-            ?? "/tmp/clipmenu-download-progress-report.json")
-        let report = UpdateCoordinator.shared.debugDownloadProgressReport()
-        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: reportURL, options: .atomic)
-        }
-        debugTerminateApplication()
-    }
-
-    private func runDebugDownloadFailurePolicyReport() {
-        let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugDownloadFailurePolicyReportPath")
-            ?? "/tmp/clipmenu-download-failure-policy-report.json")
-        let report = UpdateCoordinator.shared.debugDownloadFailurePolicyReport()
-        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: reportURL, options: .atomic)
-        }
-        debugTerminateApplication()
-    }
-
-    private func runDebugUpdateFeedSelectionReport() {
-        let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugUpdateFeedSelectionReportPath")
-            ?? "/tmp/clipmenu-update-feed-selection-report.json")
-        let report = UpdateCoordinator.shared.debugUpdateFeedSelectionReport()
-        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: reportURL, options: .atomic)
-        }
-        debugTerminateApplication()
-    }
-
-    private func runDebugUpdateCheckFailurePolicyReport() {
-        let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugUpdateCheckFailurePolicyReportPath")
-            ?? "/tmp/clipmenu-update-check-failure-policy-report.json")
-        let report = UpdateCoordinator.shared.debugUpdateCheckFailurePolicyReport()
-        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: reportURL, options: .atomic)
-        }
-        debugTerminateApplication()
-    }
-
-    private func runDebugUpdateCheckPayloadFailureReport() {
-        let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugUpdateCheckPayloadFailureReportPath")
-            ?? "/tmp/clipmenu-update-check-payload-failure-report.json")
-        let report = UpdateCoordinator.shared.debugUpdateCheckPayloadFailureReport()
-        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: reportURL, options: .atomic)
-        }
-        debugTerminateApplication()
-    }
-
-    private func runDebugUpdatePassiveAlertsReport() {
-        let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugUpdatePassiveAlertsReportPath")
-            ?? "/tmp/clipmenu-update-passive-alerts-report.json")
-        let report = UpdateCoordinator.shared.debugUpdatePassiveAlertsReport()
-        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: reportURL, options: .atomic)
-        }
-        debugTerminateApplication()
-    }
-
-    private func scheduleDebugAutomaticInstallUpdatesReportIfNeeded() {
-        let delay = debugOneShotDoubleValue(forKey: "debugWriteAutomaticInstallUpdatesReportAfterLaunchDelay") ?? 0
-        guard delay > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            self.runDebugAutomaticInstallUpdatesReport()
-        }
-    }
-
-    private func scheduleDebugUpdatePresentationPolicyReportIfNeeded() {
-        let delay = debugOneShotDoubleValue(forKey: "debugWriteUpdatePresentationPolicyReportAfterLaunchDelay") ?? 0
-        guard delay > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            self.runDebugUpdatePresentationPolicyReport()
-        }
-    }
-
-    private func runDebugAutomaticInstallUpdatesReport() {
-        let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugAutomaticInstallUpdatesReportPath")
-            ?? "/tmp/clipmenu-automatic-install-updates-report.json")
-        let report = UpdateCoordinator.shared.debugAutomaticInstallUpdatesReport()
-        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: reportURL, options: .atomic)
-        }
-        debugTerminateApplication()
-    }
-
-    private func runDebugUpdatePresentationPolicyReport() {
-        let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugUpdatePresentationPolicyReportPath")
-            ?? "/tmp/clipmenu-update-presentation-policy-report.json")
-        let report = UpdateCoordinator.shared.debugUpdatePresentationPolicyReport()
-        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: reportURL, options: .atomic)
-        }
-        debugTerminateApplication()
-    }
-
-    private func scheduleDebugSystemProfileFeedReportIfNeeded() {
-        let delay = debugOneShotDoubleValue(forKey: "debugWriteSystemProfileFeedReportAfterLaunchDelay") ?? 0
-        guard delay > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            self?.runDebugSystemProfileFeedReport()
-        }
-    }
-
-    private func runDebugSystemProfileFeedReport() {
-        let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugSystemProfileFeedReportPath")
-            ?? "/tmp/clipmenu-system-profile-feed-report.json")
-        let report = UpdateCoordinator.shared.debugSystemProfileFeedReport()
-        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: reportURL, options: .atomic)
-        }
-        debugTerminateApplication()
-    }
-
-    private func scheduleDebugInstalledSparkleCompatibilityReportIfNeeded() {
-        let delay = debugOneShotDoubleValue(forKey: "debugWriteInstalledSparkleCompatibilityReportAfterLaunchDelay") ?? 0
-        guard delay > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            self.runDebugInstalledSparkleCompatibilityReport()
-        }
-    }
-
     private func scheduleDebugDefaultsShapeReportIfNeeded() {
         let delay = debugOneShotDoubleValue(forKey: "debugWriteDefaultsShapeReportAfterLaunchDelay") ?? 0
         guard delay > 0 else { return }
@@ -19425,76 +15745,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             self.runDebugDefaultsShapeReport()
         }
-    }
-
-    private func runDebugInstalledSparkleCompatibilityReport() {
-        let reportURL = URL(fileURLWithPath: debugOneShotStringValue(forKey: "debugInstalledSparkleCompatibilityReportPath")
-            ?? "/tmp/clipmenu-installed-sparkle-compatibility-report.json")
-        let sparkleURL = URL(fileURLWithPath: "/Applications/ClipMenu.app/Contents/Frameworks/Sparkle.framework/Versions/A/Sparkle")
-        let sparkleExists = FileManager.default.fileExists(atPath: sparkleURL.path)
-        let currentArchitecture = currentDebugArchitecture()
-        let lipoResult = debugCommandResult(
-            launchPath: "/usr/bin/lipo",
-            arguments: ["-archs", sparkleURL.path]
-        )
-        let architectures = lipoResult.output
-            .split(whereSeparator: \.isWhitespace)
-            .map(String.init)
-
-        dlerror()
-        let handle = dlopen(sparkleURL.path, RTLD_NOW | RTLD_LOCAL)
-        let dlopenSucceeded = handle != nil
-        let dlopenError = dlopenSucceeded ? "" : String(cString: dlerror())
-        if let handle {
-            dlclose(handle)
-        }
-
-        let containsCurrentArchitecture = currentArchitecture.map { architectures.contains($0) } ?? false
-        let hostIsArm64 = currentArchitecture == "arm64"
-        let actualState: [String: Any] = [
-            "sparkleExists": sparkleExists,
-            "currentArchitecture": currentArchitecture as Any,
-            "containsCurrentArchitecture": containsCurrentArchitecture,
-            "dlopenSucceeded": dlopenSucceeded
-        ]
-        let expectedState: [String: Any] = hostIsArm64
-            ? [
-                "sparkleExists": true,
-                "currentArchitecture": "arm64",
-                "containsCurrentArchitecture": false,
-                "dlopenSucceeded": false
-            ]
-            : [
-                "sparkleExists": sparkleExists,
-                "currentArchitecture": currentArchitecture as Any,
-                "containsCurrentArchitecture": containsCurrentArchitecture,
-                "dlopenSucceeded": dlopenSucceeded
-            ]
-        let matchesExpectedOnCurrentHost = hostIsArm64
-            ? (actualState as NSDictionary).isEqual(to: expectedState)
-            : sparkleExists
-
-        let report: [String: Any] = [
-            "sparklePath": sparkleURL.path,
-            "sparkleExists": sparkleExists,
-            "currentArchitecture": currentArchitecture as Any,
-            "architectures": architectures,
-            "containsCurrentArchitecture": containsCurrentArchitecture,
-            "lipoExitStatus": lipoResult.status as Any,
-            "lipoError": lipoResult.error,
-            "dlopenSucceeded": dlopenSucceeded,
-            "dlopenError": dlopenError,
-            "hostIsArm64": hostIsArm64,
-            "state": actualState,
-            "expectedState": expectedState,
-            "matchesExpectedOnCurrentHost": matchesExpectedOnCurrentHost,
-            "matchesExpected": matchesExpectedOnCurrentHost
-        ]
-
-        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: reportURL, options: .atomic)
-        }
-        debugTerminateApplication()
     }
 
     private func runDebugDefaultsShapeReport() {
@@ -22252,7 +18502,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             CMPrefInvokeActionImmediatelyKey: false,
             CMPrefContorlClickBehaviorKey: "popUpActionMenu",
             CMPrefPositionOfSnippetsKey: CMPositionOfSnippets.belowClips.rawValue,
-            CMEnableAutomaticCheckKey: true,
+            CMEnableAutomaticCheckKey: false,
             CMEnableAutomaticCheckPreReleaseKey: false,
             CMUpdateCheckIntervalKey: 86400
         ])
@@ -22311,59 +18561,11 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
 
     private static func migrateLegacyUpdateDefaultsIfNeeded() {
         let defaults = UserDefaults.standard
-        guard let bundleIdentifier = Bundle.main.bundleIdentifier,
-              var persistentDefaults = defaults.persistentDomain(forName: bundleIdentifier) else {
-            return
-        }
-
-        var changed = false
-
-        if persistentDefaults[CMEnableAutomaticCheckKey] == nil,
-           let legacyAutomaticChecks = persistentDefaults[CMLegacyAutomaticChecksEnabledKey] as? NSNumber {
-            persistentDefaults[CMEnableAutomaticCheckKey] = legacyAutomaticChecks.boolValue
-            changed = true
-        } else if persistentDefaults[CMEnableAutomaticCheckKey] == nil,
-                  let legacyAutomaticChecksOld = persistentDefaults[CMLegacyAutomaticChecksEnabledOldKey] as? NSNumber {
-            persistentDefaults[CMEnableAutomaticCheckKey] = legacyAutomaticChecksOld.boolValue
-            changed = true
-        } else if persistentDefaults[CMEnableAutomaticCheckKey] == nil,
-                  let legacyAllowsAutomaticUpdates = persistentDefaults[CMLegacyAllowsAutomaticUpdatesKey] as? NSNumber {
-            persistentDefaults[CMEnableAutomaticCheckKey] = legacyAllowsAutomaticUpdates.boolValue
-            changed = true
-        }
-
-        if persistentDefaults[CMUpdateCheckIntervalKey] == nil,
-           let legacyInterval = persistentDefaults[CMLegacyUpdateCheckIntervalKey] as? NSNumber {
-            persistentDefaults[CMUpdateCheckIntervalKey] = legacyInterval.intValue
-            changed = true
-        }
-
-        if changed {
-            defaults.setPersistentDomain(persistentDefaults, forName: bundleIdentifier)
-        }
-    }
-
-    private static func syncLegacyUpdateDefaultsFromModernPreferencesIfNeeded() {
-        let defaults = UserDefaults.standard
-
-        let automaticChecks = defaults.bool(forKey: CMEnableAutomaticCheckKey)
-        let existingLegacyAutomaticChecks = defaults.object(forKey: CMLegacyAutomaticChecksEnabledKey) as? NSNumber
-        if existingLegacyAutomaticChecks?.boolValue != automaticChecks {
-            defaults.set(automaticChecks, forKey: CMLegacyAutomaticChecksEnabledKey)
-        }
-        let existingLegacyAutomaticChecksOld = defaults.object(forKey: CMLegacyAutomaticChecksEnabledOldKey) as? NSNumber
-        if existingLegacyAutomaticChecksOld?.boolValue != automaticChecks {
-            defaults.set(automaticChecks, forKey: CMLegacyAutomaticChecksEnabledOldKey)
-        }
-        let existingLegacyAllowsAutomaticUpdates = defaults.object(forKey: CMLegacyAllowsAutomaticUpdatesKey) as? NSNumber
-        if existingLegacyAllowsAutomaticUpdates?.boolValue != automaticChecks {
-            defaults.set(automaticChecks, forKey: CMLegacyAllowsAutomaticUpdatesKey)
-        }
-
-        let interval = defaults.integer(forKey: CMUpdateCheckIntervalKey)
-        let existingLegacyInterval = defaults.object(forKey: CMLegacyUpdateCheckIntervalKey) as? NSNumber
-        if existingLegacyInterval?.intValue != interval {
-            defaults.set(interval, forKey: CMLegacyUpdateCheckIntervalKey)
+        guard let bundleIdentifier = Bundle.main.bundleIdentifier else { return }
+        let persistentDefaults = defaults.persistentDomain(forName: bundleIdentifier) ?? [:]
+        let migrated = UpdateCoordinator.migratedLegacyPreferences(persistentDefaults)
+        if !(migrated as NSDictionary).isEqual(to: persistentDefaults) {
+            defaults.setPersistentDomain(migrated, forName: bundleIdentifier)
         }
     }
 
@@ -22493,7 +18695,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     private func applyUserDefaultsChanges() {
         AppController.migrateLegacyHotKeyDefaultsIfNeeded()
         AppController.migrateLegacyUpdateDefaultsIfNeeded()
-        AppController.syncLegacyUpdateDefaultsFromModernPreferencesIfNeeded()
         let normalizedObserveInterval = CMNormalizedLegacyObserveInterval(
             UserDefaults.standard.double(forKey: CMPrefTimeIntervalKey)
         )
@@ -22785,7 +18986,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if menuItem.action == #selector(checkForUpdates(_:)) {
-            return UpdateCoordinator.shared.feedURL != nil
+            return UpdateCoordinator.shared.canCheckForUpdates
         }
         if menuItem.action == #selector(clearHistory(_:)) {
             // Objective-C disabled AppController-owned clear-history items when history
@@ -22861,180 +19062,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if suppressPrompt {
             defaults.set(true, forKey: CMPrefSuppressAlertForLoginItemKey)
         }
-    }
-
-    fileprivate enum UpdatePermissionPromptDisposition {
-        case skip
-        case markFirstLaunchAndSkip
-        case prompt
-    }
-
-    fileprivate static func updatePermissionPromptDisposition(
-        persistentDefaults: [String: Any]
-    ) -> UpdatePermissionPromptDisposition {
-        if persistentDefaults[CMEnableAutomaticCheckKey] != nil
-            || persistentDefaults[CMLegacyAutomaticChecksEnabledKey] != nil
-            || persistentDefaults["SUCheckAtStartup"] != nil {
-            return .skip
-        }
-
-        if persistentDefaults[CMLegacyHasLaunchedBeforeKey] == nil {
-            return .markFirstLaunchAndSkip
-        }
-
-        return .prompt
-    }
-
-    fileprivate static func updatePermissionPromptDisposition(defaults: UserDefaults = .standard) -> UpdatePermissionPromptDisposition {
-        guard let bundleIdentifier = Bundle.main.bundleIdentifier else {
-            return .skip
-        }
-
-        let persistentDefaults = defaults.persistentDomain(forName: bundleIdentifier) ?? [:]
-        return updatePermissionPromptDisposition(persistentDefaults: persistentDefaults)
-    }
-
-    fileprivate func localizedUpdatePermissionPromptMessageText() -> String {
-        if CMRuntimePrefersJapanese() {
-            return "アップデートを自動で確認しますか?"
-        }
-        return "Check for updates automatically?"
-    }
-
-    fileprivate func localizedUpdatePermissionPromptInformativeText(appName: String) -> String {
-        if CMRuntimePrefersJapanese() {
-            return "\(appName) のアップデートを自動で確認しますか? \(appName) メニューから手動で確認することはいつでもできます。"
-        }
-        return "Should \(appName) automatically check for updates? You can always check for updates manually from the \(appName) menu."
-    }
-
-    fileprivate func localizedUpdatePermissionPromptAcceptTitle() -> String {
-        if CMRuntimePrefersJapanese() {
-            return "自動的にチェック"
-        }
-        return "Check Automatically"
-    }
-
-    fileprivate func localizedUpdatePermissionPromptDeclineTitle() -> String {
-        if CMRuntimePrefersJapanese() {
-            return "チェックしない"
-        }
-        return "Don't Check"
-    }
-
-    fileprivate func localizedAnonymousSystemProfileTitle() -> String {
-        if CMRuntimePrefersJapanese() {
-            return "匿名のシステムプロファイルを含める"
-        }
-        return "Include anonymous system profile"
-    }
-
-    fileprivate func localizedAnonymousSystemProfileDescription() -> String {
-        if CMRuntimePrefersJapanese() {
-            return "匿名のシステムプロファイル情報は、今後の開発計画に役立てるために使用されます。この情報について質問がある場合はお問い合わせください。"
-        }
-        return "Anonymous system profile information is used to help us plan future development work. Please contact us if you have any questions about this."
-    }
-
-    fileprivate func shouldOfferAnonymousSystemProfile() -> Bool {
-        if let value = Bundle.main.object(forInfoDictionaryKey: CMLegacyEnableSystemProfilingKey) as? NSNumber {
-            return value.boolValue
-        }
-        return false
-    }
-
-    fileprivate func defaultAnonymousSystemProfileEnabled() -> Bool {
-        shouldOfferAnonymousSystemProfile()
-    }
-
-    fileprivate func makeUpdatePermissionPromptAccessory() -> NSView {
-        let width: CGFloat = 420
-        let includesProfileOption = shouldOfferAnonymousSystemProfile()
-        let containerHeight: CGFloat = includesProfileOption ? 118 : 72
-        let container = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: width, height: containerHeight))
-        container.material = .menu
-        container.state = .active
-        container.wantsLayer = true
-        container.layer?.cornerRadius = 12
-        container.layer?.masksToBounds = true
-
-        let iconBackground = NSVisualEffectView(frame: NSRect(x: 16, y: containerHeight - 56, width: 40, height: 40))
-        iconBackground.material = .sidebar
-        iconBackground.state = .active
-        iconBackground.wantsLayer = true
-        iconBackground.layer?.cornerRadius = 10
-        iconBackground.layer?.masksToBounds = true
-        container.addSubview(iconBackground)
-
-        let iconConfiguration = NSImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
-        let iconView = NSImageView(frame: NSRect(x: 9, y: 9, width: 22, height: 22))
-        iconView.image = NSImage(
-            systemSymbolName: "arrow.triangle.2.circlepath",
-            accessibilityDescription: localizedUpdatePermissionPromptMessageText()
-        )?.withSymbolConfiguration(iconConfiguration)
-        iconView.contentTintColor = .systemBlue
-        iconView.imageScaling = .scaleProportionallyUpOrDown
-        iconBackground.addSubview(iconView)
-
-        let textWidth = width - 90
-
-        let titleLabel = NSTextField(
-            labelWithString: CMLocalizedModernString(
-                "Automatic Update Checks",
-                japanese: "自動アップデート確認"
-            )
-        )
-        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
-        titleLabel.frame = NSRect(x: 70, y: containerHeight - 34, width: textWidth, height: 18)
-        container.addSubview(titleLabel)
-
-        let detailLabel = NSTextField(
-            labelWithString: CMLocalizedModernString(
-                "Keep ClipMenu ready to look for new versions after launch while manual checks stay available anytime.",
-                japanese: "起動後に新しいバージョンを確認しやすくしつつ、手動確認もいつでも使えるようにします。"
-            )
-        )
-        detailLabel.font = .systemFont(ofSize: 12)
-        detailLabel.textColor = .secondaryLabelColor
-        detailLabel.lineBreakMode = .byTruncatingTail
-        detailLabel.frame = NSRect(x: 70, y: containerHeight - 54, width: textWidth, height: 17)
-        container.addSubview(detailLabel)
-
-        guard includesProfileOption else {
-            return container
-        }
-
-        let separator = NSBox(frame: NSRect(x: 16, y: 44, width: width - 32, height: 1))
-        separator.boxType = .separator
-        container.addSubview(separator)
-
-        let checkbox = NSButton(
-            checkboxWithTitle: localizedAnonymousSystemProfileTitle(),
-            target: nil,
-            action: nil
-        )
-        checkbox.state = defaultAnonymousSystemProfileEnabled() ? .on : .off
-        checkbox.frame = NSRect(x: 16, y: 18, width: width - 32, height: 20)
-        container.addSubview(checkbox)
-
-        let descriptionLabel = NSTextField(wrappingLabelWithString: localizedAnonymousSystemProfileDescription())
-        descriptionLabel.textColor = .secondaryLabelColor
-        descriptionLabel.font = .systemFont(ofSize: 11)
-        descriptionLabel.frame = NSRect(x: 36, y: -2, width: width - 52, height: 32)
-        container.addSubview(descriptionLabel)
-
-        return container
-    }
-
-    fileprivate func makeUpdatePermissionPrompt() -> NSAlert {
-        let alert = NSAlert()
-        let appName = legacyApplicationName()
-        alert.messageText = localizedUpdatePermissionPromptMessageText()
-        alert.informativeText = localizedUpdatePermissionPromptInformativeText(appName: appName)
-        alert.accessoryView = makeUpdatePermissionPromptAccessory()
-        alert.addButton(withTitle: localizedUpdatePermissionPromptAcceptTitle())
-        alert.addButton(withTitle: localizedUpdatePermissionPromptDeclineTitle())
-        return alert
     }
 
     private func localizedLoginItemPromptAccessoryDetail() -> String {
@@ -23375,55 +19402,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         return alert
     }
 
-    private func applyUpdatePermissionPromptDecision(
-        enableAutomaticChecks: Bool,
-        sendProfileInfo: Bool,
-        defaults: UserDefaults = .standard
-    ) {
-        let effectiveSendProfileInfo = shouldOfferAnonymousSystemProfile() ? sendProfileInfo : false
-        defaults.set(true, forKey: CMLegacyHasLaunchedBeforeKey)
-        defaults.set(enableAutomaticChecks, forKey: CMEnableAutomaticCheckKey)
-        defaults.set(enableAutomaticChecks, forKey: CMLegacyAutomaticChecksEnabledKey)
-        defaults.set(enableAutomaticChecks, forKey: CMLegacyAutomaticChecksEnabledOldKey)
-        defaults.set(enableAutomaticChecks, forKey: CMLegacyAllowsAutomaticUpdatesKey)
-        defaults.set(effectiveSendProfileInfo, forKey: CMLegacySendProfileInfoKey)
-        AppController.syncLegacyUpdateDefaultsFromModernPreferencesIfNeeded()
-        UpdateCoordinator.shared.configureFromDefaults()
-    }
-
-    @discardableResult
-    private func promptToAddUpdatePermissionIfNeeded() -> Bool {
-        let defaults = UserDefaults.standard
-        switch Self.updatePermissionPromptDisposition(defaults: defaults) {
-        case .skip:
-            return false
-        case .markFirstLaunchAndSkip:
-            defaults.set(true, forKey: CMLegacyHasLaunchedBeforeKey)
-            return false
-        case .prompt:
-            break
-        }
-
-#if DEBUG
-        if debugBypassLoginItemPromptUI() {
-            return false
-        }
-#endif
-
-        DispatchQueue.main.async {
-            let alert = self.makeUpdatePermissionPrompt()
-            NSApp.activate(ignoringOtherApps: true)
-            let enableAutomaticChecks = alert.runModal() == .alertFirstButtonReturn
-            let sendProfileInfo = ((alert.accessoryView?.subviews.first { $0 is NSButton } as? NSButton)?.state ?? .off) == .on
-            self.applyUpdatePermissionPromptDecision(
-                enableAutomaticChecks: enableAutomaticChecks,
-                sendProfileInfo: sendProfileInfo,
-                defaults: defaults
-            )
-        }
-        return true
-    }
-
     @discardableResult
     private func promptToAddLoginItemIfNeeded() -> Bool {
         let defaults = UserDefaults.standard
@@ -23448,9 +19426,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 suppressPrompt: shouldSuppressPrompt,
                 defaults: defaults
             )
-            if !self.promptToAddUpdatePermissionIfNeeded() {
-                UpdateCoordinator.shared.configureFromDefaults()
-            }
+            UpdateCoordinator.shared.configureFromDefaults()
         }
         return true
     }
@@ -26866,7 +22842,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         applyPreferredFont(to: menuItem)
 
         let views = [
-            makeUpdatePermissionPromptAccessory(),
             makeLoginItemPromptAccessory(),
             makeClearHistoryPromptAccessory(),
             makePastePermissionPromptAccessory(appName: legacyApplicationName(), accessState: accessDeniedState),

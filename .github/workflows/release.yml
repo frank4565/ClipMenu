@@ -1,0 +1,151 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'vX.Y.Z, vX.Y.Z-beta.N, or vX.Y.Z-rc.N'
+        required: true
+        type: string
+      dry_run:
+        description: 'Build an unsigned preview without credentials or publishing'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# Keep feed reads, release publication, and Pages deployment in one serialized run.
+concurrency:
+  group: clipmenu-releases
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+    outputs:
+      tag: ${{ steps.metadata.outputs.tag }}
+      dry_run: ${{ steps.mode.outputs.dry_run }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          # Dry runs may use the selected branch. Publishing always builds the tag.
+          ref: ${{ github.event_name == 'workflow_dispatch' && !inputs.dry_run && inputs.version_tag || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate release tag
+        id: metadata
+        env:
+          RELEASE_TAG: ${{ inputs.version_tag || github.ref_name }}
+        run: python3 script/release_metadata.py "$RELEASE_TAG" --github-output "$GITHUB_OUTPUT"
+      - name: Select release mode
+        id: mode
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+        run: echo "dry_run=$DRY_RUN" >> "$GITHUB_OUTPUT"
+      - name: Test release helpers
+        run: python3 -m unittest discover -s script/tests -v
+      - name: Build unsigned preview
+        if: steps.mode.outputs.dry_run == 'true'
+        env:
+          RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
+          CLIPMENU_SPARKLE_PUBLIC_KEY: ${{ vars.CLIPMENU_SPARKLE_PUBLIC_KEY }}
+          CLIPMENU_UPDATE_FEED_URL: ${{ vars.CLIPMENU_UPDATE_FEED_URL }}
+        run: |
+          python3 script/release_build.py "$RELEASE_TAG" --dry-run
+          python3 script/generate_appcast.py --metadata build/release/build_info.json --preview --output build/release/appcast-preview.xml
+      - name: Build, sign, notarize, and staple
+        if: steps.mode.outputs.dry_run != 'true'
+        env:
+          RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
+          CLIPMENU_SPARKLE_PUBLIC_KEY: ${{ vars.CLIPMENU_SPARKLE_PUBLIC_KEY }}
+          CLIPMENU_UPDATE_FEED_URL: ${{ vars.CLIPMENU_UPDATE_FEED_URL }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          SPARKLE_KEY_CONFIGURED: ${{ secrets.SPARKLE_PRIVATE_KEY != '' }}
+          DEVELOPER_ID_CERTIFICATE_P12_BASE64: ${{ secrets.DEVELOPER_ID_CERTIFICATE_P12_BASE64 }}
+          DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          APPLE_NOTARY_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+        run: python3 script/release_build.py "$RELEASE_TAG"
+      - name: Save release artifacts
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: release-${{ steps.metadata.outputs.tag }}
+          path: build/release/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  publish:
+    if: needs.build.outputs.dry_run != 'true'
+    needs: build
+    runs-on: macos-15
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.build.outputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: release-${{ needs.build.outputs.tag }}
+          path: build/release/
+      - name: Get verified Sparkle tools matching Package.resolved
+        run: python3 script/release_download_tools.py
+      - name: Sign archive and preserve previous stable and beta items
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FEED_URL=$(python3 -c 'import json; print(json.load(open("build/release/build_info.json"))["feed_url"])')
+          python3 script/generate_appcast.py --metadata build/release/build_info.json --sign-update build/SparkleTools/bin/sign_update --previous-url "$FEED_URL" --bootstrap-if-no-published-updates --output build/release/site/appcast.xml
+      - name: Publish immutable GitHub release assets and verify the public archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 script/release_publish.py
+      - name: Save published appcast for review and deployment recovery
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: appcast-${{ needs.build.outputs.tag }}
+          path: build/release/site/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload Pages artifact after release publication
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        with:
+          path: build/release/site/
+          retention-days: 14
+
+  deploy-pages:
+    needs: [build, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.build.outputs.tag }}
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: release-${{ needs.build.outputs.tag }}
+          path: build/release/
+      - name: Deploy appcast to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+      - name: Verify the deployed appcast before another release can run
+        run: python3 script/release_verify_feed.py

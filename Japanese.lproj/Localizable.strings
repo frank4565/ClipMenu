@@ -1692,5 +1692,17 @@
 	<string>ツールチップ</string>
 	<key>Image Preview</key>
 	<string>画像のプレビュー</string>
+	<key>Automatically download and install updates</key>
+	<string>アップデートを自動的にダウンロードしてインストールする</string>
+	<key>Eligible updates download in the background and install when ClipMenu quits. Updates that need authorization ask before installation.</key>
+	<string>対応するアップデートをバックグラウンドでダウンロードし、ClipMenu の終了時にインストールします。認証が必要なアップデートはインストール前に確認します。</string>
+	<key>Update in progress</key>
+	<string>アップデート処理中</string>
+	<key>Software Updates Unavailable</key>
+	<string>ソフトウェアアップデートを利用できません</string>
+	<key>This copy of ClipMenu is not configured for secure updates. Install a release from the project’s GitHub Releases page.</key>
+	<string>この ClipMenu は安全なアップデート用に設定されていません。プロジェクトの GitHub Releases ページからリリース版をインストールしてください。</string>
+	<key>Could not start the software updater: %@</key>
+	<string>ソフトウェアアップデーターを開始できませんでした: %@</string>
 </dict>
 </plist>

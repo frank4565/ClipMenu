@@ -1804,6 +1804,14 @@ private func CMUpdatesLastCheckedDisplay(_ date: Date?) -> String {
     return formatter.string(from: date)
 }
 
+private func CMUpdatesConfigurationError(_ coordinator: UpdateCoordinator) -> String? {
+    guard !coordinator.isConfiguredForUpdates else { return nil }
+    return coordinator.configurationError ?? NSLocalizedString(
+        "This copy of ClipMenu is not configured for secure updates. Install a release from the project’s GitHub Releases page.",
+        comment: "Missing feed URL or Ed25519 update key"
+    )
+}
+
 private func CMUpdatesWorkflowStages(
     automaticChecks: Bool,
     preReleases: Bool,
@@ -1817,18 +1825,23 @@ private func CMUpdatesWorkflowStages(
     let lastCheckedPrefix = NSLocalizedString("Last checked", comment: "")
     let lastCheckedValue = CMUpdatesLastCheckedDisplay(coordinator.lastCheckDate)
 
-    let modeValue = automaticChecks
-        ? NSLocalizedString("Automatic checks on", comment: "")
-        : NSLocalizedString("Manual only", comment: "")
-    let modeDetail = automaticChecks
-        ? NSLocalizedString("Scheduled checks are enabled.", comment: "")
-        : NSLocalizedString("Check manually whenever you want to review updates.", comment: "")
+    let configurationAvailable = coordinator.isConfiguredForUpdates
+    let modeValue = configurationAvailable
+        ? (automaticChecks
+            ? NSLocalizedString("Automatic checks on", comment: "")
+            : NSLocalizedString("Manual only", comment: ""))
+        : NSLocalizedString("Unavailable", comment: "")
+    let modeDetail = configurationAvailable
+        ? (automaticChecks
+            ? NSLocalizedString("Scheduled checks are enabled.", comment: "")
+            : NSLocalizedString("Check manually whenever you want to review updates.", comment: ""))
+        : (CMUpdatesConfigurationError(coordinator) ?? "")
 
     let channelValue: String
     let channelDetail: String
-    if coordinator.feedURL == nil {
+    if !configurationAvailable {
         channelValue = NSLocalizedString("Unavailable", comment: "")
-        channelDetail = NSLocalizedString("No update feed is currently available.", comment: "")
+        channelDetail = CMUpdatesConfigurationError(coordinator) ?? ""
     } else if preReleases {
         channelValue = NSLocalizedString("Pre-release", comment: "")
         channelDetail = NSLocalizedString("Pre-release updates are included.", comment: "")
@@ -1843,8 +1856,8 @@ private func CMUpdatesWorkflowStages(
 
     let checkNowValue: String
     if coordinator.isChecking {
-        checkNowValue = NSLocalizedString("Checking now", comment: "")
-    } else if automaticChecks && coordinator.feedURL != nil {
+        checkNowValue = NSLocalizedString("Update in progress", comment: "")
+    } else if coordinator.canCheckForUpdates {
         checkNowValue = NSLocalizedString("Ready", comment: "")
     } else {
         checkNowValue = NSLocalizedString("Unavailable", comment: "")
@@ -2796,17 +2809,17 @@ func CMSnippetPreferencesSnapshotForDebug() -> [String: Any] {
 }
 
 func CMUpdatesPreferencesSnapshotForDebug() -> [String: Any] {
-    let defaults = UserDefaults.standard
-    let automaticChecks = defaults.object(forKey: CMEnableAutomaticCheckKey) as? Bool ?? true
-    let preReleases = defaults.object(forKey: CMEnableAutomaticCheckPreReleaseKey) as? Bool ?? false
-    let interval = defaults.object(forKey: CMUpdateCheckIntervalKey) as? Int ?? 86400
-    let automaticallyInstallUpdates = defaults.object(forKey: CMAutomaticallyInstallUpdatesKey) as? Bool ?? false
     let coordinator = UpdateCoordinator.shared
+    let automaticChecks = coordinator.automaticallyChecksForUpdates
+    let preReleases = coordinator.includePreReleases
+    let interval = Int(coordinator.updateCheckInterval)
+    let automaticallyDownloadsUpdates = coordinator.automaticallyDownloadsUpdates
+    let configurationAvailable = coordinator.isConfiguredForUpdates
     let intervalOptions = CMVisibleUpdateIntervalOptions()
     let visibleIntervalSelection = CMVisibleUpdateIntervalSelectionValue(for: interval)
     let showsImportedIntervalNotice = intervalOptions.contains(where: { $0.value == interval }) == false
     let feedStatusTitle: String = {
-        guard coordinator.feedURL != nil else {
+        guard configurationAvailable else {
             return NSLocalizedString("Unavailable", comment: "")
         }
         return preReleases
@@ -2815,8 +2828,11 @@ func CMUpdatesPreferencesSnapshotForDebug() -> [String: Any] {
     }()
 
     let checkingStatusTitle: String = {
+        guard configurationAvailable else {
+            return NSLocalizedString("Unavailable", comment: "")
+        }
         if coordinator.isChecking {
-            return NSLocalizedString("Checking now", comment: "")
+            return NSLocalizedString("Update in progress", comment: "")
         }
         return automaticChecks
             ? NSLocalizedString("Automatic checks on", comment: "")
@@ -2832,7 +2848,9 @@ func CMUpdatesPreferencesSnapshotForDebug() -> [String: Any] {
     let availability = CMUpdatePreferencesAvailabilityReport(
         automaticChecks: automaticChecks,
         feedURLPresent: coordinator.feedURL != nil,
-        isChecking: coordinator.isChecking
+        isChecking: coordinator.isChecking,
+        configurationAvailable: configurationAvailable,
+        canCheckForUpdates: coordinator.canCheckForUpdates
     )
     let workflowStages = CMUpdatesWorkflowStages(
         automaticChecks: automaticChecks,
@@ -2851,16 +2869,18 @@ func CMUpdatesPreferencesSnapshotForDebug() -> [String: Any] {
     report["controlTitles"] = [
             NSLocalizedString("1337.title", tableName: "Preferences", bundle: .main, value: "Automatically check for updates:", comment: ""),
             NSLocalizedString("1426.title", tableName: "Preferences", bundle: .main, value: "Include pre-releases", comment: ""),
-            NSLocalizedString("Automatically download updates in the future", comment: ""),
+            NSLocalizedString("Automatically download and install updates", comment: ""),
             NSLocalizedString("1279.title", tableName: "Preferences", bundle: .main, value: "Time interval", comment: ""),
             NSLocalizedString("1331.title", tableName: "Preferences", bundle: .main, value: "Check Now", comment: "")
         ]
     report["intervalTitles"] = intervalOptions.map(\.title)
     report["workflowStages"] = workflowStages.map(\.debugDictionary)
+    report["automaticUpdatesDetail"] = NSLocalizedString("Eligible updates download in the background and install when ClipMenu quits. Updates that need authorization ask before installation.", comment: "")
     let states: [String: Any] = [
             "automaticChecks": automaticChecks,
             "preReleases": preReleases,
-            "automaticallyInstallUpdates": automaticallyInstallUpdates,
+            "automaticallyInstallUpdates": automaticallyDownloadsUpdates,
+            "automaticallyDownloadsUpdates": automaticallyDownloadsUpdates,
             "interval": interval,
             "visibleIntervalSelection": visibleIntervalSelection,
             "showsImportedIntervalNotice": showsImportedIntervalNotice,
@@ -2870,6 +2890,9 @@ func CMUpdatesPreferencesSnapshotForDebug() -> [String: Any] {
             "lastCheckedDisplay": lastCheckedDisplay,
             "isChecking": coordinator.isChecking,
             "hasFeedURL": coordinator.feedURL != nil,
+            "configurationAvailable": configurationAvailable,
+            "configurationError": CMUpdatesConfigurationError(coordinator) ?? "",
+            "canCheckForUpdates": coordinator.canCheckForUpdates,
             "availability": availability
         ]
     report["states"] = states
@@ -6228,13 +6251,15 @@ private func CMIsUserScriptURL(_ url: URL) -> Bool {
 func CMUpdatePreferencesAvailabilityReport(
     automaticChecks: Bool,
     feedURLPresent: Bool,
-    isChecking: Bool
+    isChecking: Bool,
+    configurationAvailable: Bool = true,
+    canCheckForUpdates: Bool? = nil
 ) -> [String: Bool] {
     [
-        "preReleasesEnabled": automaticChecks,
-        "automaticallyInstallUpdatesEnabled": automaticChecks,
-        "intervalEnabled": automaticChecks,
-        "checkNowEnabled": automaticChecks && feedURLPresent && !isChecking
+        "preReleasesEnabled": configurationAvailable,
+        "automaticallyInstallUpdatesEnabled": automaticChecks && configurationAvailable,
+        "intervalEnabled": automaticChecks && configurationAvailable,
+        "checkNowEnabled": configurationAvailable && feedURLPresent && (canCheckForUpdates ?? !isChecking)
     ]
 }
 
@@ -8380,32 +8405,53 @@ private enum SnippetPositionCardOption: Int, CaseIterable, Identifiable {
 }
 
 private struct UpdatePreferencesView: View {
-    @AppStorage(CMEnableAutomaticCheckKey) private var automaticChecks = true
-    @AppStorage(CMEnableAutomaticCheckPreReleaseKey) private var preReleases = false
-    @AppStorage(CMUpdateCheckIntervalKey) private var interval = 86400
-    @AppStorage(CMAutomaticallyInstallUpdatesKey) private var automaticallyInstallUpdates = false
     @ObservedObject private var updateCoordinator = UpdateCoordinator.shared
 
     private let legacyAutomaticCheckLabel = NSLocalizedString("1337.title", tableName: "Preferences", bundle: .main, value: "Automatically check for updates:", comment: "")
     private let legacyIncludePreReleasesLabel = NSLocalizedString("1426.title", tableName: "Preferences", bundle: .main, value: "Include pre-releases", comment: "")
     private let legacyCheckNowLabel = NSLocalizedString("1331.title", tableName: "Preferences", bundle: .main, value: "Check Now", comment: "")
     private let legacyUpdateIntervalLabel = NSLocalizedString("1279.title", tableName: "Preferences", bundle: .main, value: "Time interval", comment: "")
-    private let legacyAutomaticallyInstallUpdatesLabel = NSLocalizedString("Automatically download updates in the future", comment: "")
+    private let automaticUpdatesLabel = NSLocalizedString("Automatically download and install updates", comment: "")
 
     var body: some View {
         PreferencePane {
             PreferenceSection(NSLocalizedString("Updates", comment: "")) {
                 VStack(alignment: .leading, spacing: 10) {
-                    PreferenceToggle(title: legacyAutomaticCheckLabel, isOn: $automaticChecks)
-                    PreferenceToggle(title: legacyIncludePreReleasesLabel, isOn: $preReleases)
-                        .disabled(!automaticChecks)
-                    PreferenceToggle(title: legacyAutomaticallyInstallUpdatesLabel, isOn: $automaticallyInstallUpdates)
-                        .disabled(!automaticChecks)
+                    PreferenceToggle(
+                        title: legacyAutomaticCheckLabel,
+                        isOn: Binding(
+                            get: { updateCoordinator.automaticallyChecksForUpdates },
+                            set: { updateCoordinator.automaticallyChecksForUpdates = $0 }
+                        )
+                    )
+                    .disabled(!configurationAvailable)
+                    PreferenceToggle(
+                        title: legacyIncludePreReleasesLabel,
+                        isOn: Binding(
+                            get: { updateCoordinator.includePreReleases },
+                            set: { updateCoordinator.includePreReleases = $0 }
+                        )
+                    )
+                    .disabled(!configurationAvailable)
+                    PreferenceToggle(
+                        title: automaticUpdatesLabel,
+                        isOn: Binding(
+                            get: { updateCoordinator.automaticallyDownloadsUpdates },
+                            set: { updateCoordinator.automaticallyDownloadsUpdates = $0 }
+                        )
+                    )
+                    .disabled(!automaticChecks || !configurationAvailable)
+                    PreferenceControlRow {
+                        Text(NSLocalizedString("Eligible updates download in the background and install when ClipMenu quits. Updates that need authorization ask before installation.", comment: ""))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     PreferenceRow(legacyUpdateIntervalLabel) {
                         PreferencePicker(
                             selection: Binding(
                                 get: { visibleIntervalSelection },
-                                set: { interval = $0 }
+                                set: { updateCoordinator.updateCheckInterval = TimeInterval($0) }
                             ),
                             width: 220
                         ) {
@@ -8413,7 +8459,7 @@ private struct UpdatePreferencesView: View {
                                 Text(option.title).tag(option.value)
                             }
                         }
-                        .disabled(!automaticChecks)
+                        .disabled(!automaticChecks || !configurationAvailable)
                     }
                     if automaticChecks && showsImportedIntervalNotice {
                         PreferenceControlRow {
@@ -8433,6 +8479,14 @@ private struct UpdatePreferencesView: View {
                             title: feedStatusTitle,
                             tint: feedStatusTint
                         )
+                    }
+                    if let configurationError = CMUpdatesConfigurationError(updateCoordinator) {
+                        PreferenceControlRow {
+                            Text(configurationError)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
 
                     PreferenceRow(NSLocalizedString("Last checked", comment: "")) {
@@ -8465,15 +8519,31 @@ private struct UpdatePreferencesView: View {
                         } label: {
                             Label(legacyCheckNowLabel, systemImage: "arrow.clockwise.circle")
                         }
-                        .disabled(!automaticChecks || updateCoordinator.feedURL == nil || updateCoordinator.isChecking)
+                        .disabled(!updateCoordinator.canCheckForUpdates)
                     }
                 }
             }
         }
     }
 
+    private var automaticChecks: Bool {
+        updateCoordinator.automaticallyChecksForUpdates
+    }
+
+    private var preReleases: Bool {
+        updateCoordinator.includePreReleases
+    }
+
+    private var interval: Int {
+        Int(updateCoordinator.updateCheckInterval)
+    }
+
+    private var configurationAvailable: Bool {
+        updateCoordinator.isConfiguredForUpdates
+    }
+
     private var feedStatusTitle: String {
-        guard updateCoordinator.feedURL != nil else {
+        guard configurationAvailable else {
             return NSLocalizedString("Unavailable", comment: "")
         }
         return preReleases
@@ -8482,15 +8552,18 @@ private struct UpdatePreferencesView: View {
     }
 
     private var feedStatusTint: Color {
-        guard updateCoordinator.feedURL != nil else {
+        guard configurationAvailable else {
             return .secondary
         }
         return preReleases ? .orange : .green
     }
 
     private var checkingStatusTitle: String {
+        guard configurationAvailable else {
+            return NSLocalizedString("Unavailable", comment: "")
+        }
         if updateCoordinator.isChecking {
-            return NSLocalizedString("Checking now", comment: "")
+            return NSLocalizedString("Update in progress", comment: "")
         }
         return automaticChecks
             ? NSLocalizedString("Automatic checks on", comment: "")
@@ -8498,6 +8571,9 @@ private struct UpdatePreferencesView: View {
     }
 
     private var checkingStatusTint: Color {
+        guard configurationAvailable else {
+            return .secondary
+        }
         if updateCoordinator.isChecking {
             return .blue
         }

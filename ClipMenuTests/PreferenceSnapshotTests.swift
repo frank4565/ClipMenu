@@ -21,6 +21,8 @@ final class PreferenceSnapshotTests: XCTestCase {
         CMEnableAutomaticCheckPreReleaseKey,
         CMAutomaticallyInstallUpdatesKey,
         CMUpdateCheckIntervalKey,
+        "SUEnableAutomaticChecks",
+        "SUScheduledCheckInterval",
         CMPrefEnableActionKey,
         CMPrefInvokeActionImmediatelyKey,
         "excludeApps",
@@ -83,7 +85,7 @@ final class PreferenceSnapshotTests: XCTestCase {
         let snapshot = CMGeneralPreferencesSnapshotForDebug()
         let clipboard = try XCTUnwrap(snapshot["clipboardHistory"] as? [String: Any])
         let states = try XCTUnwrap(clipboard["states"] as? [String: Any])
-        let excludedSurface = try XCTUnwrap(clipboard["excludedAppsSurface"] as? [String: Any])
+        let excludedSurface = try XCTUnwrap(snapshot["excludedApplications"] as? [String: Any])
         let pasteAutomationSurface = try XCTUnwrap(clipboard["pasteAutomationSurface"] as? [String: Any])
         let pasteAutomationStates = try XCTUnwrap(pasteAutomationSurface["states"] as? [String: Any])
         let pasteAutomationBadges = try XCTUnwrap(pasteAutomationSurface["badges"] as? [String])
@@ -99,8 +101,7 @@ final class PreferenceSnapshotTests: XCTestCase {
         XCTAssertEqual(states["maxHistorySize"] as? Int, 1)
         XCTAssertEqual(states["autosaveDelay"] as? Int, 60)
         XCTAssertEqual(states["timeInterval"] as? Double, 1.0)
-        XCTAssertEqual(states["excludedApps"] as? [String], ["Notes", "Safari"])
-        XCTAssertEqual(excludedSurface["previewTitles"] as? [String], ["Notes", "Safari"])
+        XCTAssertEqual(excludedSurface["applicationNames"] as? [String], ["Notes", "Safari"])
     }
 
     func testTypePreferencesSnapshotSummarizesStoreTypesImagesAndIcons() throws {
@@ -192,10 +193,10 @@ final class PreferenceSnapshotTests: XCTestCase {
     func testSnippetAndUpdateSnapshotsExposeSelectedState() throws {
         let defaults = UserDefaults.standard
         defaults.set(CMPositionOfSnippets.aboveClips.rawValue, forKey: CMPrefPositionOfSnippetsKey)
-        defaults.set(false, forKey: CMEnableAutomaticCheckKey)
+        UpdateCoordinator.shared.automaticallyChecksForUpdates = false
         defaults.set(true, forKey: CMEnableAutomaticCheckPreReleaseKey)
-        defaults.set(true, forKey: CMAutomaticallyInstallUpdatesKey)
-        defaults.set(12_345, forKey: CMUpdateCheckIntervalKey)
+        UpdateCoordinator.shared.automaticallyDownloadsUpdates = true
+        UpdateCoordinator.shared.updateCheckInterval = 12_345
 
         let snippet = CMSnippetPreferencesSnapshotForDebug()
         XCTAssertEqual(snippet["selectedPosition"] as? Int, CMPositionOfSnippets.aboveClips.rawValue)
@@ -206,7 +207,9 @@ final class PreferenceSnapshotTests: XCTestCase {
         let states = try XCTUnwrap(updates["states"] as? [String: Any])
         XCTAssertEqual(states["automaticChecks"] as? Bool, false)
         XCTAssertEqual(states["preReleases"] as? Bool, true)
-        XCTAssertEqual(states["automaticallyInstallUpdates"] as? Bool, true)
+        XCTAssertEqual(states["automaticallyInstallUpdates"] as? Bool, false)
+        XCTAssertEqual(states["automaticallyDownloadsUpdates"] as? Bool, false)
+        XCTAssertTrue(defaults.bool(forKey: "SUAutomaticallyUpdate"))
         XCTAssertEqual(states["interval"] as? Int, 12_345)
         XCTAssertEqual(states["showsImportedIntervalNotice"] as? Bool, true)
     }
