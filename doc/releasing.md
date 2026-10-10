@@ -116,10 +116,18 @@ The **Validate** workflow builds Debug and runs unit tests for pushes to `master
 and `swiftui-native`, and for pull requests. Release helper tests cover ordering,
 feed preservation, immutable versions, fetch errors, and unsigned-preview guards.
 The test host uses local ad-hoc signing so it can launch on Apple silicon; it
-does not require Apple release credentials.
+does not require Apple release credentials. After the tests, it builds a universal
+unsigned Release archive with the fixed preview version `v0.0.0`, generates an
+unsigned appcast preview, and saves the files as the `unsigned-release-preview`
+artifact. Opening a draft pull request runs this validation before merging the
+workflow into the default branch. It uses only public repository variables.
 
-Run the **Release** workflow manually on the branch being reviewed, provide the
-intended `version_tag`, and leave `dry_run` checked (the default). This builds a
+GitHub permits [manual `workflow_dispatch` runs](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow) only after the workflow file
+exists on the repository's default branch (`master`). Until then, use the
+pull-request **Validate** run for hosted unsigned-release validation. Once
+`release.yml` is on the default branch, run the **Release** workflow manually on
+the branch being reviewed, provide the intended `version_tag`, and leave
+`dry_run` checked (the default). This builds a
 universal unsigned Release archive, checks its bundle/feed versions, and saves
 `ClipMenu-vX.Y.Z-UNSIGNED.zip`, `build_info.json`, `SHA256SUMS.txt`, and
 `appcast-preview.xml` as a workflow artifact. It reads no signing credentials and
