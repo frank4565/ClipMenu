@@ -3,6 +3,141 @@ import Carbon
 import Combine
 import SwiftUI
 
+func CMImageHoverPreviewLayout(
+    imageSize: NSSize,
+    menuFrame: NSRect,
+    pointer: NSPoint,
+    visibleFrame: NSRect
+) -> NSRect? {
+    let padding: CGFloat = 10
+    let gap: CGFloat = 12
+    let bounds = visibleFrame.insetBy(dx: gap, dy: gap)
+    guard imageSize.width.isFinite, imageSize.height.isFinite,
+          imageSize.width > 0, imageSize.height > 0,
+          bounds.width > padding * 2, bounds.height > padding * 2 else { return nil }
+
+    let rightSpace = bounds.maxX - menuFrame.maxX - gap
+    let leftSpace = menuFrame.minX - gap - bounds.minX
+    let sideSpace = max(rightSpace, leftSpace)
+    let availableWidth = sideSpace > padding * 2 + 40 ? sideSpace : bounds.width
+    let maxImageWidth = min(480, availableWidth - padding * 2)
+    let maxImageHeight = min(360, bounds.height - padding * 2)
+    let scale = min(maxImageWidth / imageSize.width, maxImageHeight / imageSize.height, 1)
+    let size = NSSize(
+        width: imageSize.width * scale + padding * 2,
+        height: imageSize.height * scale + padding * 2
+    )
+
+    let proposedX: CGFloat
+    if rightSpace >= size.width {
+        proposedX = menuFrame.maxX + gap
+    } else if leftSpace >= size.width {
+        proposedX = menuFrame.minX - gap - size.width
+    } else {
+        proposedX = pointer.x + gap
+    }
+    return NSRect(
+        x: min(max(proposedX, bounds.minX), bounds.maxX - size.width),
+        y: min(max(pointer.y - size.height / 2, bounds.minY), bounds.maxY - size.height),
+        width: size.width,
+        height: size.height
+    )
+}
+
+private final class ImageHoverPreviewPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
+
+final class ImageHoverPreviewController {
+    private var panel: ImageHoverPreviewPanel?
+    private var imageView: NSImageView?
+    private var clipID: UUID?
+    private var imagePixelSize = NSSize.zero
+
+    func show(image: NSImage, clipID: UUID, menuFrame: NSRect, pointer: NSPoint, visibleFrame: NSRect) {
+        let bitmap = image.representations.compactMap { $0 as? NSBitmapImageRep }
+            .max { Double($0.pixelsWide) * Double($0.pixelsHigh) < Double($1.pixelsWide) * Double($1.pixelsHigh) }
+        let imageSize = bitmap.map { NSSize(width: $0.pixelsWide, height: $0.pixelsHigh) } ?? image.size
+        guard let frame = CMImageHoverPreviewLayout(
+            imageSize: imageSize,
+            menuFrame: menuFrame,
+            pointer: pointer,
+            visibleFrame: visibleFrame
+        ) else {
+            hide()
+            return
+        }
+
+        let panel = panel ?? makePanel()
+        self.panel = panel
+        self.clipID = clipID
+        imagePixelSize = imageSize
+        panel.setFrame(frame, display: false)
+        imageView?.frame = NSRect(origin: .zero, size: frame.size).insetBy(dx: 10, dy: 10)
+        imageView?.image = image
+        panel.orderFrontRegardless()
+    }
+
+    func hide() {
+        panel?.orderOut(nil)
+        imageView?.image = nil
+        clipID = nil
+        imagePixelSize = .zero
+    }
+
+    private func makePanel() -> ImageHoverPreviewPanel {
+        let panel = ImageHoverPreviewPanel(
+            contentRect: .zero,
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.title = NSLocalizedString("Image Preview", comment: "")
+        panel.level = NSWindow.Level(rawValue: NSWindow.Level.popUpMenu.rawValue + 1)
+        panel.isReleasedWhenClosed = false
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.hidesOnDeactivate = false
+        panel.ignoresMouseEvents = true
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
+
+        let background = NSVisualEffectView(frame: .zero)
+        background.material = .popover
+        background.state = .active
+        background.wantsLayer = true
+        background.layer?.cornerRadius = 10
+        background.layer?.masksToBounds = true
+        panel.contentView = background
+
+        let imageView = NSImageView(frame: .zero)
+        imageView.imageScaling = .scaleProportionallyUpOrDown
+        imageView.imageAlignment = .alignCenter
+        imageView.setAccessibilityLabel(NSLocalizedString("Image Preview", comment: ""))
+        background.addSubview(imageView)
+        self.imageView = imageView
+        return panel
+    }
+
+#if DEBUG
+    var debugStateForTesting: [String: Any] {
+        var state: [String: Any] = [
+            "isVisible": panel?.isVisible ?? false,
+            "imagePixelWidth": Int(imagePixelSize.width),
+            "imagePixelHeight": Int(imagePixelSize.height),
+            "panelFrame": panel?.frame ?? .zero,
+            "ignoresMouseEvents": panel?.ignoresMouseEvents ?? true,
+            "isKeyWindow": panel?.isKeyWindow ?? false
+        ]
+        if let clipID {
+            state["clipID"] = clipID.uuidString
+        }
+        return state
+    }
+#endif
+}
+
 final class SwiftUIPreferencesWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate {
     static let shared = SwiftUIPreferencesWindowController()
     private static let defaultContentSize = NSSize(width: 760, height: 640)

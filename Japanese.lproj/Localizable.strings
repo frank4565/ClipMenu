@@ -1690,5 +1690,7 @@
 	<string>サンプルフォルダ</string>
 	<key>Tooltip</key>
 	<string>ツールチップ</string>
+	<key>Image Preview</key>
+	<string>画像のプレビュー</string>
 </dict>
 </plist>

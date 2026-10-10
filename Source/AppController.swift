@@ -5493,6 +5493,10 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
 #endif
     private let pasteDispatchQueue = DispatchQueue(label: "com.naotaka.ClipMenu.paste-dispatch")
     private weak var highlightedFolderMenuItem: NSMenuItem?
+    private let imageHoverPreviewController = ImageHoverPreviewController()
+    private weak var imageHoverPreviewMenu: NSMenu?
+    private weak var imageHoverPreviewItem: NSMenuItem?
+    private var imageHoverPreviewTimer: Timer?
     private var terminationPersistenceHandled = false
     private var hasShownPastePermissionAlert = false
     private var deferredLoginItemSyncRequired = false
@@ -22668,6 +22672,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
     func menu(_ menu: NSMenu, willHighlight item: NSMenuItem?) {
+        updateImageHoverPreview(for: item, in: menu)
         if let highlightedFolderMenuItem,
            highlightedFolderMenuItem !== item {
             unhighlightFolderMenuItem()
@@ -22679,6 +22684,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
     func menuWillOpen(_ menu: NSMenu) {
+        dismissImageHoverPreview()
         if menu.title == NSLocalizedString("Open Recent", comment: "") {
             rebuildOpenRecentMenu(menu)
         }
@@ -22687,7 +22693,94 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
     func menuDidClose(_ menu: NSMenu) {
+        var previewMenu = imageHoverPreviewMenu
+        while let current = previewMenu {
+            if current === menu {
+                dismissImageHoverPreview()
+                break
+            }
+            previewMenu = current.supermenu
+        }
         unhighlightFolderMenuItem()
+    }
+
+    private func updateImageHoverPreview(for item: NSMenuItem?, in menu: NSMenu) {
+        // Parent menus can lose their highlight as a submenu starts tracking.
+        // That callback must not dismiss the submenu's own image preview.
+        if item == nil, let owner = imageHoverPreviewMenu, owner !== menu { return }
+        if imageHoverPreviewMenu === menu, imageHoverPreviewItem === item { return }
+        dismissImageHoverPreview()
+
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: CMPrefShowImageInTheMenuKey),
+              let item, item.isEnabled,
+              let id = item.representedObject as? String,
+              let clip = clipsStore.clip(with: id),
+              clip.imageData?.isEmpty == false else { return }
+
+        imageHoverPreviewMenu = menu
+        imageHoverPreviewItem = item
+        let timer = Timer(timeInterval: 0.25, repeats: false) { [weak self, weak menu, weak item] timer in
+            guard let self, let menu, let item,
+                  self.imageHoverPreviewTimer === timer,
+                  self.imageHoverPreviewMenu === menu,
+                  self.imageHoverPreviewItem === item else { return }
+            self.imageHoverPreviewTimer = nil
+            guard let clip = self.clipsStore.clip(with: id), let image = clip.image else {
+                self.dismissImageHoverPreview()
+                return
+            }
+
+            let pointer = NSEvent.mouseLocation
+            guard let screen = NSScreen.screens.first(where: { $0.frame.contains(pointer) }) ?? NSScreen.screens.first else { return }
+            self.imageHoverPreviewController.show(
+                image: image,
+                clipID: clip.id,
+                menuFrame: self.imageHoverMenuFrame(menu, near: pointer),
+                pointer: pointer,
+                visibleFrame: screen.visibleFrame
+            )
+        }
+        imageHoverPreviewTimer = timer
+        // Native menus run their own tracking mode; default-only timers wait
+        // until the menu closes and cannot display a hover preview in time.
+        RunLoop.main.add(timer, forMode: .eventTracking)
+        RunLoop.main.add(timer, forMode: .default)
+    }
+
+    private func imageHoverMenuFrame(_ menu: NSMenu, near pointer: NSPoint) -> NSRect {
+        if let primaryScreen = NSScreen.screens.first,
+           let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] {
+            for window in windows {
+                guard window[kCGWindowOwnerPID as String] as? Int == Int(getpid()),
+                      window[kCGWindowLayer as String] as? Int == NSWindow.Level.popUpMenu.rawValue,
+                      let bounds = window[kCGWindowBounds as String] as? [String: Any],
+                      let quartzFrame = CGRect(dictionaryRepresentation: bounds as CFDictionary) else { continue }
+                let frame = NSRect(
+                    x: quartzFrame.minX,
+                    y: primaryScreen.frame.maxY - quartzFrame.maxY,
+                    width: quartzFrame.width,
+                    height: quartzFrame.height
+                )
+                if frame.contains(pointer) { return frame }
+            }
+        }
+        // The pointer may be anywhere within the menu. Conservatively reserve
+        // its full width on both sides when exact window metadata is unavailable.
+        return NSRect(
+            x: pointer.x - menu.size.width,
+            y: pointer.y,
+            width: menu.size.width * 2,
+            height: menu.size.height
+        )
+    }
+
+    private func dismissImageHoverPreview() {
+        imageHoverPreviewTimer?.invalidate()
+        imageHoverPreviewTimer = nil
+        imageHoverPreviewMenu = nil
+        imageHoverPreviewItem = nil
+        imageHoverPreviewController.hide()
     }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
@@ -23640,6 +23733,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
     @objc private func rebuildMenu() {
+        dismissImageHoverPreview()
         guard UserDefaults.standard.integer(forKey: CMPrefShowStatusItemKey) != 0 else {
             statusItem?.menu = nil
             return
@@ -23766,6 +23860,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 applyPreferredFont(to: submenuItem)
 
                 let submenu = NSMenu(title: submenuItem.title)
+                submenu.delegate = self
                 for offset in range {
                     let listNumber = menuListNumber(
                         forOffset: offset - folderStart,
@@ -24535,6 +24630,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
     @objc(selectMenuItem:) fileprivate func selectClip(_ sender: NSMenuItem) {
+        dismissImageHoverPreview()
         guard let id = sender.representedObject as? String,
               let clip = clipsStore.clip(with: id) else { return }
         debugPasteFlow("selectClip title=\(sender.title) targetText=\(clip.text)")
@@ -27232,6 +27328,18 @@ enum CMDebugAppControllerReportForTesting: String, CaseIterable {
 }
 
 extension AppController {
+    func debugMakeHistoryMenuForTesting() -> NSMenu {
+        makeHistoryMenu()
+    }
+
+    var debugImageHoverPreviewStateForTesting: [String: Any] {
+        imageHoverPreviewController.debugStateForTesting
+    }
+
+    func debugFireImageHoverPreviewTimerForTesting() {
+        imageHoverPreviewTimer?.fire()
+    }
+
     var debugHistoryClipsForTesting: [ClipItem] {
         clipsStore.clips
     }
