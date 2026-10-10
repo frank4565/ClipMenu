@@ -15992,12 +15992,29 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
     private func debugImageData() -> Data? {
-        let image = NSImage(size: NSSize(width: 8, height: 8))
-        image.lockFocus()
-        NSColor.systemBlue.setFill()
-        NSRect(x: 0, y: 0, width: 8, height: 8).fill()
-        image.unlockFocus()
-        return image.tiffRepresentation
+        // lockFocus creates a screen-backed representation: 8 points becomes
+        // either 8 or 16 pixels depending on the display. Thumbnail reports
+        // need the same source pixels on local and headless CI machines.
+        guard let bitmap = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: 16,
+            pixelsHigh: 16,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else { return nil }
+        bitmap.size = NSSize(width: 8, height: 8)
+        let blue = NSColor(deviceRed: 0, green: 0.478, blue: 1, alpha: 1)
+        for y in 0..<bitmap.pixelsHigh {
+            for x in 0..<bitmap.pixelsWide {
+                bitmap.setColor(blue, atX: x, y: y)
+            }
+        }
+        return bitmap.representation(using: .tiff, properties: [:])
     }
 
     private func scheduleDebugDefaultsDumpIfNeeded() {

@@ -134,10 +134,16 @@ final class AppControllerDebugReportTests: XCTestCase {
                 outputURL: temporaryReportURL(named: report.rawValue)
             )
             if payload["matchesExpected"] as? Bool != true {
-                failedReports.append(report.rawValue)
+                let diagnosticState: [String: Any] = [
+                    "state": payload["state"] ?? NSNull(),
+                    "expectedState": payload["expectedState"] ?? NSNull()
+                ]
+                let diagnosticData = try JSONSerialization.data(withJSONObject: diagnosticState, options: [.sortedKeys])
+                let diagnostic = String(decoding: diagnosticData, as: UTF8.self)
+                failedReports.append("\(report.rawValue): \(diagnostic)")
             }
         }
-        let failedReportList = failedReports.joined(separator: ", ")
+        let failedReportList = failedReports.joined(separator: "\n")
         if !failedReports.isEmpty {
             XCTFail("Reports did not match expected state: \(failedReportList)")
         }
