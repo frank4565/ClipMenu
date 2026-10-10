@@ -30,6 +30,13 @@ Suggested sample content:
 - Image: a small copied PNG/TIFF-compatible image.
 - JavaScript action inputs: `Hello World`, `<b>bold</b>`, `one   two\tthree`, `ClipMenu`.
 
+## Preferences layout
+
+| ID | Feature | Steps | Expected result |
+| --- | --- | --- | --- |
+| CM-PREF-MENU-LAYOUT | Compact Menu pane | Open Preferences > Menu in English and Japanese. Inspect all sections, hover checkbox labels, and toggle numbering and custom font sizing before restoring the original settings. | The Menu pane has no scroll area and the window fits its content height. Scroll gestures do not move the pane; switching to another tab and back restores the appropriate height. Checkboxes align with section headings; dependent options are indented and retain their enabled/disabled behavior. Descriptions appear as hover help. A labeled, bordered preview occupies a separate column beside all settings, with a localized Example Folder. Menu Items and Tooltips retain consistent spacing when the tooltip sample is shown or hidden. Font mode and size share one row. |
+| CM-PREF-PANE-SIZE | Fit every Preferences pane | Visit General, Menu, Type, Action, Shortcuts, and Updates; scroll over each pane and switch repeatedly between a short and tall tab. | Each outer pane is non-scrolling and its window fits its content. All controls remain visible on the test display. Type uses two columns for clipboard types and side-by-side Images and Icons sections. Action retains its fixed list viewport and independent scrolling within the two lists. |
+
 ## Launch and lifecycle
 
 | ID | Feature | Steps | Expected result |
@@ -132,7 +139,7 @@ Suggested sample content:
 
 | ID | Feature | Steps | Expected result |
 | --- | --- | --- | --- |
-| CM-PREF-001 | Open preferences | Choose `Preferences...`. | Preferences opens as a fixed-size macOS settings window with a visible, noncustomizable toolbar containing General, Menu, Type, Action, Shortcuts, and Updates. The selected toolbar item stays highlighted, the title matches the visible pane, and the minimize and zoom controls are disabled. The legacy snippet-position control remains available inside General rather than as a separate top-level pane. |
+| CM-PREF-001 | Open preferences | Choose `Preferences...`. | Preferences opens as a macOS settings window sized to the selected pane, with a visible, noncustomizable toolbar containing General, Menu, Type, Action, Shortcuts, and Updates. The selected toolbar item stays highlighted, the title matches the visible pane, and the minimize and zoom controls are disabled. The legacy snippet-position control remains available inside General rather than as a separate top-level pane. |
 | CM-PREF-001A | File menu close routing | Open `Preferences...`, then `Edit Snippets...`, checking the File menu in each state. | In the bare menu-bar state, `File > Close` stays disabled. When Preferences or Snippet Editor is visible, `File > Close` becomes enabled and closes the visible window. |
 | CM-PREF-001B | Launch-on-login apply timing | Open Preferences, toggle `Launch on Login`, and keep the window open briefly before closing it. | The visible checkbox state updates immediately, but the actual login-item mutation is applied when Preferences closes, matching the original preferences-close timing instead of mutating login items on every toggle while the window stays open. |
 | CM-PREF-001C | Modifier-click behavior apply timing | Open Preferences, change at least `Control + Click` and `Shift + Click` action mappings, keep the window open briefly, then close it. | The picker selections update immediately in the visible UI, but the underlying `controlClickBehavior` and modifier-action defaults do not change until Preferences closes, matching the original Objective-C close-time commit behavior. |
@@ -152,6 +159,9 @@ Suggested sample content:
 | CM-PREF-011 | Hotkey customization | Change ClipMenu/snippets hotkeys, close preferences, use new hotkeys. | Old visible hotkeys are unregistered and new hotkeys trigger the installed Preferences UI's two editable global menus; the hidden default History hotkey remains registered from defaults/imported legacy `hotKeys`. |
 | CM-PREF-012 | Action tree editing | Add/remove/reorder action folders and actions in preferences. Close and relaunch. | Action tree persists in `actions.plist`; removed/disabled actions no longer appear. Saved leaf nodes use the Objective-C plist shape, with no `children` key. |
 | CM-PREF-012A | Action list backgrounds | Open Preferences > Action in light and dark appearances. Inspect Available Actions and Action Menu, switch available-action categories, select rows, and expand folders. Check an empty category or menu when available. | Both lists have a system control background and subtle rounded border covering the header, rows, and unused list area. Empty-state text and selected rows remain legible; scrolling and disclosure controls remain usable. |
+| CM-PREF-012B | Independent Action list scrolling | Open Preferences > Action. Select JavaScript under Available Actions and expand folders in Action Menu until both lists overflow. Scroll each list, then scroll over Behavior or the space between lists. Select an action to show its inspector and repeat. | Only the list under the pointer scrolls. The window content, Behavior controls, column headers, and other list stay fixed. Both lists fit the remaining window height, including when the inspector is visible. |
+| CM-PREF-012C | Action scrolling responsiveness | With both lists overflowing and a JavaScript action selected in the inspector, repeatedly scroll each list to the bottom and back to the top. Alternate directions and lists, then switch available-action categories and preferences tabs. | The app remains responsive during and after scrolling, both lists reach their ends, and category/tab changes respond normally without a sustained layout loop. |
+| CM-PREF-012D | Compact action transfer controls | Open Preferences > Action and inspect the middle controls. Select an available action and inspect the right arrow; select an Action Menu item and inspect the left arrow. | A narrow middle column leaves most of the width for the two lists. The right arrow adds the selected available action and the left arrow removes the selected menu item. Existing Add/Remove tooltips and accessibility labels identify their purpose. Folder creation and up/down reordering remain available. |
 
 ## Migration data checks
 

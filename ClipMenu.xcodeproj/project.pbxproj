@@ -7,21 +7,15 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3578F7700D7E3D5E00E804BF /* Menu.png in Resources */ = {isa = PBXBuildFile; fileRef = 3578F76F0D7E3D5E00E804BF /* Menu.png */; };
+		35A473490D20E8DE00E6B842 /* ClipMenu.icns in Resources */ = {isa = PBXBuildFile; fileRef = 35A473480D20E8DE00E6B842 /* ClipMenu.icns */; };
+		35C028950D6838D600B95FF5 /* ActionIcon.tiff in Resources */ = {isa = PBXBuildFile; fileRef = 35C028940D6838D600B95FF5 /* ActionIcon.tiff */; };
+		35C028DC0D683C0200B95FF5 /* ActionIconLarge.tiff in Resources */ = {isa = PBXBuildFile; fileRef = 35C028DB0D683C0200B95FF5 /* ActionIconLarge.tiff */; };
+		35C02FFE0D6BAB8300B95FF5 /* script in Resources */ = {isa = PBXBuildFile; fileRef = 35C02FFA0D6BAB8300B95FF5 /* script */; };
 		7A1000030000000000000001 /* AppController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1000010000000000000001 /* AppController.swift */; };
+		7A1000040000000000000001 /* AppController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1000010000000000000001 /* AppController.swift */; };
 		7A1000060000000000000001 /* SwiftUINativeWindows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1000050000000000000001 /* SwiftUINativeWindows.swift */; };
-		7A1000210000000000000001 /* SwiftUINativeAppKitSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1000200000000000000001 /* SwiftUINativeAppKitSupport.swift */; };
-		7A2000100000000000000001 /* PreferenceNormalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000010000000000000001 /* PreferenceNormalizationTests.swift */; };
-		7A2000110000000000000001 /* MenuPreviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000020000000000000001 /* MenuPreviewTests.swift */; };
-		7A2000120000000000000001 /* ClipItemTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000030000000000000001 /* ClipItemTests.swift */; };
-		7A2000130000000000000001 /* ClipStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000040000000000000001 /* ClipStoreTests.swift */; };
-		7A2000140000000000000001 /* AlertFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000050000000000000001 /* AlertFactoryTests.swift */; };
-		7A2000150000000000000001 /* FixtureIntegrityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000060000000000000001 /* FixtureIntegrityTests.swift */; };
-		7A2000160000000000000001 /* PreferenceSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000070000000000000001 /* PreferenceSnapshotTests.swift */; };
-		7A2000170000000000000001 /* UpdateCoordinatorDebugTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000080000000000000001 /* UpdateCoordinatorDebugTests.swift */; };
-		7A2000180000000000000001 /* SnippetDebugReportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000090000000000000001 /* SnippetDebugReportTests.swift */; };
-		7A2000190000000000000001 /* AppControllerDebugReportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A20000A0000000000000001 /* AppControllerDebugReportTests.swift */; };
-		7A20001A0000000000000001 /* JavaScriptActionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A20000B0000000000000001 /* JavaScriptActionTests.swift */; };
-		7A3000100000000000000001 /* HistoryAutoPasteUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3000010000000000000001 /* HistoryAutoPasteUITests.swift */; };
+		7A1000070000000000000001 /* SwiftUINativeWindows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1000050000000000000001 /* SwiftUINativeWindows.swift */; };
 		7A1000080000000000000001 /* ComposingPreferences.tiff in Resources */ = {isa = PBXBuildFile; fileRef = 7A10000A0000000000000001 /* ComposingPreferences.tiff */; };
 		7A1000090000000000000001 /* ComposingPreferences.tiff in Resources */ = {isa = PBXBuildFile; fileRef = 7A10000A0000000000000001 /* ComposingPreferences.tiff */; };
 		7A10000C0000000000000001 /* MainMenu.nib in Resources */ = {isa = PBXBuildFile; fileRef = 7A10000B0000000000000001 /* MainMenu.nib */; };
@@ -36,11 +30,20 @@
 		7A10001A0000000000000001 /* Preferences.strings (English) in Resources */ = {isa = PBXBuildFile; fileRef = 7A1000130000000000000001 /* Preferences.strings (English) */; };
 		7A10001B0000000000000001 /* Preferences.strings (Japanese) in Resources */ = {isa = PBXBuildFile; fileRef = 7A1000140000000000000001 /* Preferences.strings (Japanese) */; };
 		7A10001C0000000000000001 /* Preferences.strings (Japanese) in Resources */ = {isa = PBXBuildFile; fileRef = 7A1000140000000000000001 /* Preferences.strings (Japanese) */; };
-		3578F7700D7E3D5E00E804BF /* Menu.png in Resources */ = {isa = PBXBuildFile; fileRef = 3578F76F0D7E3D5E00E804BF /* Menu.png */; };
-		35A473490D20E8DE00E6B842 /* ClipMenu.icns in Resources */ = {isa = PBXBuildFile; fileRef = 35A473480D20E8DE00E6B842 /* ClipMenu.icns */; };
-		35C028950D6838D600B95FF5 /* ActionIcon.tiff in Resources */ = {isa = PBXBuildFile; fileRef = 35C028940D6838D600B95FF5 /* ActionIcon.tiff */; };
-		35C028DC0D683C0200B95FF5 /* ActionIconLarge.tiff in Resources */ = {isa = PBXBuildFile; fileRef = 35C028DB0D683C0200B95FF5 /* ActionIconLarge.tiff */; };
-		35C02FFE0D6BAB8300B95FF5 /* script in Resources */ = {isa = PBXBuildFile; fileRef = 35C02FFA0D6BAB8300B95FF5 /* script */; };
+		7A1000210000000000000001 /* SwiftUINativeAppKitSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1000200000000000000001 /* SwiftUINativeAppKitSupport.swift */; };
+		7A1000220000000000000001 /* SwiftUINativeAppKitSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1000200000000000000001 /* SwiftUINativeAppKitSupport.swift */; };
+		7A2000100000000000000001 /* PreferenceNormalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000010000000000000001 /* PreferenceNormalizationTests.swift */; };
+		7A2000110000000000000001 /* MenuPreviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000020000000000000001 /* MenuPreviewTests.swift */; };
+		7A2000120000000000000001 /* ClipItemTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000030000000000000001 /* ClipItemTests.swift */; };
+		7A2000130000000000000001 /* ClipStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000040000000000000001 /* ClipStoreTests.swift */; };
+		7A2000140000000000000001 /* AlertFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000050000000000000001 /* AlertFactoryTests.swift */; };
+		7A2000150000000000000001 /* FixtureIntegrityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000060000000000000001 /* FixtureIntegrityTests.swift */; };
+		7A2000160000000000000001 /* PreferenceSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000070000000000000001 /* PreferenceSnapshotTests.swift */; };
+		7A2000170000000000000001 /* UpdateCoordinatorDebugTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000080000000000000001 /* UpdateCoordinatorDebugTests.swift */; };
+		7A2000180000000000000001 /* SnippetDebugReportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2000090000000000000001 /* SnippetDebugReportTests.swift */; };
+		7A2000190000000000000001 /* AppControllerDebugReportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A20000A0000000000000001 /* AppControllerDebugReportTests.swift */; };
+		7A20001A0000000000000001 /* JavaScriptActionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A20000B0000000000000001 /* JavaScriptActionTests.swift */; };
+		7A3000100000000000000001 /* HistoryAutoPasteUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3000010000000000000001 /* HistoryAutoPasteUITests.swift */; };
 		8D11072B0486CEB800E47090 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 089C165CFE840E0CC02AAC07 /* InfoPlist.strings */; };
 		8D11072F0486CEB800E47090 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1058C7A1FEA54F0111CA2CBB /* Cocoa.framework */; };
 		A821F5411085696E00B25C8B /* dsa_pub.pem in Resources */ = {isa = PBXBuildFile; fileRef = A821F5401085696E00B25C8B /* dsa_pub.pem */; };
@@ -51,9 +54,6 @@
 		A82B8ABA0EC3F8D700096102 /* ActionIconLarge.tiff in Resources */ = {isa = PBXBuildFile; fileRef = 35C028DB0D683C0200B95FF5 /* ActionIconLarge.tiff */; };
 		A82B8ABB0EC3F8D700096102 /* script in Resources */ = {isa = PBXBuildFile; fileRef = 35C02FFA0D6BAB8300B95FF5 /* script */; };
 		A82B8ABC0EC3F8D700096102 /* Menu.png in Resources */ = {isa = PBXBuildFile; fileRef = 3578F76F0D7E3D5E00E804BF /* Menu.png */; };
-		7A1000040000000000000001 /* AppController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1000010000000000000001 /* AppController.swift */; };
-		7A1000070000000000000001 /* SwiftUINativeWindows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1000050000000000000001 /* SwiftUINativeWindows.swift */; };
-		7A1000220000000000000001 /* SwiftUINativeAppKitSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1000200000000000000001 /* SwiftUINativeAppKitSupport.swift */; };
 		A82B8AE20EC3F8D700096102 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1058C7A1FEA54F0111CA2CBB /* Cocoa.framework */; };
 		A8464D9D108AAC3B0040C8C6 /* StatusMenuIconByDaveUlrich-scissors1-bw-left.png in Resources */ = {isa = PBXBuildFile; fileRef = A8464D95108AAC3B0040C8C6 /* StatusMenuIconByDaveUlrich-scissors1-bw-left.png */; };
 		A8464D9E108AAC3B0040C8C6 /* StatusMenuIconByDaveUlrich-scissors1-bw-right.png in Resources */ = {isa = PBXBuildFile; fileRef = A8464D96108AAC3B0040C8C6 /* StatusMenuIconByDaveUlrich-scissors1-bw-right.png */; };
@@ -75,25 +75,11 @@
 		A8464DD7108AD6A90040C8C6 /* StatusMenuIconByDaveUlrich-diagonal-color.png in Resources */ = {isa = PBXBuildFile; fileRef = A8464DD5108AD6A90040C8C6 /* StatusMenuIconByDaveUlrich-diagonal-color.png */; };
 		A8464DD8108AD6A90040C8C6 /* StatusMenuIconByDaveUlrich-diagonal-bw.png in Resources */ = {isa = PBXBuildFile; fileRef = A8464DD4108AD6A90040C8C6 /* StatusMenuIconByDaveUlrich-diagonal-bw.png */; };
 		A8464DD9108AD6A90040C8C6 /* StatusMenuIconByDaveUlrich-diagonal-color.png in Resources */ = {isa = PBXBuildFile; fileRef = A8464DD5108AD6A90040C8C6 /* StatusMenuIconByDaveUlrich-diagonal-color.png */; };
-		A86E0701119BF24200DF8A58 /* AddSnippet.tiff in Resources */ = {isa = PBXBuildFile; fileRef = A86E0700119BF24200DF8A58 /* AddSnippet.tiff */; };
-		A86E0702119BF24200DF8A58 /* AddSnippet.tiff in Resources */ = {isa = PBXBuildFile; fileRef = A86E0700119BF24200DF8A58 /* AddSnippet.tiff */; };
-		A86E0708119BF38100DF8A58 /* CheckSnippet.tiff in Resources */ = {isa = PBXBuildFile; fileRef = A86E0706119BF38100DF8A58 /* CheckSnippet.tiff */; };
-		A86E0709119BF38100DF8A58 /* DeleteSnippet.tiff in Resources */ = {isa = PBXBuildFile; fileRef = A86E0707119BF38100DF8A58 /* DeleteSnippet.tiff */; };
-		A86E070A119BF38100DF8A58 /* CheckSnippet.tiff in Resources */ = {isa = PBXBuildFile; fileRef = A86E0706119BF38100DF8A58 /* CheckSnippet.tiff */; };
-		A86E070B119BF38100DF8A58 /* DeleteSnippet.tiff in Resources */ = {isa = PBXBuildFile; fileRef = A86E0707119BF38100DF8A58 /* DeleteSnippet.tiff */; };
 		A86F93910ED183C30058E899 /* Action.tiff in Resources */ = {isa = PBXBuildFile; fileRef = A8DF42840ED13BF000506877 /* Action.tiff */; };
-		A8755B4B1164B0C500465B3B /* check.png in Resources */ = {isa = PBXBuildFile; fileRef = A8755B4A1164B0C500465B3B /* check.png */; };
-		A8755B4C1164B0C500465B3B /* check.png in Resources */ = {isa = PBXBuildFile; fileRef = A8755B4A1164B0C500465B3B /* check.png */; };
 		A878AA430EC411BE00112A8E /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = A878AA420EC411BE00112A8E /* Localizable.strings */; };
 		A878AA440EC411BE00112A8E /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = A878AA420EC411BE00112A8E /* Localizable.strings */; };
-		A87F7D05119FC41500420FF1 /* ClipMenu3.icns in Resources */ = {isa = PBXBuildFile; fileRef = A87F7D04119FC41500420FF1 /* ClipMenu3.icns */; };
-		A87F7D06119FC41500420FF1 /* ClipMenu3.icns in Resources */ = {isa = PBXBuildFile; fileRef = A87F7D04119FC41500420FF1 /* ClipMenu3.icns */; };
 		A8975E9C1087042E00973851 /* SparkleIcon.tif in Resources */ = {isa = PBXBuildFile; fileRef = A8975E9B1087042E00973851 /* SparkleIcon.tif */; };
 		A8975E9D1087042E00973851 /* SparkleIcon.tif in Resources */ = {isa = PBXBuildFile; fileRef = A8975E9B1087042E00973851 /* SparkleIcon.tif */; };
-		A8A6350D116C4F0F001ED122 /* StatusMenuIconBySuphiAksoy_pressed.png in Resources */ = {isa = PBXBuildFile; fileRef = A8A6350B116C4F0F001ED122 /* StatusMenuIconBySuphiAksoy_pressed.png */; };
-		A8A6350E116C4F0F001ED122 /* StatusMenuIconBySuphiAksoy.png in Resources */ = {isa = PBXBuildFile; fileRef = A8A6350C116C4F0F001ED122 /* StatusMenuIconBySuphiAksoy.png */; };
-		A8A6350F116C4F0F001ED122 /* StatusMenuIconBySuphiAksoy_pressed.png in Resources */ = {isa = PBXBuildFile; fileRef = A8A6350B116C4F0F001ED122 /* StatusMenuIconBySuphiAksoy_pressed.png */; };
-		A8A63510116C4F0F001ED122 /* StatusMenuIconBySuphiAksoy.png in Resources */ = {isa = PBXBuildFile; fileRef = A8A6350C116C4F0F001ED122 /* StatusMenuIconBySuphiAksoy.png */; };
 		A8DCABDE10819C81006E02C8 /* StatusMenuIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = A8DCABD810819C81006E02C8 /* StatusMenuIcon.png */; };
 		A8DCABDF10819C81006E02C8 /* StatusMenuIcon_pressed.png in Resources */ = {isa = PBXBuildFile; fileRef = A8DCABD910819C81006E02C8 /* StatusMenuIcon_pressed.png */; };
 		A8DCABE010819C81006E02C8 /* StatusMenuIconFirst.png in Resources */ = {isa = PBXBuildFile; fileRef = A8DCABDA10819C81006E02C8 /* StatusMenuIconFirst.png */; };
@@ -141,9 +127,14 @@
 		1058C7A1FEA54F0111CA2CBB /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = /System/Library/Frameworks/Cocoa.framework; sourceTree = "<absolute>"; };
 		29B97324FDCFA39411CA2CEA /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = /System/Library/Frameworks/AppKit.framework; sourceTree = "<absolute>"; };
 		29B97325FDCFA39411CA2CEA /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = /System/Library/Frameworks/Foundation.framework; sourceTree = "<absolute>"; };
+		3578645D0D23A82400FAFFC5 /* English */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = English; path = English.lproj/Localizable.strings; sourceTree = "<group>"; };
+		3578F76F0D7E3D5E00E804BF /* Menu.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = Menu.png; path = resource/Menu.png; sourceTree = "<group>"; };
+		35A473480D20E8DE00E6B842 /* ClipMenu.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; name = ClipMenu.icns; path = resource/ClipMenu.icns; sourceTree = "<group>"; };
+		35C028940D6838D600B95FF5 /* ActionIcon.tiff */ = {isa = PBXFileReference; lastKnownFileType = image.tiff; name = ActionIcon.tiff; path = resource/ActionIcon.tiff; sourceTree = "<group>"; };
+		35C028DB0D683C0200B95FF5 /* ActionIconLarge.tiff */ = {isa = PBXFileReference; lastKnownFileType = image.tiff; name = ActionIconLarge.tiff; path = resource/ActionIconLarge.tiff; sourceTree = "<group>"; };
+		35C02FFA0D6BAB8300B95FF5 /* script */ = {isa = PBXFileReference; lastKnownFileType = folder; name = script; path = resource/script; sourceTree = "<group>"; };
 		7A1000010000000000000001 /* AppController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppController.swift; path = Source/AppController.swift; sourceTree = "<group>"; };
 		7A1000050000000000000001 /* SwiftUINativeWindows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SwiftUINativeWindows.swift; path = Source/SwiftUINativeWindows.swift; sourceTree = "<group>"; };
-		7A1000200000000000000001 /* SwiftUINativeAppKitSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SwiftUINativeAppKitSupport.swift; path = Source/SwiftUINativeAppKitSupport.swift; sourceTree = "<group>"; };
 		7A10000A0000000000000001 /* ComposingPreferences.tiff */ = {isa = PBXFileReference; lastKnownFileType = image.tiff; name = ComposingPreferences.tiff; path = resource/ComposingPreferences.tiff; sourceTree = "<group>"; };
 		7A10000B0000000000000001 /* MainMenu.nib */ = {isa = PBXFileReference; lastKnownFileType = wrapper.nib; name = MainMenu.nib; path = English.lproj/MainMenu.nib; sourceTree = "<group>"; };
 		7A10000E0000000000000001 /* Snippets.mom */ = {isa = PBXFileReference; lastKnownFileType = wrapper.mom; name = Snippets.mom; path = resource/Snippets.mom; sourceTree = "<group>"; };
@@ -151,6 +142,7 @@
 		7A1000120000000000000001 /* Preferences.nib (Japanese) */ = {isa = PBXFileReference; lastKnownFileType = wrapper.nib; name = "Preferences.nib (Japanese)"; path = Japanese.lproj/Preferences.nib; sourceTree = "<group>"; };
 		7A1000130000000000000001 /* Preferences.strings (English) */ = {isa = PBXFileReference; fileEncoding = 10; lastKnownFileType = text.plist.strings; name = "Preferences.strings (English)"; path = English.lproj/Preferences.strings; sourceTree = "<group>"; };
 		7A1000140000000000000001 /* Preferences.strings (Japanese) */ = {isa = PBXFileReference; fileEncoding = 10; lastKnownFileType = text.plist.strings; name = "Preferences.strings (Japanese)"; path = Japanese.lproj/Preferences.strings; sourceTree = "<group>"; };
+		7A1000200000000000000001 /* SwiftUINativeAppKitSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SwiftUINativeAppKitSupport.swift; path = Source/SwiftUINativeAppKitSupport.swift; sourceTree = "<group>"; };
 		7A2000010000000000000001 /* PreferenceNormalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferenceNormalizationTests.swift; sourceTree = "<group>"; };
 		7A2000020000000000000001 /* MenuPreviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuPreviewTests.swift; sourceTree = "<group>"; };
 		7A2000030000000000000001 /* ClipItemTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipItemTests.swift; sourceTree = "<group>"; };
@@ -162,21 +154,15 @@
 		7A2000090000000000000001 /* SnippetDebugReportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetDebugReportTests.swift; sourceTree = "<group>"; };
 		7A20000A0000000000000001 /* AppControllerDebugReportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppControllerDebugReportTests.swift; sourceTree = "<group>"; };
 		7A20000B0000000000000001 /* JavaScriptActionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JavaScriptActionTests.swift; sourceTree = "<group>"; };
-		7A3000010000000000000001 /* HistoryAutoPasteUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryAutoPasteUITests.swift; sourceTree = "<group>"; };
-		7A3000210000000000000001 /* ClipMenuUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClipMenuUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7A2000210000000000000001 /* ClipMenuTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClipMenuTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7A2000500000000000000001 /* ClipMenu.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = ClipMenu.xctestplan; sourceTree = "<group>"; };
-		3578645D0D23A82400FAFFC5 /* English */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = English; path = English.lproj/Localizable.strings; sourceTree = "<group>"; };
-		3578F76F0D7E3D5E00E804BF /* Menu.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = Menu.png; path = resource/Menu.png; sourceTree = "<group>"; };
-		35A473480D20E8DE00E6B842 /* ClipMenu.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; name = ClipMenu.icns; path = resource/ClipMenu.icns; sourceTree = "<group>"; };
-		35C028940D6838D600B95FF5 /* ActionIcon.tiff */ = {isa = PBXFileReference; lastKnownFileType = image.tiff; name = ActionIcon.tiff; path = resource/ActionIcon.tiff; sourceTree = "<group>"; };
-		35C028DB0D683C0200B95FF5 /* ActionIconLarge.tiff */ = {isa = PBXFileReference; lastKnownFileType = image.tiff; name = ActionIconLarge.tiff; path = resource/ActionIconLarge.tiff; sourceTree = "<group>"; };
-		35C02FFA0D6BAB8300B95FF5 /* script */ = {isa = PBXFileReference; lastKnownFileType = folder; name = script; path = resource/script; sourceTree = "<group>"; };
+		7A3000010000000000000001 /* HistoryAutoPasteUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryAutoPasteUITests.swift; sourceTree = "<group>"; };
+		7A3000210000000000000001 /* ClipMenuUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClipMenuUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8D1107310486CEB800E47090 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		8D1107320486CEB800E47090 /* ClipMenu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClipMenu.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8D1107320486CEB800E47090 /* ClipMenuDebug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClipMenuDebug.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A821F5401085696E00B25C8B /* dsa_pub.pem */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = dsa_pub.pem; path = resource/dsa_pub.pem; sourceTree = "<group>"; };
 		A821F5861085DA8A00B25C8B /* Japanese */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = Japanese; path = Japanese.lproj/InfoPlist.strings; sourceTree = "<group>"; };
-		A82B8AEB0EC3F8D700096102 /* ClipMenu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClipMenu.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A82B8AEB0EC3F8D700096102 /* ClipMenu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = ClipMenu.app; path = ClipMenuDebug.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A8328DCC108859AE00A54DF4 /* ShortcutRecorder.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ShortcutRecorder.framework; path = /Library/Frameworks/ShortcutRecorder.framework; sourceTree = "<absolute>"; };
 		A8464D95108AAC3B0040C8C6 /* StatusMenuIconByDaveUlrich-scissors1-bw-left.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "StatusMenuIconByDaveUlrich-scissors1-bw-left.png"; sourceTree = "<group>"; };
 		A8464D96108AAC3B0040C8C6 /* StatusMenuIconByDaveUlrich-scissors1-bw-right.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "StatusMenuIconByDaveUlrich-scissors1-bw-right.png"; sourceTree = "<group>"; };
@@ -206,6 +192,20 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		7A2000230000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7A3000230000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		8D11072E0486CEB800E47090 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -222,29 +222,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		7A2000230000000000000001 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		7A3000230000000000000001 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		080E96DDFE201D6D7F000001 /* Classes */ = {
 			isa = PBXGroup;
 			children = (
-			7A1000010000000000000001 /* AppController.swift */,
-			7A1000050000000000000001 /* SwiftUINativeWindows.swift */,
-			7A1000200000000000000001 /* SwiftUINativeAppKitSupport.swift */,
+				7A1000010000000000000001 /* AppController.swift */,
+				7A1000050000000000000001 /* SwiftUINativeWindows.swift */,
+				7A1000200000000000000001 /* SwiftUINativeAppKitSupport.swift */,
 				3505FF180D7FAE0000B55D03 /* Clip */,
 				A83A1FA210AA3F9A002CB62A /* Snippet */,
 				3505FF150D7FADC400B55D03 /* Action */,
@@ -277,7 +263,7 @@
 		19C28FACFE9D520D11CA2CBB /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				8D1107320486CEB800E47090 /* ClipMenu.app */,
+				8D1107320486CEB800E47090 /* ClipMenuDebug.app */,
 				A82B8AEB0EC3F8D700096102 /* ClipMenu.app */,
 				7A2000210000000000000001 /* ClipMenuTests.xctest */,
 				7A3000210000000000000001 /* ClipMenuUITests.xctest */,
@@ -300,32 +286,6 @@
 				19C28FACFE9D520D11CA2CBB /* Products */,
 			);
 			name = ClipMenu;
-			sourceTree = "<group>";
-		};
-		7A2000600000000000000001 /* ClipMenuTests */ = {
-			isa = PBXGroup;
-			children = (
-				7A2000010000000000000001 /* PreferenceNormalizationTests.swift */,
-				7A2000020000000000000001 /* MenuPreviewTests.swift */,
-				7A2000030000000000000001 /* ClipItemTests.swift */,
-				7A2000040000000000000001 /* ClipStoreTests.swift */,
-				7A2000050000000000000001 /* AlertFactoryTests.swift */,
-				7A2000060000000000000001 /* FixtureIntegrityTests.swift */,
-				7A2000070000000000000001 /* PreferenceSnapshotTests.swift */,
-				7A2000080000000000000001 /* UpdateCoordinatorDebugTests.swift */,
-				7A2000090000000000000001 /* SnippetDebugReportTests.swift */,
-				7A20000A0000000000000001 /* AppControllerDebugReportTests.swift */,
-				7A20000B0000000000000001 /* JavaScriptActionTests.swift */,
-			);
-			path = ClipMenuTests;
-			sourceTree = "<group>";
-		};
-		7A3000600000000000000001 /* ClipMenuUITests */ = {
-			isa = PBXGroup;
-			children = (
-				7A3000010000000000000001 /* HistoryAutoPasteUITests.swift */,
-			);
-			path = ClipMenuUITests;
 			sourceTree = "<group>";
 		};
 		29B97315FDCFA39411CA2CEA /* Other Source */ = {
@@ -397,6 +357,32 @@
 			name = NaoAdditions;
 			path = Source/NaoAdditions;
 			sourceTree = SOURCE_ROOT;
+		};
+		7A2000600000000000000001 /* ClipMenuTests */ = {
+			isa = PBXGroup;
+			children = (
+				7A2000010000000000000001 /* PreferenceNormalizationTests.swift */,
+				7A2000020000000000000001 /* MenuPreviewTests.swift */,
+				7A2000030000000000000001 /* ClipItemTests.swift */,
+				7A2000040000000000000001 /* ClipStoreTests.swift */,
+				7A2000050000000000000001 /* AlertFactoryTests.swift */,
+				7A2000060000000000000001 /* FixtureIntegrityTests.swift */,
+				7A2000070000000000000001 /* PreferenceSnapshotTests.swift */,
+				7A2000080000000000000001 /* UpdateCoordinatorDebugTests.swift */,
+				7A2000090000000000000001 /* SnippetDebugReportTests.swift */,
+				7A20000A0000000000000001 /* AppControllerDebugReportTests.swift */,
+				7A20000B0000000000000001 /* JavaScriptActionTests.swift */,
+			);
+			path = ClipMenuTests;
+			sourceTree = "<group>";
+		};
+		7A3000600000000000000001 /* ClipMenuUITests */ = {
+			isa = PBXGroup;
+			children = (
+				7A3000010000000000000001 /* HistoryAutoPasteUITests.swift */,
+			);
+			path = ClipMenuUITests;
+			sourceTree = "<group>";
 		};
 		A8328E0910885FAF00A54DF4 /* DBPrefsWindowController */ = {
 			isa = PBXGroup;
@@ -538,7 +524,7 @@
 			name = ClipMenu;
 			productInstallPath = "$(HOME)/Applications";
 			productName = ClipMenu;
-			productReference = 8D1107320486CEB800E47090 /* ClipMenu.app */;
+			productReference = 8D1107320486CEB800E47090 /* ClipMenuDebug.app */;
 			productType = "com.apple.product-type.application";
 		};
 		A82B8AB20EC3F8D700096102 /* ClipMenu (deployment) */ = {
@@ -566,6 +552,14 @@
 		29B97313FDCFA39411CA2CEA /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
+				TargetAttributes = {
+					7A2000200000000000000001 = {
+						ProvisioningStyle = Automatic;
+					};
+					7A3000200000000000000001 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
 			};
 			buildConfigurationList = C01FCF4E08A954540054247B /* Build configuration list for PBXProject "ClipMenu" */;
 			compatibilityVersion = "Xcode 3.2";
@@ -671,26 +665,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		8D11072C0486CEB800E47090 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			7A1000030000000000000001 /* AppController.swift in Sources */,
-			7A1000060000000000000001 /* SwiftUINativeWindows.swift in Sources */,
-			7A1000210000000000000001 /* SwiftUINativeAppKitSupport.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		A82B8AC20EC3F8D700096102 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			7A1000040000000000000001 /* AppController.swift in Sources */,
-			7A1000070000000000000001 /* SwiftUINativeWindows.swift in Sources */,
-			7A1000220000000000000001 /* SwiftUINativeAppKitSupport.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		7A2000220000000000000001 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -714,6 +688,26 @@
 			buildActionMask = 2147483647;
 			files = (
 				7A3000100000000000000001 /* HistoryAutoPasteUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8D11072C0486CEB800E47090 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7A1000030000000000000001 /* AppController.swift in Sources */,
+				7A1000060000000000000001 /* SwiftUINativeWindows.swift in Sources */,
+				7A1000210000000000000001 /* SwiftUINativeAppKitSupport.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A82B8AC20EC3F8D700096102 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7A1000040000000000000001 /* AppController.swift in Sources */,
+				7A1000070000000000000001 /* SwiftUINativeWindows.swift in Sources */,
+				7A1000220000000000000001 /* SwiftUINativeAppKitSupport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -741,155 +735,19 @@
 			);
 			name = InfoPlist.strings;
 			sourceTree = "<group>";
-			};
-			A878AA420EC411BE00112A8E /* Localizable.strings */ = {
-				isa = PBXVariantGroup;
-				children = (
+		};
+		A878AA420EC411BE00112A8E /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
 				3578645D0D23A82400FAFFC5 /* English */,
 				A878AA450EC411C400112A8E /* Japanese */,
-				);
-				name = Localizable.strings;
-				sourceTree = "<group>";
-			};
-	/* End PBXVariantGroup section */
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
-		A82B8AE90EC3F8D700096102 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD)";
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				COPY_PHASE_STRIP = NO;
-				ENABLE_TESTABILITY = YES;
-				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
-				GCC_C_LANGUAGE_STANDARD = c99;
-				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_WARN_ABOUT_MISSING_NEWLINE = YES;
-				GCC_WARN_CHECK_SWITCH_STATEMENTS = YES;
-				GCC_WARN_INITIALIZER_NOT_FULLY_BRACKETED = YES;
-				GCC_WARN_MISSING_PARENTHESES = NO;
-				INFOPLIST_FILE = Info.plist;
-				INSTALL_PATH = "$(HOME)/Applications";
-				MACOSX_DEPLOYMENT_TARGET = 11.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.naotaka.ClipMenu.Debug;
-				PRODUCT_MODULE_NAME = ClipMenu;
-				PRODUCT_NAME = ClipMenuDebug;
-				RUN_CLANG_STATIC_ANALYZER = YES;
-				SDKROOT = macosx;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
-				WRAPPER_EXTENSION = app;
-			};
-			name = Debug;
-		};
-		A82B8AEA0EC3F8D700096102 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD)";
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				DEPLOYMENT_POSTPROCESSING = YES;
-				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
-				GCC_C_LANGUAGE_STANDARD = c99;
-				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
-				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
-				GCC_WARN_ABOUT_MISSING_NEWLINE = YES;
-				GCC_WARN_CHECK_SWITCH_STATEMENTS = YES;
-				GCC_WARN_INITIALIZER_NOT_FULLY_BRACKETED = YES;
-				GCC_WARN_MISSING_PARENTHESES = NO;
-				INFOPLIST_FILE = Info.plist;
-				INSTALL_PATH = "$(HOME)/Applications";
-				MACOSX_DEPLOYMENT_TARGET = 11.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.naotaka.ClipMenu;
-				PRODUCT_MODULE_NAME = ClipMenu;
-				PRODUCT_NAME = ClipMenu;
-				RUN_CLANG_STATIC_ANALYZER = YES;
-				SDKROOT = macosx;
-				SWIFT_VERSION = 5.0;
-				WRAPPER_EXTENSION = app;
-			};
-			name = Release;
-		};
-		C01FCF4B08A954540054247B /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD)";
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				COPY_PHASE_STRIP = NO;
-				ENABLE_TESTABILITY = YES;
-				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
-				GCC_C_LANGUAGE_STANDARD = c99;
-				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_WARN_ABOUT_MISSING_NEWLINE = YES;
-				GCC_WARN_CHECK_SWITCH_STATEMENTS = YES;
-				GCC_WARN_MISSING_PARENTHESES = NO;
-				INFOPLIST_FILE = Info.plist;
-				INSTALL_PATH = "$(HOME)/Applications";
-				MACOSX_DEPLOYMENT_TARGET = 11.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.naotaka.ClipMenu.Debug;
-				PRODUCT_MODULE_NAME = ClipMenu;
-				PRODUCT_NAME = ClipMenuDebug;
-				RUN_CLANG_STATIC_ANALYZER = NO;
-				SDKROOT = macosx;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
-				WRAPPER_EXTENSION = app;
-			};
-			name = Debug;
-		};
-		C01FCF4C08A954540054247B /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD)";
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				DEPLOYMENT_POSTPROCESSING = YES;
-				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
-				GCC_C_LANGUAGE_STANDARD = c99;
-				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
-				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
-				GCC_WARN_ABOUT_MISSING_NEWLINE = YES;
-				GCC_WARN_CHECK_SWITCH_STATEMENTS = YES;
-				GCC_WARN_MISSING_PARENTHESES = NO;
-				INFOPLIST_FILE = Info.plist;
-				INSTALL_PATH = "$(HOME)/Applications";
-				MACOSX_DEPLOYMENT_TARGET = 11.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.naotaka.ClipMenu;
-				PRODUCT_MODULE_NAME = ClipMenu;
-				PRODUCT_NAME = ClipMenu;
-				RUN_CLANG_STATIC_ANALYZER = YES;
-				SDKROOT = macosx;
-				SWIFT_VERSION = 5.0;
-				WRAPPER_EXTENSION = app;
-			};
-			name = Release;
-		};
-		C01FCF4F08A954540054247B /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				GCC_C_LANGUAGE_STANDARD = c99;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				PREBINDING = NO;
-			};
-			name = Debug;
-		};
-		C01FCF5008A954540054247B /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				GCC_C_LANGUAGE_STANDARD = c99;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				PREBINDING = NO;
-			};
-			name = Release;
-		};
 		7A2000400000000000000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -897,11 +755,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@loader_path/../Frameworks",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 11.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.naotaka.ClipMenuTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -921,11 +775,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@loader_path/../Frameworks",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 11.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.naotaka.ClipMenuTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -968,18 +818,145 @@
 			};
 			name = Release;
 		};
+		A82B8AE90EC3F8D700096102 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD)";
+				COPY_PHASE_STRIP = NO;
+				ENABLE_TESTABILITY = YES;
+				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
+				GCC_C_LANGUAGE_STANDARD = c99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_WARN_ABOUT_MISSING_NEWLINE = YES;
+				GCC_WARN_CHECK_SWITCH_STATEMENTS = YES;
+				GCC_WARN_INITIALIZER_NOT_FULLY_BRACKETED = YES;
+				GCC_WARN_MISSING_PARENTHESES = NO;
+				INFOPLIST_FILE = Info.plist;
+				INSTALL_PATH = "$(HOME)/Applications";
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.naotaka.ClipMenu.Debug;
+				PRODUCT_MODULE_NAME = ClipMenu;
+				PRODUCT_NAME = ClipMenuDebug;
+				RUN_CLANG_STATIC_ANALYZER = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				WRAPPER_EXTENSION = app;
+			};
+			name = Debug;
+		};
+		A82B8AEA0EC3F8D700096102 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD)";
+				DEPLOYMENT_POSTPROCESSING = YES;
+				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
+				GCC_C_LANGUAGE_STANDARD = c99;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_WARN_ABOUT_MISSING_NEWLINE = YES;
+				GCC_WARN_CHECK_SWITCH_STATEMENTS = YES;
+				GCC_WARN_INITIALIZER_NOT_FULLY_BRACKETED = YES;
+				GCC_WARN_MISSING_PARENTHESES = NO;
+				INFOPLIST_FILE = Info.plist;
+				INSTALL_PATH = "$(HOME)/Applications";
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.naotaka.ClipMenu;
+				PRODUCT_MODULE_NAME = ClipMenu;
+				PRODUCT_NAME = ClipMenu;
+				RUN_CLANG_STATIC_ANALYZER = YES;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+				WRAPPER_EXTENSION = app;
+			};
+			name = Release;
+		};
+		C01FCF4B08A954540054247B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD)";
+				COPY_PHASE_STRIP = NO;
+				ENABLE_TESTABILITY = YES;
+				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
+				GCC_C_LANGUAGE_STANDARD = c99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_WARN_ABOUT_MISSING_NEWLINE = YES;
+				GCC_WARN_CHECK_SWITCH_STATEMENTS = YES;
+				GCC_WARN_MISSING_PARENTHESES = NO;
+				INFOPLIST_FILE = Info.plist;
+				INSTALL_PATH = "$(HOME)/Applications";
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.naotaka.ClipMenu.Debug;
+				PRODUCT_MODULE_NAME = ClipMenu;
+				PRODUCT_NAME = ClipMenuDebug;
+				RUN_CLANG_STATIC_ANALYZER = NO;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				WRAPPER_EXTENSION = app;
+			};
+			name = Debug;
+		};
+		C01FCF4C08A954540054247B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD)";
+				DEPLOYMENT_POSTPROCESSING = YES;
+				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
+				GCC_C_LANGUAGE_STANDARD = c99;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_WARN_ABOUT_MISSING_NEWLINE = YES;
+				GCC_WARN_CHECK_SWITCH_STATEMENTS = YES;
+				GCC_WARN_MISSING_PARENTHESES = NO;
+				INFOPLIST_FILE = Info.plist;
+				INSTALL_PATH = "$(HOME)/Applications";
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.naotaka.ClipMenu;
+				PRODUCT_MODULE_NAME = ClipMenu;
+				PRODUCT_NAME = ClipMenu;
+				RUN_CLANG_STATIC_ANALYZER = YES;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+				WRAPPER_EXTENSION = app;
+			};
+			name = Release;
+		};
+		C01FCF4F08A954540054247B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				GCC_C_LANGUAGE_STANDARD = c99;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				PREBINDING = NO;
+			};
+			name = Debug;
+		};
+		C01FCF5008A954540054247B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				GCC_C_LANGUAGE_STANDARD = c99;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				PREBINDING = NO;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A82B8AE80EC3F8D700096102 /* Build configuration list for PBXNativeTarget "ClipMenu (deployment)" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				A82B8AE90EC3F8D700096102 /* Debug */,
-				A82B8AEA0EC3F8D700096102 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		7A2000420000000000000001 /* Build configuration list for PBXNativeTarget "ClipMenuTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -997,6 +974,15 @@
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
+		};
+		A82B8AE80EC3F8D700096102 /* Build configuration list for PBXNativeTarget "ClipMenu (deployment)" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A82B8AE90EC3F8D700096102 /* Debug */,
+				A82B8AEA0EC3F8D700096102 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		C01FCF4A08A954540054247B /* Build configuration list for PBXNativeTarget "ClipMenu" */ = {
 			isa = XCConfigurationList;

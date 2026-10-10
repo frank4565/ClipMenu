@@ -1901,6 +1901,9 @@ enum LoginItemManager {
         if debugBypassLoginItemMutation() {
             return true
         }
+        if enabled {
+            return true
+        }
 #endif
         if #available(macOS 13.0, *) {
             do {
@@ -8916,6 +8919,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 let selectedPaneTitle = SwiftUIPreferencesWindowController.shared.debugSelectedTabTitle()
                 let paneSnapshot = CMSnippetPreferencesSnapshotForDebug()
                 let rowLabel = paneSnapshot["rowLabel"] as? String
+                let previewLabel = paneSnapshot["previewLabel"] as? String
                 let pickerTitles = paneSnapshot["pickerTitles"] as? [String] ?? []
                 let selectedPosition = paneSnapshot["selectedPosition"] as? Int ?? -1
                 let options = paneSnapshot["options"] as? [[String: Any]] ?? []
@@ -8935,7 +8939,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                     NSLocalizedString("Keep snippets available after the history list.", comment: "")
                 ]
                 let expectedOptionPreviewRows = [
-                    ["history", "commands", "commands"],
+                    ["history", "commands"],
                     ["snippets", "history", "commands"],
                     ["history", "snippets", "commands"]
                 ]
@@ -8948,7 +8952,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                     && self.debugToolbarStyleName(window.toolbarStyle) == "preference"
                     && window.isVisible
                     && selectedPaneTitle == NSLocalizedString("General", comment: "")
-                    && rowLabel == NSLocalizedString("903.title", tableName: "Preferences", bundle: .main, value: "The position to show snippets in ClipMenu:", comment: "")
+                    && rowLabel == NSLocalizedString("Snippet Menu Position", comment: "")
+                    && previewLabel == NSLocalizedString("Current Menu Order", comment: "")
                     && pickerTitles == expectedPickerTitles
                     && options.count == 3
                     && optionTitles == expectedPickerTitles
@@ -9101,14 +9106,13 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 let startup = paneSnapshot["startup"] as? [String: Any] ?? [:]
                 let clipboardHistory = paneSnapshot["clipboardHistory"] as? [String: Any] ?? [:]
                 let appearance = paneSnapshot["appearance"] as? [String: Any] ?? [:]
+                let excludedApplications = paneSnapshot["excludedApplications"] as? [String: Any] ?? [:]
                 let startupToggleTitles = startup["toggleTitles"] as? [String] ?? []
                 let clipboardControlTitles = clipboardHistory["controlTitles"] as? [String] ?? []
-                let excludedAppsSurface = clipboardHistory["excludedAppsSurface"] as? [String: Any] ?? [:]
-                let excludedAppsSurfaceTitle = excludedAppsSurface["title"] as? String ?? ""
-                let excludedAppsSurfaceSummaryText = excludedAppsSurface["summaryText"] as? String ?? ""
-                let excludedAppsSurfaceBadges = excludedAppsSurface["badges"] as? [String] ?? []
-                let excludedAppsSurfacePreviewTitles = excludedAppsSurface["previewTitles"] as? [String] ?? []
-                let excludedAppsSurfaceActionTitle = excludedAppsSurface["actionTitle"] as? String ?? ""
+                let excludedAppsStatusText = excludedApplications["statusText"] as? String ?? ""
+                let excludedAppsDetailText = excludedApplications["detailText"] as? String ?? ""
+                let excludedAppsActionTitle = excludedApplications["actionTitle"] as? String ?? ""
+                let excludedApps = excludedApplications["applicationNames"] as? [String] ?? []
                 let sortOrderTitles = clipboardHistory["sortOrderTitles"] as? [String] ?? []
                 let exportModeTitles = clipboardHistory["exportModeTitles"] as? [String] ?? []
                 let separatorTitles = clipboardHistory["separatorTitles"] as? [String] ?? []
@@ -9211,40 +9215,25 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 let expectedTimeIntervalState = CMNormalizedLegacyObserveInterval(
                     defaults.object(forKey: CMPrefTimeIntervalKey) as? Double ?? 0.75
                 )
-                let excludedApps = clipboardStates["excludedApps"] as? [String] ?? []
-                let expectedExcludedAppsSurfaceSummaryText: String = {
+                let expectedExcludedAppsStatusText: String = {
                     let count = excludedApps.count
                     if count == 0 {
-                        return NSLocalizedString("No applications are currently excluded from clipboard capture.", comment: "")
+                        return NSLocalizedString("No applications excluded", comment: "")
                     }
                     if count == 1 {
-                        return excludedApps[0]
+                        return NSLocalizedString("1 application excluded", comment: "")
                     }
-                    let names = Array(excludedApps.prefix(2))
-                    if count == 2 {
-                        return names.joined(separator: ", ")
-                    }
-                    return String(
-                        format: NSLocalizedString("%1$@, %2$@, and %3$d more", comment: ""),
-                        names.first ?? "",
-                        names.dropFirst().first ?? "",
-                        count - 2
-                    )
+                    return String(format: NSLocalizedString("%d applications excluded", comment: ""), count)
                 }()
-                let expectedExcludedAppsSurfaceBadges = [
-                    excludedApps.count == 1
-                        ? NSLocalizedString("1 app", comment: "")
-                        : String(format: NSLocalizedString("%d apps", comment: ""), excludedApps.count),
-                    excludedApps.isEmpty
-                        ? NSLocalizedString("Capture open to all apps", comment: "")
-                        : NSLocalizedString("Capture filtered by app", comment: "")
-                ]
-                let expectedExcludedAppsSurfacePreviewTitles: [String] = {
+                let expectedExcludedAppsDetailText: String = {
+                    guard !excludedApps.isEmpty else {
+                        return NSLocalizedString("No applications are currently excluded from clipboard capture.", comment: "")
+                    }
                     let preview = Array(excludedApps.prefix(3))
-                    guard excludedApps.count > 3 else { return preview }
-                    return preview + [
-                        String(format: NSLocalizedString("%d more", comment: ""), excludedApps.count - 3)
-                    ]
+                    guard excludedApps.count > 3 else { return preview.joined(separator: ", ") }
+                    return preview.joined(separator: ", ")
+                        + ", "
+                        + String(format: NSLocalizedString("%d more", comment: ""), excludedApps.count - 3)
                 }()
                 var mismatchReasons: [String] = []
                 func require(_ condition: Bool, _ reason: String) {
@@ -9260,7 +9249,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 require(sectionTitles == [
                     NSLocalizedString("Startup", comment: ""),
                     NSLocalizedString("1275.title", tableName: "Preferences", bundle: .main, value: "Clipboard History", comment: ""),
-                    NSLocalizedString("1277.title", tableName: "Preferences", bundle: .main, value: "Appearance", comment: "")
+                    NSLocalizedString("Snippets", comment: ""),
+                    NSLocalizedString("1277.title", tableName: "Preferences", bundle: .main, value: "Appearance", comment: ""),
+                    NSLocalizedString("Excluded Applications", comment: "")
                 ], "sectionTitles")
                 require(startupToggleTitles == [
                     NSLocalizedString("768.title", tableName: "Preferences", bundle: .main, value: "Launch on Login", comment: ""),
@@ -9269,7 +9260,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 require(clipboardControlTitles == [
                     NSLocalizedString("690.title", tableName: "Preferences", bundle: .main, value: "Input \"⌘ + V\" after menu item selection", comment: ""),
                     NSLocalizedString("1417.title", tableName: "Preferences", bundle: .main, value: "Sort history order by:", comment: ""),
-                    NSLocalizedString("1446.title", tableName: "Preferences", bundle: .main, value: "Exclude Applications", comment: ""),
                     NSLocalizedString("1047.title", tableName: "Preferences", bundle: .main, value: "Save clipboard history on quit", comment: ""),
                     NSLocalizedString("1380.title", tableName: "Preferences", bundle: .main, value: "Export clipboard history as:", comment: ""),
                     NSLocalizedString("1396.title", tableName: "Preferences", bundle: .main, value: "separator:", comment: ""),
@@ -9306,11 +9296,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                     NSLocalizedString("1295.title", tableName: "Preferences", bundle: .main, value: "Every day", comment: ""),
                     NSLocalizedString("1285.title", tableName: "Preferences", bundle: .main, value: "Never", comment: "")
                 ], "clipboard.autosaveIntervalTitles")
-                require(excludedAppsSurfaceTitle == NSLocalizedString("1451.title", tableName: "Preferences", bundle: .main, value: "Exclude Apps", comment: ""), "clipboard.excludedApps.title")
-                require(excludedAppsSurfaceSummaryText == expectedExcludedAppsSurfaceSummaryText, "clipboard.excludedApps.summaryText")
-                require(excludedAppsSurfaceBadges == expectedExcludedAppsSurfaceBadges, "clipboard.excludedApps.badges")
-                require(excludedAppsSurfacePreviewTitles == expectedExcludedAppsSurfacePreviewTitles, "clipboard.excludedApps.previewTitles")
-                require(excludedAppsSurfaceActionTitle == NSLocalizedString("1448.title", tableName: "Preferences", bundle: .main, value: "Define Exclude Options...", comment: ""), "clipboard.excludedApps.actionTitle")
+                require(excludedAppsStatusText == expectedExcludedAppsStatusText, "excludedApplications.statusText")
+                require(excludedAppsDetailText == expectedExcludedAppsDetailText, "excludedApplications.detailText")
+                require(excludedAppsActionTitle == NSLocalizedString("1448.title", tableName: "Preferences", bundle: .main, value: "Define Exclude Options...", comment: ""), "excludedApplications.actionTitle")
                 require(exportSeparatorState == expectedExportSeparatorState, "clipboard.state.exportSeparator")
                 require(autosaveDelayState == expectedAutosaveDelayState, "clipboard.state.autosaveDelay")
                 require(maxHistorySizeState == expectedMaxHistorySizeState, "clipboard.state.maxHistorySize")

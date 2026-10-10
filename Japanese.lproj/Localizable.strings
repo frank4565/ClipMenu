@@ -1684,5 +1684,11 @@
 	<string>検証済みのアップデートは「ダウンロード」フォルダにあります。</string>
 	<key>Open the download to continue the update manually, or choose Later to leave it in Downloads.</key>
 	<string>ダウンロードを開いて手動でアップデートを続けるか、「あとで」を選んで「ダウンロード」に残します。</string>
+	<key>Menu Preview</key>
+	<string>メニューのプレビュー</string>
+	<key>Example Folder</key>
+	<string>サンプルフォルダ</string>
+	<key>Tooltip</key>
+	<string>ツールチップ</string>
 </dict>
 </plist>

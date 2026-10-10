@@ -12,6 +12,9 @@ final class SwiftUIPreferencesWindowController: NSWindowController, NSWindowDele
 
     private init() {
         let controller = NSHostingController(rootView: CMPreferencesRootView(state: presentationState))
+        if #available(macOS 13.0, *) {
+            controller.sizingOptions = []
+        }
         let window = NSWindow(contentViewController: controller)
         window.title = presentationState.selection?.title ?? NSLocalizedString("Preferences", comment: "")
         window.setContentSize(Self.defaultContentSize)
@@ -40,11 +43,11 @@ final class SwiftUIPreferencesWindowController: NSWindowController, NSWindowDele
 
         window.delegate = self
         selectionObserver = presentationState.$selection
-            .compactMap { $0 }
-            .removeDuplicates()
+            .combineLatest(presentationState.$contentHeights)
             .receive(on: RunLoop.main)
-            .sink { [weak self] tab in
-                self?.updateWindowChrome(for: tab)
+            .sink { [weak self] tab, contentHeights in
+                guard let tab else { return }
+                self?.updateWindowChrome(for: tab, contentHeight: contentHeights[tab])
             }
     }
 
@@ -81,10 +84,6 @@ final class SwiftUIPreferencesWindowController: NSWindowController, NSWindowDele
             "miniaturizeButtonEnabled": window?.standardWindowButton(.miniaturizeButton)?.isEnabled as Any,
             "zoomButtonEnabled": window?.standardWindowButton(.zoomButton)?.isEnabled as Any
         ]
-    }
-
-    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
-        sender.frame.size
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -146,10 +145,32 @@ final class SwiftUIPreferencesWindowController: NSWindowController, NSWindowDele
         presentationState.selection = tab
     }
 
-    private func updateWindowChrome(for tab: PreferenceTab) {
+    private func updateWindowChrome(for tab: PreferenceTab, contentHeight: CGFloat? = nil) {
         window?.title = tab.title
         window?.toolbar?.selectedItemIdentifier = tab.toolbarItemIdentifier
         UserDefaults.standard.set(tab.rawValue, forKey: CMSelectedPreferencePaneKey)
+
+        guard let window else { return }
+        var contentSize = Self.defaultContentSize
+        if let contentHeight {
+            contentSize.height = contentHeight
+        }
+        guard let currentSize = window.contentView?.frame.size,
+              currentSize != contentSize else { return }
+
+        // Allow the programmatic resize, keeping the toolbar in place as the
+        // bottom edge follows the selected pane's content height.
+        let topLeft = NSPoint(x: window.frame.minX, y: window.frame.maxY)
+        window.contentMinSize = NSSize(width: contentSize.width, height: min(currentSize.height, contentSize.height))
+        window.contentMaxSize = NSSize(width: contentSize.width, height: max(currentSize.height, contentSize.height))
+        window.setContentSize(contentSize)
+        var fittedTopLeft = topLeft
+        if let screenFrame = window.screen?.visibleFrame {
+            fittedTopLeft.y = min(screenFrame.maxY, max(topLeft.y, screenFrame.minY + window.frame.height))
+        }
+        window.setFrameTopLeftPoint(fittedTopLeft)
+        window.contentMinSize = contentSize
+        window.contentMaxSize = contentSize
     }
 }
 

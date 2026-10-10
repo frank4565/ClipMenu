@@ -715,6 +715,7 @@ final class ClipMenuUndoWindow: NSWindow {
 
 final class PreferencesPresentationState: ObservableObject {
     @Published var selection: PreferenceTab?
+    @Published var contentHeights: [PreferenceTab: CGFloat] = [:]
 
     init() {
         resetForPresentation()
@@ -1356,8 +1357,31 @@ private struct PreferencesView: View {
         }
     }
 
-    @ViewBuilder
     private func selectedPane(for selection: PreferenceTab) -> some View {
+        paneContent(for: selection)
+            .frame(width: 760)
+            .fixedSize(horizontal: false, vertical: true)
+            .background {
+                GeometryReader { geometry in
+                    Color.clear
+                        .onAppear { updateContentHeight(geometry.size.height, for: selection) }
+                        .onChange(of: geometry.size.height) { height in
+                            updateContentHeight(height, for: selection)
+                        }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private func updateContentHeight(_ height: CGFloat, for tab: PreferenceTab) {
+        let height = ceil(height)
+        if height.isFinite, height > 0, state.contentHeights[tab] != height {
+            state.contentHeights[tab] = height
+        }
+    }
+
+    @ViewBuilder
+    private func paneContent(for selection: PreferenceTab) -> some View {
         switch selection {
         case .general:
             GeneralPreferencesView()
@@ -1366,7 +1390,9 @@ private struct PreferencesView: View {
         case .types:
             TypePreferencesView()
         case .actions:
+            // The two action collections scroll inside a stable list viewport.
             ActionPreferencesView()
+                .frame(height: 640)
         case .shortcuts:
             ShortcutsPreferencesView()
         case .updates:
@@ -1399,17 +1425,13 @@ private struct PreferencePane<Content: View>: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                content
-            }
-            .padding(.horizontal, 40)
-            .padding(.top, 24)
-            .padding(.bottom, 28)
-            .frame(maxWidth: 760, alignment: .topLeading)
-            .frame(maxWidth: .infinity, alignment: .top)
+        VStack(alignment: .leading, spacing: 18) {
+            content
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.horizontal, 40)
+        .padding(.top, 24)
+        .padding(.bottom, 28)
+        .frame(width: 760, alignment: .topLeading)
     }
 }
 
@@ -1463,10 +1485,12 @@ private struct PreferenceControlRow<Control: View>: View {
 
 private struct PreferenceRow<Control: View>: View {
     let title: String
+    let labelWidth: CGFloat
     let control: Control
 
-    init(_ title: String, @ViewBuilder control: () -> Control) {
+    init(_ title: String, labelWidth: CGFloat = 190, @ViewBuilder control: () -> Control) {
         self.title = title
+        self.labelWidth = labelWidth
         self.control = control()
     }
 
@@ -1474,7 +1498,7 @@ private struct PreferenceRow<Control: View>: View {
         HStack(alignment: .center, spacing: 14) {
             Text(title)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(width: 190, alignment: .trailing)
+                .frame(width: labelWidth, alignment: .trailing)
                 .foregroundColor(.primary)
             control
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1925,6 +1949,7 @@ private struct PreferenceStepper: View {
     let range: ClosedRange<Int>
     let step: Int
     let suffix: String?
+    let labelWidth: CGFloat
 
     private static let integerFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
@@ -1934,16 +1959,17 @@ private struct PreferenceStepper: View {
         return formatter
     }()
 
-    init(_ title: String, value: Binding<Int>, in range: ClosedRange<Int>, step: Int = 1, suffix: String? = nil) {
+    init(_ title: String, value: Binding<Int>, in range: ClosedRange<Int>, step: Int = 1, suffix: String? = nil, labelWidth: CGFloat = 190) {
         self.title = title
         self._value = value
         self.range = range
         self.step = step
         self.suffix = suffix
+        self.labelWidth = labelWidth
     }
 
     var body: some View {
-        PreferenceRow(title) {
+        PreferenceRow(title, labelWidth: labelWidth) {
             HStack(spacing: 10) {
                 TextField("", value: $value, formatter: Self.integerFormatter)
                     .textFieldStyle(.roundedBorder)
@@ -2757,7 +2783,8 @@ func CMSnippetPreferencesSnapshotForDebug() -> [String: Any] {
     return [
         "paneTitle": NSLocalizedString("Snippets", comment: ""),
         "sectionTitle": NSLocalizedString("Snippets", comment: ""),
-        "rowLabel": NSLocalizedString("903.title", tableName: "Preferences", bundle: .main, value: "The position to show snippets in ClipMenu:", comment: ""),
+        "rowLabel": NSLocalizedString("Snippet Menu Position", comment: ""),
+        "previewLabel": NSLocalizedString("Current Menu Order", comment: ""),
         "pickerTitles": [
             hiddenLabel,
             aboveLabel,
@@ -3047,41 +3074,26 @@ func CMGeneralPreferencesSnapshotForDebug() -> [String: Any] {
         .compactMap(ExcludedApp.init(defaultsObject:))
         .map(\.name)
 
-    let excludedAppsSurfaceSummaryText: String = {
+    let excludedAppsSurfaceStatusText: String = {
         let count = excludedApps.count
         if count == 0 {
-            return NSLocalizedString("No applications are currently excluded from clipboard capture.", comment: "")
+            return NSLocalizedString("No applications excluded", comment: "")
         }
         if count == 1 {
-            return excludedApps[0]
+            return NSLocalizedString("1 application excluded", comment: "")
         }
-        let names = Array(excludedApps.prefix(2))
-        if count == 2 {
-            return names.joined(separator: ", ")
-        }
-        return String(
-            format: NSLocalizedString("%1$@, %2$@, and %3$d more", comment: ""),
-            names.first ?? "",
-            names.dropFirst().first ?? "",
-            count - 2
-        )
+        return String(format: NSLocalizedString("%d applications excluded", comment: ""), count)
     }()
 
-    let excludedAppsSurfaceBadges: [String] = [
-        excludedApps.count == 1
-            ? NSLocalizedString("1 app", comment: "")
-            : String(format: NSLocalizedString("%d apps", comment: ""), excludedApps.count),
-        excludedApps.isEmpty
-            ? NSLocalizedString("Capture open to all apps", comment: "")
-            : NSLocalizedString("Capture filtered by app", comment: "")
-    ]
-
-    let excludedAppsSurfacePreviewTitles: [String] = {
+    let excludedAppsSurfaceDetailText: String = {
+        guard !excludedApps.isEmpty else {
+            return NSLocalizedString("No applications are currently excluded from clipboard capture.", comment: "")
+        }
         let preview = Array(excludedApps.prefix(3))
-        guard excludedApps.count > 3 else { return preview }
-        return preview + [
-            String(format: NSLocalizedString("%d more", comment: ""), excludedApps.count - 3)
-        ]
+        guard excludedApps.count > 3 else { return preview.joined(separator: ", ") }
+        return preview.joined(separator: ", ")
+            + ", "
+            + String(format: NSLocalizedString("%d more", comment: ""), excludedApps.count - 3)
     }()
     let selectedStatusItemOption = StatusItemOption(rawValue: CMNormalizedStatusItemSelectionTag(showStatusItem)) ?? .default
 
@@ -3090,7 +3102,9 @@ func CMGeneralPreferencesSnapshotForDebug() -> [String: Any] {
     report["sectionTitles"] = [
             NSLocalizedString("Startup", comment: ""),
             NSLocalizedString("1275.title", tableName: "Preferences", bundle: .main, value: "Clipboard History", comment: ""),
-            NSLocalizedString("1277.title", tableName: "Preferences", bundle: .main, value: "Appearance", comment: "")
+            NSLocalizedString("Snippets", comment: ""),
+            NSLocalizedString("1277.title", tableName: "Preferences", bundle: .main, value: "Appearance", comment: ""),
+            NSLocalizedString("Excluded Applications", comment: "")
         ]
     report["startup"] = [
             "toggleTitles": [
@@ -3102,17 +3116,9 @@ func CMGeneralPreferencesSnapshotForDebug() -> [String: Any] {
             "pasteAutomationSurface": CMPasteAutomationPreferencesSnapshotForDebug(
                 inputPasteCommand: inputPasteCommand
             ),
-            "excludedAppsSurface": [
-                "title": NSLocalizedString("1451.title", tableName: "Preferences", bundle: .main, value: "Exclude Apps", comment: ""),
-                "summaryText": excludedAppsSurfaceSummaryText,
-                "badges": excludedAppsSurfaceBadges,
-                "previewTitles": excludedAppsSurfacePreviewTitles,
-                "actionTitle": NSLocalizedString("1448.title", tableName: "Preferences", bundle: .main, value: "Define Exclude Options...", comment: "")
-            ],
             "controlTitles": [
                 NSLocalizedString("690.title", tableName: "Preferences", bundle: .main, value: "Input \"⌘ + V\" after menu item selection", comment: ""),
                 NSLocalizedString("1417.title", tableName: "Preferences", bundle: .main, value: "Sort history order by:", comment: ""),
-                NSLocalizedString("1446.title", tableName: "Preferences", bundle: .main, value: "Exclude Applications", comment: ""),
                 NSLocalizedString("1047.title", tableName: "Preferences", bundle: .main, value: "Save clipboard history on quit", comment: ""),
                 NSLocalizedString("1380.title", tableName: "Preferences", bundle: .main, value: "Export clipboard history as:", comment: ""),
                 NSLocalizedString("1396.title", tableName: "Preferences", bundle: .main, value: "separator:", comment: ""),
@@ -3157,11 +3163,16 @@ func CMGeneralPreferencesSnapshotForDebug() -> [String: Any] {
                 "exportSeparator": exportSeparator,
                 "maxHistorySize": maxHistorySize,
                 "autosaveDelay": autosaveDelay,
-                "timeInterval": timeInterval,
-                "excludedApps": excludedApps
+                "timeInterval": timeInterval
             ]
         ]
     report["clipboardHistory"] = clipboardHistory
+    report["excludedApplications"] = [
+        "statusText": excludedAppsSurfaceStatusText,
+        "detailText": excludedAppsSurfaceDetailText,
+        "actionTitle": NSLocalizedString("1448.title", tableName: "Preferences", bundle: .main, value: "Define Exclude Options...", comment: ""),
+        "applicationNames": excludedApps
+    ]
     report["appearance"] = [
             "controlTitle": NSLocalizedString("1316.title", tableName: "Preferences", bundle: .main, value: "Status Bar icon style:", comment: ""),
             "selectedStatusItemTitle": selectedStatusItemOption.title,
@@ -4112,16 +4123,19 @@ private struct StoreTypePreferencesViewContent: View {
 
     var body: some View {
         PreferenceSection(legacyStoreTypesSectionTitle) {
-            PreferenceControlRow {
-                VStack(alignment: .leading, spacing: 10) {
-                    Button(NSLocalizedString("1066.title", tableName: "Preferences", bundle: .main, value: "Check All", comment: "")) {
-                        store.enableAllStoreTypes()
-                    }
-                    .controlSize(.small)
+            Button(NSLocalizedString("1066.title", tableName: "Preferences", bundle: .main, value: "Check All", comment: "")) {
+                store.enableAllStoreTypes()
+            }
+            .controlSize(.small)
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(StoreTypeOption.all) { option in
-                            storeTypeToggleCard(option: option)
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(0..<((StoreTypeOption.all.count + 1) / 2), id: \.self) { row in
+                    HStack(alignment: .top, spacing: 20) {
+                        storeTypeToggleCard(option: StoreTypeOption.all[row * 2])
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if row * 2 + 1 < StoreTypeOption.all.count {
+                            storeTypeToggleCard(option: StoreTypeOption.all[row * 2 + 1])
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                 }
@@ -4149,25 +4163,13 @@ private struct ExcludedApplicationsPreferenceControl: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(NSLocalizedString("1451.title", tableName: "Preferences", bundle: .main, value: "Exclude Apps", comment: ""))
-                .font(.subheadline.weight(.semibold))
+            Text(statusText)
+                .font(.body.weight(.medium))
 
-            Text(summaryText)
+            Text(detailText)
                 .foregroundColor(.secondary)
                 .lineLimit(2)
                 .truncationMode(.tail)
-
-            Text("\(countBadgeText) • \(selectionScopeBadgeText)")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            if !store.excludedApps.isEmpty {
-                Text(appPreviewText)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
 
             Button(NSLocalizedString("1448.title", tableName: "Preferences", bundle: .main, value: "Define Exclude Options...", comment: "")) {
                 store.reload()
@@ -4175,47 +4177,28 @@ private struct ExcludedApplicationsPreferenceControl: View {
             }
             .fixedSize()
         }
-        .frame(maxWidth: 320, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .sheet(isPresented: $isPresented) {
             ExcludedApplicationsEditorSheet(store: store, isPresented: $isPresented)
         }
         .onAppear(perform: store.reload)
     }
 
-    private var countBadgeText: String {
-        let count = store.excludedApps.count
-        return count == 1
-            ? NSLocalizedString("1 app", comment: "")
-            : String(format: NSLocalizedString("%d apps", comment: ""), count)
-    }
-
-    private var summaryText: String {
+    private var statusText: String {
         let count = store.excludedApps.count
         if count == 0 {
-            return NSLocalizedString("No applications are currently excluded from clipboard capture.", comment: "")
+            return NSLocalizedString("No applications excluded", comment: "")
         }
         if count == 1 {
-            return store.excludedApps[0].name
+            return NSLocalizedString("1 application excluded", comment: "")
         }
-        let names = store.excludedApps.prefix(2).map(\.name)
-        if count == 2 {
-            return names.joined(separator: ", ")
-        }
-        return String(
-            format: NSLocalizedString("%1$@, %2$@, and %3$d more", comment: ""),
-            names.first ?? "",
-            names.dropFirst().first ?? "",
-            count - 2
-        )
+        return String(format: NSLocalizedString("%d applications excluded", comment: ""), count)
     }
 
-    private var selectionScopeBadgeText: String {
-        store.excludedApps.isEmpty
-            ? NSLocalizedString("Capture open to all apps", comment: "")
-            : NSLocalizedString("Capture filtered by app", comment: "")
-    }
-
-    private var appPreviewText: String {
+    private var detailText: String {
+        guard !store.excludedApps.isEmpty else {
+            return NSLocalizedString("No applications are currently excluded from clipboard capture.", comment: "")
+        }
         let preview = Array(store.excludedApps.prefix(3).map(\.name))
         if store.excludedApps.count > 3 {
             return preview.joined(separator: ", ")
@@ -4236,16 +4219,31 @@ private struct ExcludedApplicationsEditorSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top, spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(NSLocalizedString("1451.title", tableName: "Preferences", bundle: .main, value: "Exclude Apps", comment: ""))
+                    .font(.title3.weight(.semibold))
+                Text(overviewDetail)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.bottom, 18)
+
+            HStack(alignment: .top, spacing: 20) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(NSLocalizedString("1459.title", tableName: "Preferences", bundle: .main, value: "Exclude these applications:", comment: ""))
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(.subheadline.weight(.semibold))
                     excludedAppList
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .layoutPriority(1)
+
                 addAppsSidebar
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+            Divider()
+                .padding(.top, 18)
 
             HStack {
                 Spacer()
@@ -4260,14 +4258,28 @@ private struct ExcludedApplicationsEditorSheet: View {
                 }
                 .keyboardShortcut(.defaultAction)
             }
+            .padding(.top, 12)
         }
-        .padding(20)
-        .frame(width: 620, height: 360)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 20)
+        .frame(width: 680, height: 420)
         .onDisappear {
             if !didApplyChanges {
                 store.revertExcludedApps()
             }
         }
+    }
+
+    private var overviewDetail: String {
+        store.excludedApps.isEmpty
+            ? NSLocalizedString(
+                "Keep clipboard capture open to every app, or add exceptions for tools ClipMenu should ignore.",
+                comment: ""
+            )
+            : NSLocalizedString(
+                "Review which apps are blocked from clipboard capture and keep their draft changes isolated until you choose Done.",
+                comment: ""
+            )
     }
 
     private var addAppsSidebar: some View {
@@ -4333,7 +4345,7 @@ private struct ExcludedApplicationsEditorSheet: View {
 
             Spacer(minLength: 0)
         }
-        .frame(width: 180, alignment: .topLeading)
+        .frame(width: 190, alignment: .topLeading)
     }
 
     private var excludedAppList: some View {
@@ -4387,7 +4399,7 @@ private struct ExcludedApplicationsEditorSheet: View {
                 .padding(8)
             }
         }
-        .frame(minWidth: 420, minHeight: 120, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 120, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(NSColor.textBackgroundColor))
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -4446,7 +4458,6 @@ private struct GeneralPreferencesView: View {
     private let legacySortHistoryLabel = NSLocalizedString("1417.title", tableName: "Preferences", bundle: .main, value: "Sort history order by:", comment: "")
     private let legacyLastUsedLabel = NSLocalizedString("1422.title", tableName: "Preferences", bundle: .main, value: "Last Used", comment: "")
     private let legacyDateCreatedLabel = NSLocalizedString("1421.title", tableName: "Preferences", bundle: .main, value: "Date Created", comment: "")
-    private let legacyExcludeApplicationsLabel = NSLocalizedString("1446.title", tableName: "Preferences", bundle: .main, value: "Exclude Applications", comment: "")
     private let legacySaveHistoryOnQuitLabel = NSLocalizedString("1047.title", tableName: "Preferences", bundle: .main, value: "Save clipboard history on quit", comment: "")
     private let legacyExportHistoryAsLabel = NSLocalizedString("1380.title", tableName: "Preferences", bundle: .main, value: "Export clipboard history as:", comment: "")
     private let legacySingleFileLabel = NSLocalizedString("1384.title", tableName: "Preferences", bundle: .main, value: "Single file", comment: "")
@@ -4502,12 +4513,6 @@ private struct GeneralPreferencesView: View {
         )
     }
 
-    private var excludedApps: [String] {
-        (UserDefaults.standard.array(forKey: CMPrefExcludeAppsKey) ?? [])
-            .compactMap(ExcludedApp.init(defaultsObject:))
-            .map(\.name)
-    }
-
     var body: some View {
         PreferencePane {
             PreferenceSection(NSLocalizedString("Startup", comment: "")) {
@@ -4527,9 +4532,6 @@ private struct GeneralPreferencesView: View {
                         Text(legacyLastUsedLabel).tag(true)
                         Text(legacyDateCreatedLabel).tag(false)
                     }
-                }
-                PreferenceRow(legacyExcludeApplicationsLabel) {
-                    ExcludedApplicationsPreferenceControl()
                 }
                 PreferenceToggle(title: legacySaveHistoryOnQuitLabel, isOn: $saveHistoryOnQuit)
                 VStack(alignment: .leading, spacing: 10) {
@@ -4608,6 +4610,11 @@ private struct GeneralPreferencesView: View {
             PreferenceSection(legacyAppearanceSectionTitle) {
                 PreferenceRow(legacyStatusBarIconStyleLabel) {
                     StatusItemPreviewPicker(selection: $showStatusItem)
+                }
+            }
+            PreferenceSection(NSLocalizedString("Excluded Applications", comment: "")) {
+                PreferenceControlRow {
+                    ExcludedApplicationsPreferenceControl()
                 }
             }
         }
@@ -5080,10 +5087,10 @@ private struct MenuPreferencesView: View {
     }
 
     var body: some View {
-        PreferencePane {
-            PreferenceSection(NSLocalizedString("Layout", comment: "")) {
-                menuConfigurationSurface {
-                    VStack(alignment: .leading, spacing: 10) {
+        VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 20) {
+                VStack(alignment: .leading, spacing: 18) {
+                    PreferenceSection(NSLocalizedString("Layout", comment: "")) {
                         PreferenceStepper(
                             legacyMenuCharacterCountLabel,
                             value: normalizedTitleLengthBinding,
@@ -5103,15 +5110,8 @@ private struct MenuPreferencesView: View {
                             suffix: legacyFolderItemsUnitLabel
                         )
                     }
-                }
-            }
-            PreferenceSection(NSLocalizedString("Menu Items", comment: "")) {
-                PreferenceControlRow {
-                    menuRowPreviewSurface
-                }
-                menuConfigurationSurface {
-                    VStack(alignment: .leading, spacing: 10) {
-                        menuToggleCard(
+                    PreferenceSection(NSLocalizedString("Menu Items", comment: "")) {
+                        menuToggle(
                             title: legacyMarkMenuItemsLabel,
                             detail: CMLocalizedModernString(
                                 "Prefix menu rows with numbered titles.",
@@ -5119,16 +5119,17 @@ private struct MenuPreferencesView: View {
                             ),
                             isOn: $markWithNumbers
                         )
-                        menuToggleCard(
+                        menuToggle(
                             title: legacyStartWithZeroLabel,
                             detail: CMLocalizedModernString(
                                 "Switch numbering from `1.` to `0.`.",
                                 japanese: "番号表示を `1.` から `0.` に切り替えます。"
                             ),
                             isOn: $titleStartsWithZero,
-                            disabled: !markWithNumbers
+                            disabled: !markWithNumbers,
+                            indented: true
                         )
-                        menuToggleCard(
+                        menuToggle(
                             title: legacyNumericKeyEquivalentsLabel,
                             detail: CMLocalizedModernString(
                                 "Use number keys to select visible menu items.",
@@ -5136,38 +5137,30 @@ private struct MenuPreferencesView: View {
                             ),
                             isOn: $numericKeyEquivalents
                         )
-                    }
-                }
-                menuConfigurationSurface {
-                    VStack(alignment: .leading, spacing: 10) {
-                        menuToggleCard(
+                        menuToggle(
                             title: legacyShowLabelsLabel,
                             detail: NSLocalizedString("Show or hide the History and Snippets section labels in the menu.", comment: ""),
                             isOn: $showLabels
                         )
-                        menuToggleCard(
+                        menuToggle(
                             title: legacyClearHistoryMenuItemLabel,
                             detail: NSLocalizedString("Keep the explicit Clear History command visible in the main status menu.", comment: ""),
                             isOn: $clearHistoryItem
                         )
-                        menuToggleCard(
+                        menuToggle(
                             title: legacyAlertBeforeClearLabel,
                             detail: NSLocalizedString("Ask for confirmation before clearing unless suppression has been chosen.", comment: ""),
                             isOn: $alertBeforeClear,
-                            disabled: !clearHistoryItem
+                            disabled: !clearHistoryItem,
+                            indented: true
                         )
                     }
-                }
-            }
-            PreferenceSection(NSLocalizedString("Tooltips", comment: "")) {
-                menuConfigurationSurface {
-                    VStack(alignment: .leading, spacing: 10) {
-                        menuToggleCard(
+                    PreferenceSection(NSLocalizedString("Tooltips", comment: "")) {
+                        menuToggle(
                             title: legacyShowTooltipsLabel,
                             detail: NSLocalizedString("Preview long or multiline content without changing the stored clipboard payload.", comment: ""),
                             isOn: $showTooltips
                         )
-
                         PreferenceStepper(
                             legacyToolTipMaxLengthLabel,
                             value: normalizedTooltipLengthBinding,
@@ -5176,47 +5169,63 @@ private struct MenuPreferencesView: View {
                             suffix: legacyToolTipCharacterUnitLabel
                         )
                         .disabled(!showTooltips)
+                        .padding(.leading, 22)
                     }
-                }
-            }
-            PreferenceSection(NSLocalizedString("Font", comment: "")) {
-                menuConfigurationSurface {
-                    VStack(alignment: .leading, spacing: 10) {
-                        menuToggleCard(
+                    PreferenceSection(NSLocalizedString("Font", comment: "")) {
+                        menuToggle(
                             title: legacyChangeFontSizeLabel,
                             detail: NSLocalizedString("Choose whether menu titles follow the icon size or a fixed point size.", comment: ""),
                             isOn: $changeFontSize
                         )
-
-                        PreferenceControlRow {
+                        HStack(spacing: 10) {
                             Picker(selection: normalizedFontSizingModeBinding) {
                                 Text(legacyFitToIconSizeLabel).tag(0)
                                 Text(legacySelectFontSizeLabel).tag(1)
                             } label: {
-                                EmptyView()
+                                Text(legacyChangeFontSizeLabel)
                             }
                             .labelsHidden()
                             .pickerStyle(.menu)
-                            .frame(width: 220, alignment: .leading)
+                            .frame(width: 220)
                             .disabled(!changeFontSize)
-                        }
 
-                        PreferenceControlRow {
-                            HStack(spacing: 10) {
-                                PreferencePicker(selection: normalizedSelectedFontSizeBinding, width: 120) {
-                                    ForEach(Self.fontSizeOptions, id: \.self) { size in
-                                        Text("\(size)").tag(size)
-                                    }
+                            PreferencePicker(selection: normalizedSelectedFontSizeBinding, width: 76) {
+                                ForEach(Self.fontSizeOptions, id: \.self) { size in
+                                    Text("\(size)").tag(size)
                                 }
-                                Text(legacyPointUnitLabel)
-                                    .foregroundColor(.secondary)
                             }
+                            .accessibilityLabel(legacySelectFontSizeLabel)
                             .disabled(!changeFontSize || normalizedFontSizingMode != 1)
+                            Text(legacyPointUnitLabel)
+                                .foregroundColor(.secondary)
                         }
+                        .padding(.leading, 22)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(NSLocalizedString("Menu Preview", comment: ""))
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    menuRowPreviewSurface
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(NSColor.controlBackgroundColor))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
+                        )
+                }
+                .frame(width: 250)
             }
         }
+        .padding(.horizontal, 40)
+        .padding(.top, 24)
+        .padding(.bottom, 28)
+        .frame(width: 760)
         .onAppear(perform: normalizeMenuPreferencesIfNeeded)
     }
 
@@ -5306,25 +5315,32 @@ private struct MenuPreferencesView: View {
             if previewHeaders.count == 2 {
                 previewHeaderRow(title: previewHeaders[0])
             }
-            previewMenuRow(title: previewHistoryRowTitle, keyEquivalent: previewHistoryKeyEquivalent)
             if let previewTooltip {
-                Text(previewTooltip)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                    .padding(.leading, 24)
+                previewMenuRow(title: previewHistoryRowTitle, keyEquivalent: previewHistoryKeyEquivalent)
+                    .help(previewTooltip)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(NSLocalizedString("Tooltip", comment: ""))
+                        .font(.caption2.weight(.semibold))
+                    Text(previewTooltip)
+                        .font(.caption)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(NSColor.windowBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .help(previewTooltip)
+            } else {
+                previewMenuRow(title: previewHistoryRowTitle, keyEquivalent: previewHistoryKeyEquivalent)
             }
             if previewHeaders.count == 2 {
                 previewHeaderRow(title: previewHeaders[1])
             }
-            previewFolderRow(title: "QA")
+            previewFolderRow(title: NSLocalizedString("Example Folder", comment: ""))
             previewMenuRow(title: previewSnippetRowTitle, keyEquivalent: "", indented: true)
-        }
-    }
-
-    private func menuConfigurationSurface<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            content()
         }
     }
 
@@ -5364,7 +5380,7 @@ private struct MenuPreferencesView: View {
                 .lineLimit(1)
             Spacer(minLength: 8)
             if !keyEquivalent.isEmpty {
-                Text(keyEquivalent)
+                Text("⌘\(keyEquivalent)")
                     .font(.caption.monospacedDigit())
                     .foregroundColor(.secondary)
             }
@@ -5373,28 +5389,20 @@ private struct MenuPreferencesView: View {
         .padding(.vertical, 4)
     }
 
-    private func menuToggleCard(
+    private func menuToggle(
         title: String,
         detail: String,
         isOn: Binding<Bool>,
-        disabled: Bool = false
+        disabled: Bool = false,
+        indented: Bool = false
     ) -> some View {
-        PreferenceControlRow {
-            VStack(alignment: .leading, spacing: 4) {
-                Toggle(title, isOn: isOn)
-                    .toggleStyle(.checkbox)
-                    .controlSize(.regular)
-                    .disabled(disabled)
-
-                Text(detail)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.leading, 22)
-            }
-            .padding(.vertical, 2)
-            .opacity(disabled ? 0.75 : 1)
-        }
+        Toggle(title, isOn: isOn)
+            .toggleStyle(.checkbox)
+            .controlSize(.regular)
+            .fixedSize(horizontal: false, vertical: true)
+            .disabled(disabled)
+            .help(detail)
+            .padding(.leading, indented ? 22 : 0)
     }
 
     private func normalizeMenuPreferencesIfNeeded() {
@@ -5441,43 +5449,47 @@ private struct IconPreferencesViewContent: View {
     private static let menuIconSizeOptions = CMTypeLegacyMenuIconSizeOptions()
 
     var body: some View {
-        PreferenceSection(NSLocalizedString("Images", comment: "")) {
-            PreferenceControlRow {
+        HStack(alignment: .top, spacing: 24) {
+            PreferenceSection(NSLocalizedString("Images", comment: "")) {
                 imageInlinePreviewStrip
+                Toggle(legacyShowImageLabel, isOn: $showImages)
+                    .toggleStyle(.checkbox)
+                PreferenceStepper(
+                    legacyThumbnailWidthLabel,
+                    value: normalizedThumbnailWidthBinding,
+                    in: 1...Int.max,
+                    suffix: legacyThumbnailPixelLabel,
+                    labelWidth: 80
+                )
+                .disabled(!showImages)
+                PreferenceStepper(
+                    legacyThumbnailHeightLabel,
+                    value: normalizedThumbnailHeightBinding,
+                    in: 1...Int.max,
+                    suffix: legacyThumbnailPixelLabel,
+                    labelWidth: 80
+                )
+                .disabled(!showImages)
             }
-            PreferenceToggle(title: legacyShowImageLabel, isOn: $showImages)
-            PreferenceStepper(
-                legacyThumbnailWidthLabel,
-                value: normalizedThumbnailWidthBinding,
-                in: 1...Int.max,
-                suffix: legacyThumbnailPixelLabel
-            )
-            .disabled(!showImages)
-            PreferenceStepper(
-                legacyThumbnailHeightLabel,
-                value: normalizedThumbnailHeightBinding,
-                in: 1...Int.max,
-                suffix: legacyThumbnailPixelLabel
-            )
-            .disabled(!showImages)
-        }
-        PreferenceSection(NSLocalizedString("Icons", comment: "")) {
-            PreferenceControlRow {
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            PreferenceSection(NSLocalizedString("Icons", comment: "")) {
                 iconInlinePreviewStrip
-            }
-            PreferenceToggle(title: legacyShowIconLabel, isOn: $showIcons)
-            PreferenceRow(legacyIconSizeLabel) {
-                HStack(spacing: 10) {
-                    PreferencePicker(selection: normalizedMenuIconSizeBinding, width: 120) {
-                        ForEach(Self.menuIconSizeOptions, id: \.self) { option in
-                            Text(String(option)).tag(option)
+                Toggle(legacyShowIconLabel, isOn: $showIcons)
+                    .toggleStyle(.checkbox)
+                PreferenceRow(legacyIconSizeLabel, labelWidth: 80) {
+                    HStack(spacing: 10) {
+                        PreferencePicker(selection: normalizedMenuIconSizeBinding, width: 120) {
+                            ForEach(Self.menuIconSizeOptions, id: \.self) { option in
+                                Text(String(option)).tag(option)
+                            }
                         }
+                        Text(legacyThumbnailPixelLabel)
+                            .foregroundColor(.secondary)
                     }
-                    Text(legacyThumbnailPixelLabel)
-                        .foregroundColor(.secondary)
+                    .disabled(!showIcons)
                 }
-                .disabled(!showIcons)
             }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         PreferenceSection(NSLocalizedString("File Type Icons", comment: "")) {
             VStack(alignment: .leading, spacing: 8) {
@@ -5555,7 +5567,7 @@ private struct IconPreferencesViewContent: View {
         ZStack {
             content()
         }
-        .frame(width: 112, height: 72)
+        .frame(width: 88, height: 48)
     }
 
     private var normalizedMenuIconSize: Int {
@@ -7255,7 +7267,7 @@ private struct ActionPreferencesView: View {
     var body: some View {
         let behaviorOptions = ActionBehaviorOption.options(from: store)
 
-        ScrollView {
+        GeometryReader { geometry in
             VStack(alignment: .leading, spacing: 14) {
                 PreferenceSection(legacyBehaviorSectionTitle) {
                     PreferenceToggle(title: NSLocalizedString("756.title", tableName: "Preferences", bundle: .main, value: "Enable Action", comment: ""), isOn: $enableActions)
@@ -7298,8 +7310,9 @@ private struct ActionPreferencesView: View {
                     }
                     .disabled(!enableActions)
                 }
+                .fixedSize(horizontal: false, vertical: true)
 
-                HStack(alignment: .top, spacing: 14) {
+                HStack(alignment: .top, spacing: 10) {
                     VStack(alignment: .leading, spacing: 8) {
                         VStack(alignment: .leading, spacing: 10) {
                             Text(NSLocalizedString("Available Actions", comment: ""))
@@ -7312,6 +7325,7 @@ private struct ActionPreferencesView: View {
                             }
                             .labelsHidden()
                             .pickerStyle(SegmentedPickerStyle())
+                            .frame(maxWidth: .infinity, alignment: .center)
                         }
 
                         ActionTreePanel(
@@ -7333,6 +7347,9 @@ private struct ActionPreferencesView: View {
                         .padding(.top, 84)
 
                     VStack(alignment: .leading, spacing: 10) {
+                        Text(legacyActionMenuTitle)
+                            .font(.headline)
+
                         if let inspectorContext = inspectorContext {
                             VStack(alignment: .leading, spacing: 12) {
                                 Text(actionInspectorTitle(for: inspectorContext))
@@ -7378,11 +7395,7 @@ private struct ActionPreferencesView: View {
                                     )
                                 }
                             }
-                        }
-
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(legacyActionMenuTitle)
-                                .font(.headline)
+                            .fixedSize(horizontal: false, vertical: true)
                         }
 
                         ActionTreePanel(
@@ -7410,13 +7423,17 @@ private struct ActionPreferencesView: View {
                         )
                     }
                 }
+                .frame(maxHeight: .infinity, alignment: .topLeading)
             }
             .padding(.horizontal, 24)
             .padding(.top, 24)
             .padding(.bottom, 20)
-            .frame(maxWidth: 1080, alignment: .topLeading)
+            .frame(
+                width: min(geometry.size.width, 1080),
+                height: geometry.size.height,
+                alignment: .topLeading
+            )
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear {
             store.reload()
             behaviorDraft.reload(from: behaviorOptions)
@@ -7480,75 +7497,48 @@ private struct ActionPreferencesView: View {
     }
 
     private var actionToolbarCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(spacing: 8) {
-                actionToolbarButton(
-                    systemImage: "plus",
-                    legacyImageName: "NSAddTemplate",
-                    help: NSLocalizedString("Add", comment: ""),
-                    disabled: store.selectedReservedNodeID == nil,
-                    action: performAddSelectedReservedNode
-                )
-                actionToolbarButton(
-                    systemImage: "folder.badge.plus",
-                    help: NSLocalizedString("Add Folder", comment: ""),
-                    action: performAddActionFolder
-                )
-                actionToolbarButton(
-                    systemImage: "minus",
-                    legacyImageName: "NSRemoveTemplate",
-                    help: NSLocalizedString("Remove", comment: ""),
-                    disabled: store.selectedActionNodeID == nil,
-                    action: performRemoveSelectedActionNode
-                )
+        VStack(spacing: 8) {
+            actionToolbarButton(
+                systemImage: "arrow.right",
+                help: NSLocalizedString("Add", comment: ""),
+                disabled: store.selectedReservedNodeID == nil,
+                action: performAddSelectedReservedNode
+            )
+            actionToolbarButton(
+                systemImage: "arrow.left",
+                help: NSLocalizedString("Remove", comment: ""),
+                disabled: store.selectedActionNodeID == nil,
+                action: performRemoveSelectedActionNode
+            )
+            actionToolbarButton(
+                systemImage: "folder.badge.plus",
+                help: NSLocalizedString("Add Folder", comment: ""),
+                action: performAddActionFolder
+            )
 
-                Divider()
+            Divider()
 
-                actionToolbarButton(systemImage: "arrow.up", help: NSLocalizedString("Move Up", comment: ""), disabled: !store.canMoveSelectedActionNodeUp(), action: performMoveSelectedActionNodeUp)
-                actionToolbarButton(systemImage: "arrow.down", help: NSLocalizedString("Move Down", comment: ""), disabled: !store.canMoveSelectedActionNodeDown(), action: performMoveSelectedActionNodeDown)
-            }
+            actionToolbarButton(systemImage: "arrow.up", help: NSLocalizedString("Move Up", comment: ""), disabled: !store.canMoveSelectedActionNodeUp(), action: performMoveSelectedActionNodeUp)
+            actionToolbarButton(systemImage: "arrow.down", help: NSLocalizedString("Move Down", comment: ""), disabled: !store.canMoveSelectedActionNodeDown(), action: performMoveSelectedActionNodeDown)
         }
+        .frame(width: 36)
         .buttonStyle(.bordered)
         .controlSize(.small)
     }
 
     private func actionToolbarButton(
         systemImage: String,
-        legacyImageName: String? = nil,
         help: String,
         disabled: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: { action() }) {
-            actionToolbarIcon(legacyImageName: legacyImageName, fallbackSystemImage: systemImage)
+            Image(systemName: systemImage)
                 .frame(width: 18, height: 18)
         }
+        .accessibilityLabel(help)
         .help(help)
         .disabled(disabled)
-    }
-
-    private func actionToolbarIcon(legacyImageName: String?, fallbackSystemImage: String) -> some View {
-        Group {
-            if let copiedImage = actionToolbarLegacyImage(named: legacyImageName) {
-                Image(nsImage: copiedImage)
-                    .renderingMode(.template)
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFit()
-            } else {
-                Image(systemName: fallbackSystemImage)
-            }
-        }
-    }
-
-    private func actionToolbarLegacyImage(named legacyImageName: String?) -> NSImage? {
-        guard let legacyImageName,
-              let sourceImage = NSImage(named: NSImage.Name(legacyImageName)),
-              let copiedImage = sourceImage.copy() as? NSImage else {
-            return nil
-        }
-        copiedImage.isTemplate = true
-        return copiedImage
     }
 
     private func readOnlyInspectorField(_ value: String) -> some View {
@@ -7976,7 +7966,7 @@ private struct ActionTreePanel: View {
             }
 
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 2) {
                     ForEach(Array(nodes.enumerated()), id: \.element.id) { index, node in
                         ActionNodeRow(
                             node: node,
@@ -8008,7 +7998,7 @@ private struct ActionTreePanel: View {
                 onDrop?(providers) ?? false
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 220, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(NSColor.controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
@@ -8220,7 +8210,7 @@ private extension View {
 private struct SnippetPlacementPreferenceSection: View {
     @AppStorage(CMPrefPositionOfSnippetsKey) private var position = CMPositionOfSnippets.belowClips.rawValue
 
-    private let legacySnippetPositionLabel = NSLocalizedString("903.title", tableName: "Preferences", bundle: .main, value: "The position to show snippets in ClipMenu:", comment: "")
+    private let snippetPositionLabel = NSLocalizedString("Snippet Menu Position", comment: "")
     private let legacySnippetHiddenLabel = NSLocalizedString("907.title", tableName: "Preferences", bundle: .main, value: "None", comment: "")
     private let legacySnippetAboveHistoryLabel = NSLocalizedString("908.title", tableName: "Preferences", bundle: .main, value: "Above the clipboard history", comment: "")
     private let legacySnippetBelowHistoryLabel = NSLocalizedString("909.title", tableName: "Preferences", bundle: .main, value: "Below the clipboard history", comment: "")
@@ -8235,7 +8225,7 @@ private struct SnippetPlacementPreferenceSection: View {
     var body: some View {
         PreferenceSection(NSLocalizedString("Snippets", comment: "")) {
             VStack(alignment: .leading, spacing: 10) {
-                PreferenceRow(legacySnippetPositionLabel) {
+                PreferenceRow(snippetPositionLabel) {
                     Picker(selection: snippetPositionSelection) {
                         Text(legacySnippetHiddenLabel).tag(CMPositionOfSnippets.none.rawValue)
                         Text(legacySnippetAboveHistoryLabel).tag(CMPositionOfSnippets.aboveClips.rawValue)
@@ -8248,7 +8238,9 @@ private struct SnippetPlacementPreferenceSection: View {
                     .frame(width: 260, alignment: .leading)
                 }
 
-                snippetPlacementPreviewRows
+                PreferenceRow(NSLocalizedString("Current Menu Order", comment: "")) {
+                    snippetPlacementPreviewRows
+                }
             }
         }
         .onAppear {
@@ -8262,19 +8254,34 @@ private struct SnippetPlacementPreferenceSection: View {
     private var snippetPlacementPreviewRows: some View {
         let option = SnippetPositionCardOption(rawValue: CMNormalizedLegacySnippetPosition(position)) ?? .below
 
-        return VStack(alignment: .leading, spacing: 4) {
-            ForEach(option.previewRows, id: \.self) { row in
+        return HStack(spacing: 7) {
+            ForEach(Array(option.previewRows.enumerated()), id: \.offset) { index, row in
+                if index > 0 {
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                }
+
                 HStack(spacing: 6) {
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(rowTint(for: row, selected: option.rawValue == position))
-                        .frame(width: 64, height: 6)
+                    Circle()
+                        .fill(rowTint(for: row))
+                        .frame(width: 7, height: 7)
 
                     Text(previewRowTitle(row))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    Spacer(minLength: 0)
+                        .lineLimit(1)
                 }
+                .font(.caption)
+                .foregroundColor(.primary)
+                .padding(.horizontal, 9)
+                .frame(height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color(NSColor.controlBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
+                )
             }
         }
     }
@@ -8290,14 +8297,14 @@ private struct SnippetPlacementPreferenceSection: View {
         }
     }
 
-    private func rowTint(for row: SnippetPositionCardOption.PreviewRow, selected: Bool) -> Color {
+    private func rowTint(for row: SnippetPositionCardOption.PreviewRow) -> Color {
         switch row {
         case .snippets:
-            return Color(NSColor.systemPink).opacity(selected ? 0.85 : 0.55)
+            return Color(NSColor.systemPink)
         case .history:
-            return Color(NSColor.systemBlue).opacity(selected ? 0.85 : 0.55)
+            return Color(NSColor.systemBlue)
         case .commands:
-            return Color(NSColor.systemGray).opacity(selected ? 0.6 : 0.45)
+            return Color(NSColor.systemGray)
         }
     }
 
@@ -8352,7 +8359,7 @@ private enum SnippetPositionCardOption: Int, CaseIterable, Identifiable {
     var previewRows: [PreviewRow] {
         switch self {
         case .none:
-            return [.history, .commands, .commands]
+            return [.history, .commands]
         case .above:
             return [.snippets, .history, .commands]
         case .below:
