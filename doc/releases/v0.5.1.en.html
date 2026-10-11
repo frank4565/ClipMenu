@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClipMenu 0.5.1 release notes</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 13px/1.55 -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 15px; margin-top: 22px; }
+    li + li { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>ClipMenu 0.5.1</h1>
+  <p>This patch corrects the snippet editor's appearance and updates the fork documentation. It supports Intel and Apple silicon Macs running macOS 12 or later.</p>
+
+  <h2>Updating</h2>
+  <p>ClipMenu 0.5.0 users can update through Sparkle normally. When upgrading from an older Objective-C version, quit ClipMenu and install this release manually; the original updater uses a different feed and trust key.</p>
+  <p>The app continues to use a local ad-hoc code signature, without Apple Developer ID signing or notarization. Published update ZIPs use separate Sparkle Ed25519 signatures.</p>
+
+  <h2>What changed</h2>
+  <ul>
+    <li><strong>Snippet appearance:</strong> the folder background, empty state, and folder labels now follow the macOS light or dark appearance and refresh when the appearance changes.</li>
+    <li><strong>Fork history:</strong> the README clarifies that this fork descends from the original 0.4.4a13 code and was modernized independently of the original project's 2014 Swift 1.0.0a1 alpha.</li>
+    <li><strong>Screenshots:</strong> the README gallery now starts with Menu preferences. Screenshots use PNG with transparent areas outside the rounded window corners, and the snippet editor screenshot reflects the corrected appearance.</li>
+  </ul>
+</body>
+</html>
