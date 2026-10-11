@@ -58,19 +58,13 @@ jobs:
         run: |
           python3 script/release_build.py "$RELEASE_TAG" --dry-run
           python3 script/generate_appcast.py --metadata build/release/build_info.json --preview --output build/release/appcast-preview.xml
-      - name: Build, sign, notarize, and staple
+      - name: Build and ad-hoc sign release app
         if: steps.mode.outputs.dry_run != 'true'
         env:
           RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
           CLIPMENU_SPARKLE_PUBLIC_KEY: ${{ vars.CLIPMENU_SPARKLE_PUBLIC_KEY }}
           CLIPMENU_UPDATE_FEED_URL: ${{ vars.CLIPMENU_UPDATE_FEED_URL }}
-          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
           SPARKLE_KEY_CONFIGURED: ${{ secrets.SPARKLE_PRIVATE_KEY != '' }}
-          DEVELOPER_ID_CERTIFICATE_P12_BASE64: ${{ secrets.DEVELOPER_ID_CERTIFICATE_P12_BASE64 }}
-          DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
-          APPLE_NOTARY_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
-          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
-          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
         run: python3 script/release_build.py "$RELEASE_TAG"
       - name: Save release artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

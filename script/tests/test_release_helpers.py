@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import plistlib
 import subprocess
 import sys
 import tempfile
@@ -17,8 +18,9 @@ import zipfile
 SCRIPT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SCRIPT))
 import generate_appcast as appcast
+import release_build as build
 import release_publish as publish
-from release_build import package, release_notices, source_commit, verify_release_notices, verify_source_commit
+from release_build import package, release_notices, source_commit, verify_release_notices, verify_signed_app, verify_source_commit
 from release_metadata import metadata_for_tag
 
 
@@ -197,6 +199,136 @@ class ReleaseLicenseTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Refusing to overwrite"):
                 package(Path(directory) / "ClipMenu.app", archive, {"LICENSE.txt": b"Notice"})
             self.assertEqual(archive.read_bytes(), b"Existing release")
+
+
+class AdHocSignatureTests(unittest.TestCase):
+    def test_verification_rejects_identity_signatures_and_host_library_validation(self):
+        details = [
+            "Signature size=9000\nTeamIdentifier=EXAMPLETEAM\nCodeDirectory flags=0x0(none)\n",
+            "Signature=adhoc\nTeamIdentifier=not set\nCodeDirectory flags=0x10002(adhoc,runtime)\n",
+        ]
+        for signing_details in details:
+            with self.subTest(details=signing_details), \
+                 mock.patch.object(build, "run"), \
+                 mock.patch.object(build.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stderr=signing_details)), \
+                 self.assertRaises(ValueError):
+                verify_signed_app(Path("ClipMenu.app"))
+
+    def test_production_still_requires_a_sparkle_update_key_before_building(self):
+        for public_key in ("", "malformed", base64.b64encode(bytes(16)).decode()):
+            with self.subTest(public_key=public_key), \
+                 mock.patch.dict(os.environ, {"CLIPMENU_SPARKLE_PUBLIC_KEY": public_key}, clear=True), \
+                 mock.patch.object(build, "source_commit", return_value="reviewed-commit"), \
+                 mock.patch.object(build, "run") as run_build, \
+                 mock.patch.object(sys, "argv", ["release_build.py", "v0.5.0"]), \
+                 mock.patch.object(sys, "stderr"), self.assertRaises(SystemExit):
+                build.main()
+            run_build.assert_not_called()
+
+
+@unittest.skipUnless(sys.platform == "darwin", "Production ad-hoc signing requires macOS codesign.")
+class AdHocProductionTests(unittest.TestCase):
+    def executable(self, destination, *, library=False):
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        sdk = subprocess.check_output(["xcrun", "--sdk", "macosx", "--show-sdk-path"], text=True).strip()
+        arguments = ["xcrun", "clang", "-isysroot", sdk, "-arch", "arm64", "-arch", "x86_64", "-mmacosx-version-min=12.0"]
+        if library:
+            arguments.append("-dynamiclib")
+        source = destination.with_suffix(".c")
+        source.write_text("int fixture(void) { return 0; }" if library else "int main(void) { return 0; }")
+        try:
+            result = subprocess.run(arguments + ["-o", str(destination), str(source)], text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+        finally:
+            source.unlink()
+
+    def info(self, destination, contents):
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(plistlib.dumps(contents))
+
+    def test_production_packages_and_verifies_a_real_adhoc_app_without_apple_credentials(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repository, _, _ = ReleaseLicenseTests().fixture(directory)
+            metadata = metadata_for_tag("v0.5.0")
+            public_key = base64.b64encode(bytes(32)).decode()
+            app = root / "template/ClipMenu.app"
+            self.executable(app / "Contents/MacOS/ClipMenu")
+            self.info(app / "Contents/Info.plist", {
+                "CFBundleExecutable": "ClipMenu", "CFBundleIdentifier": "com.naotaka.ClipMenu",
+                "CFBundlePackageType": "APPL", "CFBundleVersion": metadata.build_version,
+                "CFBundleShortVersionString": metadata.marketing_version, "LSMinimumSystemVersion": "12.0",
+                "SUFeedURL": build.DEFAULT_FEED, "SUPublicEDKey": public_key,
+            })
+            resource = app / "Contents/Resources/signed-resource.txt"
+            resource.parent.mkdir()
+            resource.write_bytes(b"Original sealed application resource")
+            framework = app / "Contents/Frameworks/Sparkle.framework"
+            self.executable(framework / "Versions/A/Sparkle", library=True)
+            self.info(framework / "Versions/A/Resources/Info.plist", {
+                "CFBundleExecutable": "Sparkle", "CFBundleIdentifier": "org.sparkle-project.Sparkle",
+                "CFBundlePackageType": "FMWK", "CFBundleVersion": "1",
+            })
+            (framework / "Versions/Current").symlink_to("A", target_is_directory=True)
+            (framework / "Sparkle").symlink_to("Versions/Current/Sparkle")
+            (framework / "Resources").symlink_to("Versions/Current/Resources", target_is_directory=True)
+            helper = framework / "Versions/A/Updater.app"
+            self.executable(helper / "Contents/MacOS/Updater")
+            self.info(helper / "Contents/Info.plist", {
+                "CFBundleExecutable": "Updater", "CFBundleIdentifier": "org.sparkle-project.fixtureUpdater",
+                "CFBundlePackageType": "APPL", "CFBundleVersion": "1",
+            })
+            entitlements = root / "helper-entitlements.plist"
+            entitlements.write_bytes(plistlib.dumps({"com.apple.security.cs.disable-library-validation": True}))
+            subprocess.run(["codesign", "--force", "--sign", "-", "--options", "runtime", "--timestamp=none",
+                            "--entitlements", str(entitlements), str(helper)], check=True, capture_output=True)
+            helper_before = ReleasePackagingTests.manifest(self, helper)
+            calls = []
+            real_run = build.run
+
+            def fixture_build(arguments, *, capture=False):
+                calls.append(arguments)
+                if arguments[0] != "xcodebuild":
+                    return real_run(arguments, capture=capture or arguments[0] == "codesign")
+                self.assertTrue({"CODE_SIGN_IDENTITY=-", "CODE_SIGNING_ALLOWED=YES", "DEVELOPMENT_TEAM=",
+                                 "ENABLE_HARDENED_RUNTIME=NO"}.issubset(arguments))
+                archive_path = Path(arguments[arguments.index("-archivePath") + 1])
+                archived_app = archive_path / "Products/Applications/ClipMenu.app"
+                archived_app.parent.mkdir(parents=True)
+                real_run(["ditto", str(app), str(archived_app)])
+                # Model CodeSignOnCopy after framework resource stripping without
+                # altering the already-signed nested updater or its entitlements.
+                real_run(["codesign", "--force", "--sign", "-", "--timestamp=none",
+                          str(archived_app / "Contents/Frameworks/Sparkle.framework")], capture=True)
+                return subprocess.CompletedProcess(arguments, 0)
+
+            output = root / "release"
+            with mock.patch.object(build, "ROOT", repository), \
+                 mock.patch.dict(os.environ, {"CLIPMENU_SPARKLE_PUBLIC_KEY": public_key}, clear=True), \
+                 mock.patch.object(build, "source_commit", return_value="reviewed-commit"), \
+                 mock.patch.object(build, "verify_source_commit") as verify_commit, \
+                 mock.patch.object(build, "run", side_effect=fixture_build), \
+                 mock.patch.object(sys, "argv", ["release_build.py", metadata.tag, "--output-dir", str(output), "--work-dir", str(root)]), \
+                 mock.patch("builtins.print"):
+                build.main()
+
+            verify_commit.assert_called_once_with("reviewed-commit", repository, require_clean=True)
+            info = json.loads((output / "build_info.json").read_text())
+            self.assertEqual(info["signing_mode"], "adhoc")
+            self.assertFalse(info["dry_run"])
+            self.assertEqual(info["archive_name"], metadata.archive_name)
+            self.assertEqual(info["sha256"], hashlib.sha256((output / metadata.archive_name).read_bytes()).hexdigest())
+            self.assertFalse(any(arguments[0] in ("security", "spctl") or any(
+                argument in ("notarytool", "stapler", "-exportArchive") for argument in arguments
+            ) for arguments in calls))
+            delivered_app = root / "verify-extraction/ClipMenu.app"
+            delivered_helper = delivered_app / "Contents/Frameworks/Sparkle.framework/Versions/A/Updater.app"
+            self.assertEqual(ReleasePackagingTests.manifest(self, delivered_helper), helper_before)
+            with mock.patch.object(build, "run", side_effect=lambda arguments: real_run(arguments, capture=True)):
+                verify_signed_app(delivered_app)
+                (delivered_app / "Contents/Resources/signed-resource.txt").write_bytes(b"Tampered after extraction")
+                with self.assertRaises(subprocess.CalledProcessError):
+                    verify_signed_app(delivered_app)
 
 
 @unittest.skipUnless(sys.platform == "darwin", "Release ZIP packaging uses macOS ditto.")

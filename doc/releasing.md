@@ -6,14 +6,20 @@ GitHub Pages RSS appcast at
 share this feed. The app offers beta and release-candidate items only when the
 user enables pre-release updates.
 
-This repository already has its Sparkle private-key secret and public update
-variables configured. Signed release publication also requires the Apple
-Developer ID certificate, notary API credentials, and team ID listed below.
+Formal releases use a local **ad-hoc app code signature** and a separate
+**Sparkle Ed25519 signature on the update ZIP**. This distribution path requires
+no Apple developer account, certificate, or notarization service. The repository
+already has its Sparkle private-key secret and public update variables configured.
 
 The first release containing this migration requires a **manual installation**.
 Old ClipMenu copies use the original maintainer's feeds and DSA trust key. A new
 feed and new Ed25519 key cannot automatically update those copies. Subsequent
 releases use Sparkle's install-and-relaunch flow. macOS 12 or later is required.
+
+Downloaded apps may require a first-launch exception. After attempting to open
+ClipMenu, use **Open Anyway** in **System Settings → Privacy & Security** and
+confirm. On macOS 12, use **System Preferences → Security & Privacy → General**.
+See [Apple's instructions for the applicable macOS version](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac).
 
 ## Configure GitHub once
 
@@ -30,18 +36,12 @@ releases use Sparkle's install-and-relaunch flow. macOS 12 or later is required.
    | --- | --- |
    | `CLIPMENU_SPARKLE_PUBLIC_KEY` | The base64 Ed25519 public key from `generate_keys -p`. |
    | `CLIPMENU_UPDATE_FEED_URL` | `https://frank4565.github.io/ClipMenu/appcast.xml` (optional override; this is the build default). |
-   | `APPLE_TEAM_ID` | The 10-character Apple Developer team ID that owns the Developer ID certificate. |
 
 4. Configure these **repository secrets**:
 
    | Secret | Value |
    | --- | --- |
    | `SPARKLE_PRIVATE_KEY` | Exact contents of the private key file exported by Sparkle `generate_keys -x`; already base64, do not encode it again. |
-   | `DEVELOPER_ID_CERTIFICATE_P12_BASE64` | Base64 contents of an exported **Developer ID Application** certificate and its private key in `.p12` format. |
-   | `DEVELOPER_ID_CERTIFICATE_PASSWORD` | Password used when exporting that `.p12` file. |
-   | `APPLE_NOTARY_KEY_P8_BASE64` | Base64 contents of an App Store Connect team API `.p8` private key authorized to notarize apps. |
-   | `APPLE_NOTARY_KEY_ID` | The API key's ID. |
-   | `APPLE_NOTARY_ISSUER_ID` | The API key's issuer ID. |
 
 `GITHUB_TOKEN` is supplied by Actions; no personal access token is needed for
 releases or Pages. The build job has read access to repository contents. Only
@@ -117,7 +117,7 @@ The **Validate** workflow builds Debug and runs unit tests for pushes to `master
 and `swiftui-native`, and for pull requests. Release helper tests cover ordering,
 feed preservation, immutable versions, fetch errors, and unsigned-preview guards.
 The test host uses local ad-hoc signing so it can launch on Apple silicon; it
-does not require Apple release credentials. After the tests, it builds a universal
+uses no release secrets. After the tests, it builds a universal
 unsigned Release archive with the fixed preview version `v0.0.0`, generates an
 unsigned appcast preview, and saves the files as the `unsigned-release-preview`
 artifact. Opening a draft pull request runs this validation before merging the
@@ -133,7 +133,8 @@ universal unsigned Release archive, checks its bundle/feed versions, and saves
 `ClipMenu-vX.Y.Z-UNSIGNED.zip`, `build_info.json`, `SHA256SUMS.txt`, and
 `appcast-preview.xml` as a workflow artifact. It reads no signing credentials and
 does not create a release or deploy Pages. The archive is for inspection and
-local testing; automatic updates require a signed production build.
+local testing. The unsigned preview must not be published as an update:
+production publication requires an ad-hoc signed app and a Sparkle-signed archive.
 
 The equivalent local commands use Python 3.9 or later and Xcode:
 
@@ -155,7 +156,10 @@ CLIPMENU_SPARKLE_TEST_TOOL="$PWD/build/SparkleTools/bin/sign_update" python3 -m 
 Production builds require clean tracked files and record the source commit
 before building. The helper rechecks tracked files and HEAD before writing
 release metadata. Dry runs allow working-tree changes for review; untracked
-test caches and build products do not block either mode.
+test caches and build products do not block either mode. Production metadata
+records `signing_mode: adhoc`; inspection previews record `signing_mode: unsigned`.
+The app host does not enable the hardened runtime, allowing it to load Sparkle.
+Sparkle's nested helpers retain their existing signatures and entitlements.
 
 ## Publish
 
@@ -171,14 +175,12 @@ The Release workflow performs these operations in order:
 
 1. Builds a universal `arm64`/`x86_64` archive using the pinned package, version,
    feed, and public key.
-2. Imports the Developer ID certificate into a temporary keychain, signs and
-   exports with the hardened runtime, submits to Apple's notary service, and
-   requires an accepted result.
-3. Staples the ticket, validates code signatures/Gatekeeper, creates a ZIP using
-   `ditto` to preserve framework symlinks, and includes ClipMenu and Sparkle
-   license notices beside the unchanged signed app bundle. It then extracts and
-   verifies the final archive, license bytes, and stapled ticket again. Temporary
-   signing files/keychain are removed even if an operation fails.
+2. Builds and applies the local ad-hoc code signature, without certificate
+   imports or a signing service. The release helper verifies the app and nested
+   code signatures and checks the bundle, architectures, and update configuration.
+3. Creates a ZIP using `ditto` to preserve framework symlinks and includes
+   ClipMenu and Sparkle license notices beside the app bundle. It then extracts
+   and verifies the delivered app signatures, version metadata, and license bytes.
 4. Downloads the matching official Sparkle tools and verifies their pinned
    SHA-256, signs the ZIP with Ed25519, and verifies that signature against the
    app's embedded public key.
@@ -205,8 +207,8 @@ the new stable item is the highest stable version in the feed.
 
 If Pages deployment fails after the GitHub Release succeeds, use **Re-run failed
 jobs** on that workflow within the artifact's 14-day retention period. This
-reuses the exact signed archive and Pages artifact. Rebuilding the same tag can
-produce different signing/notarization timestamps and is intentionally rejected
+reuses the exact Sparkle-signed archive and Pages artifact. Rebuilding the same tag can
+produce different archive bytes and is intentionally rejected
 when its release assets already exist. If a draft release was left by an upload
 failure, review/remove that unpublished draft before starting a fresh build.
 Never replace a published ZIP to repair an appcast or a release.
@@ -221,7 +223,12 @@ is checksum verified before execution. The old Python 2/DSA appcast publisher is
 replaced; `script/deploy.sh` remains a legacy local disk-image helper and is not
 used by this release pipeline.
 
+The ad-hoc app signature permits local execution and integrity checks; update
+authentication depends on the embedded Sparkle public key and the ZIP's Ed25519
+signature. Preserve that key across releases. Changing it requires a deliberate
+trust migration or another manual installation.
+
 Reference documentation: [Sparkle publishing](https://sparkle-project.org/documentation/publishing/),
 [GitHub Pages custom workflows](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages),
-[Apple notarization](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution),
+[Opening an app from an unknown developer](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac),
 and [Apple bundle version keys](https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html).

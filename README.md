@@ -15,7 +15,11 @@ A clipboard manager that lives in the macOS menu bar. This Swift port brings the
 
 ## Get started
 
-See [GitHub Releases](https://github.com/frank4565/ClipMenu/releases) for packaged builds. Move `ClipMenu.app` to Applications and open it, then use its menu-bar icon or these default shortcuts:
+See [GitHub Releases](https://github.com/frank4565/ClipMenu/releases) for packaged builds. Move `ClipMenu.app` to Applications and open it.
+
+Release apps use a local **ad-hoc code signature**, without an Apple developer certificate. If macOS blocks the first launch, attempt to open the app, then choose **Open Anyway** in **System Settings → Privacy & Security** and confirm. On macOS 12, use **System Preferences → Security & Privacy → General**. Follow [Apple's instructions for opening an app from an unknown developer](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac) for your macOS version.
+
+Use the menu-bar icon or these default shortcuts:
 
 | Shortcut | Opens |
 | --- | --- |
@@ -45,7 +49,7 @@ Use General → Excluded Applications to skip recording from selected apps, and 
 
 ## Updates and migration
 
-This port uses Sparkle 2 with an HTTPS update feed and Ed25519 update verification. Preferences → Updates offers manual checks, automatic checks, and an option to include pre-releases.
+This port uses Sparkle 2 with an HTTPS update feed and Ed25519 update verification. The published update ZIP has a Sparkle signature separate from the app's ad-hoc code signature. Preferences → Updates offers manual checks, automatic checks, and an option to include pre-releases.
 
 **Install the first Swift release manually if you are upgrading from the original ClipMenu.** Its old update feed and DSA key cannot deliver updates from this fork. Subsequent updates use the new Sparkle flow. The app reads legacy history, snippets, actions, and preferences.
 

@@ -886,8 +886,8 @@
 				GCC_WARN_MISSING_PARENTHESES = NO;
 				CLIPMENU_SPARKLE_PUBLIC_KEY = "NGwXZKZ7wHAufq4WawE9TQG7lpoBqsM33yAzwd9TQQw=";
 				CLIPMENU_UPDATE_FEED_URL = "https://frank4565.github.io/ClipMenu/appcast.xml";
-				CURRENT_PROJECT_VERSION = 5.3.99;
-				MARKETING_VERSION = 0.4.3;
+				CURRENT_PROJECT_VERSION = 6.0.99;
+				MARKETING_VERSION = 0.5.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
@@ -922,8 +922,8 @@
 				GCC_WARN_MISSING_PARENTHESES = NO;
 				CLIPMENU_SPARKLE_PUBLIC_KEY = "NGwXZKZ7wHAufq4WawE9TQG7lpoBqsM33yAzwd9TQQw=";
 				CLIPMENU_UPDATE_FEED_URL = "https://frank4565.github.io/ClipMenu/appcast.xml";
-				CURRENT_PROJECT_VERSION = 5.3.99;
-				MARKETING_VERSION = 0.4.3;
+				CURRENT_PROJECT_VERSION = 6.0.99;
+				MARKETING_VERSION = 0.5.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
@@ -947,7 +947,7 @@
 				ARCHS = "$(ARCHS_STANDARD)";
 				COPY_PHASE_STRIP = NO; /* Preserve signed binaries in embedded dependencies. */
 				DEPLOYMENT_POSTPROCESSING = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_HARDENED_RUNTIME = NO; /* Ad-hoc host must load Sparkle without library validation. */
 				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
@@ -958,8 +958,8 @@
 				GCC_WARN_MISSING_PARENTHESES = NO;
 				CLIPMENU_SPARKLE_PUBLIC_KEY = "NGwXZKZ7wHAufq4WawE9TQG7lpoBqsM33yAzwd9TQQw=";
 				CLIPMENU_UPDATE_FEED_URL = "https://frank4565.github.io/ClipMenu/appcast.xml";
-				CURRENT_PROJECT_VERSION = 5.3.99;
-				MARKETING_VERSION = 0.4.3;
+				CURRENT_PROJECT_VERSION = 6.0.99;
+				MARKETING_VERSION = 0.5.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
@@ -991,8 +991,8 @@
 				GCC_WARN_MISSING_PARENTHESES = NO;
 				CLIPMENU_SPARKLE_PUBLIC_KEY = "NGwXZKZ7wHAufq4WawE9TQG7lpoBqsM33yAzwd9TQQw=";
 				CLIPMENU_UPDATE_FEED_URL = "https://frank4565.github.io/ClipMenu/appcast.xml";
-				CURRENT_PROJECT_VERSION = 5.3.99;
-				MARKETING_VERSION = 0.4.3;
+				CURRENT_PROJECT_VERSION = 6.0.99;
+				MARKETING_VERSION = 0.5.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
@@ -1026,8 +1026,8 @@
 				GCC_WARN_MISSING_PARENTHESES = NO;
 				CLIPMENU_SPARKLE_PUBLIC_KEY = "NGwXZKZ7wHAufq4WawE9TQG7lpoBqsM33yAzwd9TQQw=";
 				CLIPMENU_UPDATE_FEED_URL = "https://frank4565.github.io/ClipMenu/appcast.xml";
-				CURRENT_PROJECT_VERSION = 5.3.99;
-				MARKETING_VERSION = 0.4.3;
+				CURRENT_PROJECT_VERSION = 6.0.99;
+				MARKETING_VERSION = 0.5.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
@@ -1051,7 +1051,7 @@
 				ARCHS = "$(ARCHS_STANDARD)";
 				COPY_PHASE_STRIP = NO; /* Preserve signed binaries in embedded dependencies. */
 				DEPLOYMENT_POSTPROCESSING = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_HARDENED_RUNTIME = NO; /* Ad-hoc host must load Sparkle without library validation. */
 				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
@@ -1061,8 +1061,8 @@
 				GCC_WARN_MISSING_PARENTHESES = NO;
 				CLIPMENU_SPARKLE_PUBLIC_KEY = "NGwXZKZ7wHAufq4WawE9TQG7lpoBqsM33yAzwd9TQQw=";
 				CLIPMENU_UPDATE_FEED_URL = "https://frank4565.github.io/ClipMenu/appcast.xml";
-				CURRENT_PROJECT_VERSION = 5.3.99;
-				MARKETING_VERSION = 0.4.3;
+				CURRENT_PROJECT_VERSION = 6.0.99;
+				MARKETING_VERSION = 0.5.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";

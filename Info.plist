@@ -7,7 +7,7 @@
 	<key>CFBundleExecutable</key>
 	<string>${EXECUTABLE_NAME}</string>
 	<key>CFBundleGetInfoString</key>
-	<string>0.4.3, © 2008-2009 Naotaka Morimoto.</string>
+	<string>$(MARKETING_VERSION), © 2008-2009 Naotaka Morimoto.</string>
 	<key>CFBundleIconFile</key>
 	<string>ClipMenu</string>
 	<key>CFBundleIdentifier</key>
