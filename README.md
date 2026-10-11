@@ -2,7 +2,13 @@
 
 A clipboard manager that lives in the macOS menu bar. This Swift port brings the original ClipMenu workflow to native SwiftUI and AppKit windows on **macOS 12 or later**, with English and Japanese interfaces. Packaged Release builds are universal, supporting both Apple silicon and Intel Macs.
 
-![Native snippet editor with folders and reusable templates](doc/screenshots/snippet-editor.jpg)
+## Fork history
+
+This repository is an independently maintained fork of [Naotaka Morimoto's ClipMenu](https://github.com/naotaka/ClipMenu), based on its public **0.4.4a13 Objective-C source** at [commit `e98e513c`](https://github.com/naotaka/ClipMenu/commit/e98e513cec38af2655fa07eb59bf11cdb9cc8a85). This fork modernizes that code in Swift with native SwiftUI and AppKit windows.
+
+The original author [released ClipMenu 1.0.0a1 in November 2014](https://www.clipmenu.com/blog/2014/11/11/clipmenu-1-0-0a1-released/) as a separate rewrite in Swift. That rewrite's source is absent from the currently public upstream repository. This fork was developed from the 0.4.x code and does not include the original 1.0.0a1 rewrite.
+
+**0.5.0 was the first formal Swift release of this fork.** Its version numbers follow this fork's own release history, independently of the original author's alpha release.
 
 ## Features
 
@@ -35,23 +41,27 @@ Use General → Excluded Applications to skip recording from selected apps, and 
 
 ## Native windows
 
-**General preferences**
-
-![General preferences](doc/screenshots/general-preferences.jpg)
-
 **Menu appearance and preview**
 
-![Menu preferences and live preview](doc/screenshots/menu-preferences.jpg)
+![Menu preferences and live preview](doc/screenshots/menu-preferences.png)
+
+**General preferences**
+
+![General preferences](doc/screenshots/general-preferences.png)
 
 **Actions**
 
-![Action preferences with separate available-action and action-menu lists](doc/screenshots/action-preferences.jpg)
+![Action preferences with separate available-action and action-menu lists](doc/screenshots/action-preferences.png)
+
+**Snippet editor**
+
+![Native snippet editor with folders and reusable templates](doc/screenshots/snippet-editor.png)
 
 ## Updates and migration
 
 This port uses Sparkle 2 with an HTTPS update feed and Ed25519 update verification. The published update ZIP has a Sparkle signature separate from the app's ad-hoc code signature. Preferences → Updates offers manual checks, automatic checks, and an option to include pre-releases.
 
-**Install the first Swift release manually if you are upgrading from the original ClipMenu.** Its old update feed and DSA key cannot deliver updates from this fork. Subsequent updates use the new Sparkle flow. The app reads legacy history, snippets, actions, and preferences.
+**Install this fork manually if you are upgrading from the original Objective-C ClipMenu.** Its old update feed and DSA key cannot deliver updates from this fork. Existing installations of this fork, starting with 0.5.0, can use the new Sparkle update flow. The app reads supported legacy 0.4.x history, snippets, actions, and preferences.
 
 Release configuration and publishing instructions are in [doc/releasing.md](doc/releasing.md). Fork maintainers should configure their own update key and feed before distributing builds.
 

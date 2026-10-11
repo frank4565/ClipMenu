@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClipMenu 0.5.1 リリースノート</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 13px/1.55 -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 15px; margin-top: 22px; }
+    li + li { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>ClipMenu 0.5.1</h1>
+  <p>スニペットエディタの外観を修正し、フォークの説明を更新したパッチリリースです。macOS 12 以降の Intel Mac と Apple シリコン搭載 Mac に対応します。</p>
+
+  <h2>アップデート</h2>
+  <p>ClipMenu 0.5.0 からは Sparkle で通常どおり更新できます。以前の Objective-C 版から更新する場合は、ClipMenu を終了して、このリリースを手動でインストールしてください。従来のアップデータとは更新フィードと検証キーが異なります。</p>
+  <p>アプリは引き続きローカルのアドホック署名を使用し、Apple Developer ID による署名や公証は行いません。公開する更新 ZIP は、別途 Sparkle の Ed25519 署名で検証します。</p>
+
+  <h2>主な変更点</h2>
+  <ul>
+    <li><strong>スニペットの外観：</strong>フォルダ背景、未選択時の表示、フォルダ名が macOS のライト／ダークの外観に従い、外観の変更時にも更新されるようになりました。</li>
+    <li><strong>フォークの経緯：</strong>元の 0.4.4a13 のコードを継承し、2014 年に公開された元プロジェクトの Swift 版 1.0.0a1 アルファとは独立して刷新されたことを README に明記しました。</li>
+    <li><strong>スクリーンショット：</strong>README の画像を Menu 環境設定から始まる順序に変更しました。角が丸いウインドウの外側が透明な PNG を使用し、スニペットエディタの画像も修正後の外観に更新しました。</li>
+  </ul>
+</body>
+</html>

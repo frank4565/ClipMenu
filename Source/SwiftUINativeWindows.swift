@@ -10509,19 +10509,16 @@ private struct SnippetEditorView: View {
         message: String,
         style: EmptyStateStyle = .browser
     ) -> some View {
-        let titleColor: Color = style == .inspector ? .primary : Color.black.opacity(0.72)
-        let messageColor: Color = style == .inspector ? .secondary : Color.black.opacity(0.52)
-        let iconColor: Color = style == .inspector ? .secondary : Color.black.opacity(0.32)
         VStack(alignment: style == .inspector ? .leading : .center, spacing: 8) {
             Image(systemName: systemImage)
                 .font(.system(size: 18, weight: .medium))
-                .foregroundColor(iconColor)
+                .foregroundColor(.secondary)
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(titleColor)
+                .foregroundColor(.primary)
             Text(message)
                 .font(.system(size: 12))
-                .foregroundColor(messageColor)
+                .foregroundColor(.secondary)
         }
         .multilineTextAlignment(style == .inspector ? .leading : .center)
         .frame(maxWidth: style == .inspector ? 280 : 204, alignment: style == .inspector ? .leading : .center)
@@ -10857,7 +10854,7 @@ private struct SnippetEditorView: View {
     }
 
     private var snippetFolderListBackgroundColor: NSColor {
-        NSColor(calibratedRed: 0.839, green: 0.867, blue: 0.898, alpha: 1.0)
+        .windowBackgroundColor
     }
 
     private var snippetListBackgroundColor: NSColor {
@@ -10934,6 +10931,11 @@ private final class CMSnippetFolderGroupLabelView: NSView {
 
     override var isFlipped: Bool { true }
 
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
@@ -10942,7 +10944,7 @@ private final class CMSnippetFolderGroupLabelView: NSView {
 
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
-            .foregroundColor: NSColor.black.withAlphaComponent(0.56),
+            .foregroundColor: NSColor.secondaryLabelColor,
             .paragraphStyle: paragraphStyle
         ]
 
