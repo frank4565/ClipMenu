@@ -264,6 +264,26 @@ final class ClipItemTests: XCTestCase {
         XCTAssertNotNil(rtfClip.rtfData)
     }
 
+    func testWriteReturnsOwnershipGenerationBeforeLaterPasteboardChanges() {
+        let name = NSPasteboard.Name("ClipMenuWriteOwnership-\(UUID().uuidString)")
+        let pasteboard = NSPasteboard(name: name)
+        defer { pasteboard.releaseGlobally() }
+        let clip = ClipItem(text: "Owned clip")
+
+        let ownershipGeneration = clip.write(to: pasteboard)
+
+        XCTAssertEqual(ownershipGeneration, pasteboard.changeCount)
+        XCTAssertEqual(pasteboard.string(forType: .string), "Owned clip")
+
+        let externalWriter = NSPasteboard(name: name)
+        let externalGeneration = externalWriter.declareTypes([.string], owner: nil)
+        XCTAssertTrue(externalWriter.setString("External copy", forType: .string))
+
+        XCTAssertNotEqual(ownershipGeneration, externalGeneration)
+        XCTAssertEqual(pasteboard.changeCount, externalGeneration)
+        XCTAssertEqual(pasteboard.string(forType: .string), "External copy")
+    }
+
     func testWriteToPasteboardRestoresAvailablePayloadTypes() throws {
         let pasteboard = NSPasteboard(name: NSPasteboard.Name("ClipMenuWrite-\(UUID().uuidString)"))
         let rtfData = try XCTUnwrap(NSAttributedString(string: "Styled").rtf(
