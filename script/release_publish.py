@@ -18,6 +18,19 @@ from generate_appcast import parse_previous, sparkle, version_key
 from release_metadata import metadata_for_tag
 
 
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def release_notes_options(tag: str, repository: Path) -> list[str]:
+    metadata_for_tag(tag)
+    notes = repository / "doc/releases" / f"{tag}.md"
+    if not notes.exists():
+        return ["--generate-notes"]
+    # Validate the exact tag's source without rewriting its Markdown or newlines.
+    notes.read_text(encoding="utf-8")
+    return ["--notes-file", str(notes)]
+
+
 def gh(arguments: list[str], repository: str) -> None:
     subprocess.run(["gh", "release", *arguments, "--repo", repository], check=True)
 
@@ -90,7 +103,8 @@ def main() -> None:
         existing = lookup_release(repository, metadata.tag)
         if existing is None:
             options = ["create", metadata.tag, *(str(asset) for asset in assets), "--verify-tag", "--draft",
-                       "--title", f"ClipMenu {metadata.display_version}", "--generate-notes"]
+                       "--title", f"ClipMenu {metadata.display_version}",
+                       *release_notes_options(metadata.tag, ROOT)]
             if metadata.prerelease:
                 options.append("--prerelease")
             gh(options, repository)

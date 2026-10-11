@@ -15,6 +15,7 @@ import secrets
 import shlex
 import subprocess
 import tempfile
+from typing import Optional
 
 from generate_appcast import require_https
 from release_metadata import metadata_for_tag
@@ -148,10 +149,68 @@ def verify_signed_app(app: Path) -> None:
         raise ValueError("Release app must be signed with the hardened runtime.")
 
 
-def package(app: Path, archive: Path) -> None:
+def release_notices(repository: Path, source_packages: Path) -> dict[str, bytes]:
+    resolved_path = repository / "ClipMenu.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+    resolved = json.loads(resolved_path.read_text(encoding="utf-8"))
+    pins = [pin for pin in resolved.get("pins", []) if pin.get("identity") == "sparkle"]
+    if len(pins) != 1:
+        raise ValueError("Package.resolved must identify exactly one Sparkle dependency for its release license.")
+    workspace = json.loads((source_packages / "workspace-state.json").read_text(encoding="utf-8")).get("object", {})
+    if not isinstance(workspace, dict):
+        raise ValueError("The release package cache has invalid Swift package workspace metadata.")
+    dependencies = [dependency for dependency in workspace.get("dependencies", [])
+                    if dependency.get("packageRef", {}).get("identity") == "sparkle"]
+    if len(dependencies) != 1:
+        raise ValueError("The release package cache must contain exactly one resolved Sparkle dependency.")
+    checkout = dependencies[0].get("state", {}).get("checkoutState", {})
+    expected_state = pins[0].get("state", {})
+    if not expected_state.get("revision") or any(
+        checkout.get(key) != expected_state.get(key) for key in ("revision", "version")
+    ):
+        raise ValueError("The cached Sparkle dependency does not match Package.resolved.")
+    artifacts = [artifact for artifact in workspace.get("artifacts", [])
+                 if artifact.get("packageRef", {}).get("identity") == "sparkle"
+                 and artifact.get("targetName") == "Sparkle"]
+    if len(artifacts) != 1 or not artifacts[0].get("path"):
+        raise ValueError("The release package cache must identify the resolved Sparkle framework artifact.")
+    artifact = Path(artifacts[0]["path"])
+    if not artifact.is_absolute():
+        artifact = source_packages / artifact
+    artifact = artifact.resolve()
+    if not artifact.is_relative_to(source_packages.resolve()) or not artifact.is_dir() or artifact.suffix != ".xcframework":
+        raise ValueError("The resolved Sparkle framework artifact is missing from the release package cache.")
+    sources = {"LICENSE.txt": repository / "LICENSE", "Sparkle-LICENSE.txt": artifact.parent / "LICENSE"}
+    notices = {}
+    for name, source in sources.items():
+        if not source.is_file():
+            raise ValueError(f"Missing required release license: {source}")
+        content = source.read_bytes()
+        if not content:
+            raise ValueError(f"The required release license is empty: {source}")
+        notices[name] = content
+    return notices
+
+
+def verify_release_notices(extracted: Path, notices: dict[str, bytes]) -> None:
+    for name, expected in notices.items():
+        delivered = extracted / name
+        if not delivered.is_file() or delivered.read_bytes() != expected:
+            raise ValueError(f"The delivered archive's {name} is missing or differs from its release license.")
+
+
+def package(app: Path, archive: Path, notices: Optional[dict[str, bytes]] = None) -> None:
     if archive.exists():
         raise ValueError(f"Refusing to overwrite an existing archive: {archive}")
-    run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(app), str(archive)])
+    if notices is None:
+        run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(app), str(archive)])
+        return
+    with tempfile.TemporaryDirectory(prefix="clipmenu-release-package-") as directory:
+        staging = Path(directory)
+        # Copy the signed bundle without adding resources to it or changing its signature.
+        run(["ditto", str(app), str(staging / app.name)])
+        for name, content in notices.items():
+            (staging / name).write_bytes(content)
+        run(["ditto", "-c", "-k", "--sequesterRsrc", str(staging), str(archive)])
 
 
 def main() -> None:
@@ -202,8 +261,13 @@ def main() -> None:
                           "CODE_SIGNING_ALLOWED=NO", "CODE_SIGNING_REQUIRED=NO", "CODE_SIGN_IDENTITY="])
             app = archive_path / "Products/Applications/ClipMenu.app"
             info = validate_app(app, metadata, feed_url, public_key, True)
+            notices = release_notices(ROOT, work / "SourcePackages")
             archive_name = f"ClipMenu-{metadata.tag}-UNSIGNED.zip"
-            package(app, output / archive_name)
+            package(app, output / archive_name, notices)
+            extracted = work / "verify-extraction"
+            run(["ditto", "-x", "-k", str(output / archive_name), str(extracted)])
+            validate_app(extracted / "ClipMenu.app", metadata, feed_url, public_key, True)
+            verify_release_notices(extracted, notices)
         else:
             with signing_credentials() as (identity, team, notary_key):
                 run(common + ["-archivePath", str(archive_path), "archive", *build_settings,
@@ -216,6 +280,7 @@ def main() -> None:
                      "-exportOptionsPlist", str(options), "-exportPath", str(work / "export")])
                 app = work / "export/ClipMenu.app"
                 info = validate_app(app, metadata, feed_url, public_key, False)
+                notices = release_notices(ROOT, work / "SourcePackages")
                 verify_signed_app(app)
                 notary_archive = work / "notarization.zip"
                 package(app, notary_archive)
@@ -233,12 +298,13 @@ def main() -> None:
                 verify_signed_app(app)
                 run(["spctl", "--assess", "--type", "execute", "--verbose=2", str(app)])
                 archive_name = metadata.archive_name
-                package(app, output / archive_name)
+                package(app, output / archive_name, notices)
                 # Verify the delivered archive, including the ticket, after packaging.
                 extracted = work / "verify-extraction"
                 run(["ditto", "-x", "-k", str(output / archive_name), str(extracted)])
                 delivered_app = extracted / "ClipMenu.app"
                 validate_app(delivered_app, metadata, feed_url, public_key, False)
+                verify_release_notices(extracted, notices)
                 verify_signed_app(delivered_app)
                 run(["xcrun", "stapler", "validate", str(delivered_app)])
         verify_source_commit(build_commit, ROOT, require_clean=not args.dry_run)

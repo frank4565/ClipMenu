@@ -98,7 +98,8 @@ a published tag; fix a release by incrementing its version.
 
 `CFBundleShortVersionString` stays numeric (`0.5.0`) as Apple requires. The full
 pre-release name (`0.5.0-beta.1`) appears in Sparkle's update UI and GitHub's
-release title. GitHub-generated release notes summarize merged changes. For
+release title. GitHub-generated release notes summarize merged changes unless a
+tag-specific UTF-8 Markdown body is committed at `doc/releases/v0.5.0.md`. For
 curated Sparkle notes, commit optional UTF-8 HTML files before tagging:
 
 - `doc/releases/v0.5.0.en.html`
@@ -174,9 +175,10 @@ The Release workflow performs these operations in order:
    exports with the hardened runtime, submits to Apple's notary service, and
    requires an accepted result.
 3. Staples the ticket, validates code signatures/Gatekeeper, creates a ZIP using
-   `ditto` to preserve framework symlinks, then extracts and verifies the final
-   archive and its stapled ticket again. Temporary signing files/keychain are
-   removed even if an operation fails.
+   `ditto` to preserve framework symlinks, and includes ClipMenu and Sparkle
+   license notices beside the unchanged signed app bundle. It then extracts and
+   verifies the final archive, license bytes, and stapled ticket again. Temporary
+   signing files/keychain are removed even if an operation fails.
 4. Downloads the matching official Sparkle tools and verifies their pinned
    SHA-256, signs the ZIP with Ed25519, and verifies that signature against the
    app's embedded public key.
