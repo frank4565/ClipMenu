@@ -1,0 +1,51 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches: [master, swiftui-native]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Test release metadata and appcast helpers
+        run: python3 -m unittest discover -s script/tests -v
+      - name: Build Debug
+        run: >-
+          xcodebuild -project ClipMenu.xcodeproj -scheme ClipMenu -configuration Debug
+          -derivedDataPath build/DerivedDataCI -onlyUsePackageVersionsFromResolvedFile
+          CODE_SIGNING_ALLOWED=NO build
+      - name: Run unit tests
+        run: >-
+          xcodebuild -project ClipMenu.xcodeproj -scheme ClipMenu -configuration Testing
+          -derivedDataPath build/DerivedDataCI -onlyUsePackageVersionsFromResolvedFile
+          -destination 'platform=macOS' -only-testing:ClipMenuTests
+          CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES test
+      - name: Build universal unsigned Release preview
+        env:
+          CLIPMENU_SPARKLE_PUBLIC_KEY: ${{ vars.CLIPMENU_SPARKLE_PUBLIC_KEY }}
+          CLIPMENU_UPDATE_FEED_URL: ${{ vars.CLIPMENU_UPDATE_FEED_URL }}
+        run: |
+          python3 script/release_build.py v0.0.0 --dry-run
+          python3 script/generate_appcast.py --metadata build/release/build_info.json --preview --output build/release/appcast-preview.xml
+      - name: Save unsigned Release preview
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: unsigned-release-preview
+          path: build/release/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

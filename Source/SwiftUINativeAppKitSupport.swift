@@ -1,0 +1,1029 @@
+import AppKit
+import Carbon
+import Combine
+import SwiftUI
+import UniformTypeIdentifiers
+
+func CMIconForLegacyHFSType(_ type: OSType) -> NSImage {
+    guard let fileType = NSFileTypeForHFSTypeCode(type) else {
+        return NSWorkspace.shared.icon(for: .data)
+    }
+    let hfsTag = String(fileType.dropFirst().dropLast())
+    // Resolve the original HFS tag so special icons such as open folders and clippings remain intact.
+    let contentType = UTType(
+        tag: hfsTag,
+        tagClass: UTTagClass(rawValue: "com.apple.ostype"),
+        conformingTo: nil
+    ) ?? .data
+    return NSWorkspace.shared.icon(for: contentType)
+}
+
+func CMIconForFileType(_ fileType: String) -> NSImage {
+    if fileType.count == 6, fileType.first == "'", fileType.last == "'" {
+        return CMIconForLegacyHFSType(NSHFSTypeCodeFromFileType(fileType))
+    }
+    // Existing icon preferences can contain either an extension or a uniform type identifier.
+    let contentType = UTType(fileType) ?? UTType(filenameExtension: fileType) ?? .data
+    return NSWorkspace.shared.icon(for: contentType)
+}
+
+func CMImageHoverPreviewLayout(
+    imageSize: NSSize,
+    menuFrame: NSRect,
+    pointer: NSPoint,
+    visibleFrame: NSRect
+) -> NSRect? {
+    let padding: CGFloat = 10
+    let gap: CGFloat = 12
+    let bounds = visibleFrame.insetBy(dx: gap, dy: gap)
+    guard imageSize.width.isFinite, imageSize.height.isFinite,
+          imageSize.width > 0, imageSize.height > 0,
+          bounds.width > padding * 2, bounds.height > padding * 2 else { return nil }
+
+    let rightSpace = bounds.maxX - menuFrame.maxX - gap
+    let leftSpace = menuFrame.minX - gap - bounds.minX
+    let sideSpace = max(rightSpace, leftSpace)
+    let availableWidth = sideSpace > padding * 2 + 40 ? sideSpace : bounds.width
+    let maxImageWidth = min(480, availableWidth - padding * 2)
+    let maxImageHeight = min(360, bounds.height - padding * 2)
+    let scale = min(maxImageWidth / imageSize.width, maxImageHeight / imageSize.height, 1)
+    let size = NSSize(
+        width: imageSize.width * scale + padding * 2,
+        height: imageSize.height * scale + padding * 2
+    )
+
+    let proposedX: CGFloat
+    if rightSpace >= size.width {
+        proposedX = menuFrame.maxX + gap
+    } else if leftSpace >= size.width {
+        proposedX = menuFrame.minX - gap - size.width
+    } else {
+        proposedX = pointer.x + gap
+    }
+    return NSRect(
+        x: min(max(proposedX, bounds.minX), bounds.maxX - size.width),
+        y: min(max(pointer.y - size.height / 2, bounds.minY), bounds.maxY - size.height),
+        width: size.width,
+        height: size.height
+    )
+}
+
+private final class ImageHoverPreviewPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
+
+final class ImageHoverPreviewController {
+    private var panel: ImageHoverPreviewPanel?
+    private var imageView: NSImageView?
+    private var clipID: UUID?
+    private var imagePixelSize = NSSize.zero
+
+    func show(image: NSImage, clipID: UUID, menuFrame: NSRect, pointer: NSPoint, visibleFrame: NSRect) {
+        let bitmap = image.representations.compactMap { $0 as? NSBitmapImageRep }
+            .max { Double($0.pixelsWide) * Double($0.pixelsHigh) < Double($1.pixelsWide) * Double($1.pixelsHigh) }
+        let imageSize = bitmap.map { NSSize(width: $0.pixelsWide, height: $0.pixelsHigh) } ?? image.size
+        guard let frame = CMImageHoverPreviewLayout(
+            imageSize: imageSize,
+            menuFrame: menuFrame,
+            pointer: pointer,
+            visibleFrame: visibleFrame
+        ) else {
+            hide()
+            return
+        }
+
+        let panel = panel ?? makePanel()
+        self.panel = panel
+        self.clipID = clipID
+        imagePixelSize = imageSize
+        panel.setFrame(frame, display: false)
+        imageView?.frame = NSRect(origin: .zero, size: frame.size).insetBy(dx: 10, dy: 10)
+        imageView?.image = image
+        panel.orderFrontRegardless()
+    }
+
+    func hide() {
+        panel?.orderOut(nil)
+        imageView?.image = nil
+        clipID = nil
+        imagePixelSize = .zero
+    }
+
+    private func makePanel() -> ImageHoverPreviewPanel {
+        let panel = ImageHoverPreviewPanel(
+            contentRect: .zero,
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.title = NSLocalizedString("Image Preview", comment: "")
+        panel.level = NSWindow.Level(rawValue: NSWindow.Level.popUpMenu.rawValue + 1)
+        panel.isReleasedWhenClosed = false
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.hidesOnDeactivate = false
+        panel.ignoresMouseEvents = true
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
+
+        let background = NSVisualEffectView(frame: .zero)
+        background.material = .popover
+        background.state = .active
+        background.wantsLayer = true
+        background.layer?.cornerRadius = 10
+        background.layer?.masksToBounds = true
+        panel.contentView = background
+
+        let imageView = NSImageView(frame: .zero)
+        imageView.imageScaling = .scaleProportionallyUpOrDown
+        imageView.imageAlignment = .alignCenter
+        imageView.setAccessibilityLabel(NSLocalizedString("Image Preview", comment: ""))
+        background.addSubview(imageView)
+        self.imageView = imageView
+        return panel
+    }
+
+#if DEBUG
+    var debugStateForTesting: [String: Any] {
+        var state: [String: Any] = [
+            "isVisible": panel?.isVisible ?? false,
+            "imagePixelWidth": Int(imagePixelSize.width),
+            "imagePixelHeight": Int(imagePixelSize.height),
+            "panelFrame": panel?.frame ?? .zero,
+            "ignoresMouseEvents": panel?.ignoresMouseEvents ?? true,
+            "isKeyWindow": panel?.isKeyWindow ?? false
+        ]
+        if let clipID {
+            state["clipID"] = clipID.uuidString
+        }
+        return state
+    }
+#endif
+}
+
+func CMPreferencesContentSize(
+    preferredHeight: CGFloat,
+    visibleFrame: NSRect,
+    windowChromeHeight: CGFloat
+) -> NSSize {
+    // Leave room around the window even on smaller or scaled laptop displays.
+    NSSize(
+        width: 760,
+        height: min(ceil(preferredHeight), max(1, floor(visibleFrame.height - windowChromeHeight - 24)))
+    )
+}
+
+final class SwiftUIPreferencesWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate {
+    private final class Pane {
+        let hostingView: NSHostingView<AnyView>
+        let view: NSView
+        let scrollView: NSScrollView?
+        var preferredHeight: CGFloat = 640
+#if DEBUG
+        var naturalSizeMeasurements = 0
+        var appearanceCount = 0
+#endif
+
+        init(hostingView: NSHostingView<AnyView>, scrollView: NSScrollView?) {
+            self.hostingView = hostingView
+            self.scrollView = scrollView
+            self.view = scrollView ?? hostingView
+        }
+    }
+
+    static let shared = SwiftUIPreferencesWindowController()
+    private static let defaultContentSize = NSSize(width: 760, height: 640)
+    private static let toolbarIdentifier = NSToolbar.Identifier("com.naotaka.ClipMenu.preferences")
+    private let presentationState = PreferencesPresentationState()
+    private let paneContainer = NSView()
+    private var panes: [PreferenceTab: Pane] = [:]
+    private var presentedTab: PreferenceTab?
+    private var preferredContentHeight: CGFloat = 640
+    private var selectionObserver: AnyCancellable?
+    private var screenParametersObserver: AnyCancellable?
+#if DEBUG
+    private var debugVisibleFrame: NSRect?
+#endif
+
+    private init() {
+        let window = NSWindow(
+            contentRect: NSRect(origin: .zero, size: Self.defaultContentSize),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = presentationState.selection?.title ?? NSLocalizedString("Preferences", comment: "")
+        window.isReleasedWhenClosed = false
+        window.collectionBehavior = [.canJoinAllSpaces]
+        window.titleVisibility = .visible
+        window.titlebarAppearsTransparent = false
+        window.isMovableByWindowBackground = false
+        window.isRestorable = false
+        window.toolbarStyle = .preference
+        super.init(window: window)
+
+        let toolbar = NSToolbar(identifier: Self.toolbarIdentifier)
+        toolbar.delegate = self
+        toolbar.allowsUserCustomization = false
+        toolbar.autosavesConfiguration = false
+        toolbar.displayMode = .iconAndLabel
+        toolbar.sizeMode = .regular
+        window.toolbar = toolbar
+        window.setContentSize(Self.defaultContentSize)
+        window.contentView = paneContainer
+        preparePanes()
+        window.standardWindowButton(.miniaturizeButton)?.isEnabled = false
+        window.standardWindowButton(.zoomButton)?.isEnabled = false
+
+        window.delegate = self
+        selectionObserver = presentationState.$selection
+            .sink { [weak self] tab in
+                guard let tab else { return }
+                self?.presentPane(for: tab)
+            }
+        screenParametersObserver = NotificationCenter.default.publisher(
+            for: NSApplication.didChangeScreenParametersNotification
+        )
+        .receive(on: RunLoop.main)
+        .sink { [weak self] _ in
+            self?.fitWindowToScreen()
+        }
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func showWindow(_ sender: Any?) {
+        if window?.isVisible != true {
+            CMPreparePreferencesForPresentation()
+        }
+        presentationState.resetForPresentation()
+        fitWindowToScreen()
+        window?.center()
+        CMForegroundWindowActivationPolicyBridge.retainRegularActivationPolicy()
+        super.showWindow(sender)
+        NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps])
+        NSApp.activate(ignoringOtherApps: true)
+        window?.orderFrontRegardless()
+        window?.makeMain()
+        window?.makeKeyAndOrderFront(self)
+    }
+
+    func debugShellSnapshot() -> [String: Any] {
+        let selectedTab = presentationState.selection ?? .general
+        let visibleTabs = PreferenceTab.allCases
+        return [
+            "visiblePaneTitles": visibleTabs.map(\.title),
+            "visiblePaneIconSources": Dictionary(
+                uniqueKeysWithValues: visibleTabs.map { ($0.title, $0.debugIconSourceName) }
+            ),
+            "selectedPaneTitle": selectedTab.title,
+            "selectedPaneIconSource": selectedTab.debugIconSourceName,
+            "windowTitle": window?.title as Any,
+            "selectedToolbarItemIdentifier": window?.toolbar?.selectedItemIdentifier?.rawValue as Any,
+            "toolbarAllowsUserCustomization": window?.toolbar?.allowsUserCustomization as Any,
+            "toolbarAutosavesConfiguration": window?.toolbar?.autosavesConfiguration as Any,
+            "miniaturizeButtonEnabled": window?.standardWindowButton(.miniaturizeButton)?.isEnabled as Any,
+            "zoomButtonEnabled": window?.standardWindowButton(.zoomButton)?.isEnabled as Any
+        ]
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        if let window, !window.makeFirstResponder(window) {
+            window.endEditing(for: nil)
+        }
+        CMCommitPreferencesBeforeWindowClose()
+        CMForegroundWindowActivationPolicyBridge.releaseRegularActivationPolicy()
+        NSApp.deactivate()
+        NotificationCenter.default.post(name: .CMPreferencePanelWillClose, object: nil)
+    }
+
+    func windowDidChangeScreen(_ notification: Notification) {
+        fitWindowToScreen()
+    }
+
+#if DEBUG
+    func debugSelectedTabTitle() -> String? {
+        presentationState.selection?.title
+    }
+
+    func debugSelectTab(rawValue: String) {
+        presentationState.selection = CMPreferenceTab(debugRawValue: rawValue)
+    }
+
+    func debugSetVisibleFrame(_ frame: NSRect?) {
+        debugVisibleFrame = frame
+        fitWindowToScreen()
+    }
+
+    func debugPaneCacheSnapshot() -> [String: [String: Int]] {
+        Dictionary(uniqueKeysWithValues: panes.map { tab, pane in
+            (tab.rawValue, [
+                "hostingViewIdentity": ObjectIdentifier(pane.hostingView).hashValue,
+                "naturalSizeMeasurements": pane.naturalSizeMeasurements,
+                "appearanceCount": pane.appearanceCount
+            ])
+        })
+    }
+#endif
+
+    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        PreferenceTab.allCases.map(\.toolbarItemIdentifier)
+    }
+
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        toolbarDefaultItemIdentifiers(toolbar)
+    }
+
+    func toolbarSelectableItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        toolbarDefaultItemIdentifiers(toolbar)
+    }
+
+    func toolbar(
+        _ toolbar: NSToolbar,
+        itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
+        willBeInsertedIntoToolbar flag: Bool
+    ) -> NSToolbarItem? {
+        guard let tab = PreferenceTab.allCases.first(where: { $0.toolbarItemIdentifier == itemIdentifier }) else {
+            return nil
+        }
+
+        let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+        item.label = tab.title
+        item.paletteLabel = tab.title
+        item.toolTip = tab.title
+        item.image = tab.toolbarImage
+        item.target = self
+        item.action = #selector(selectPreferencePane(_:))
+        item.isEnabled = true
+        return item
+    }
+
+    @objc private func selectPreferencePane(_ sender: NSToolbarItem) {
+        guard let tab = PreferenceTab.allCases.first(where: { $0.toolbarItemIdentifier == sender.itemIdentifier }) else {
+            return
+        }
+        if let window, !window.makeFirstResponder(window) {
+            return
+        }
+        presentationState.selection = tab
+    }
+
+    private func preparePanes() {
+        // Keep every pane attached to the same window. Switching tabs can then reveal
+        // existing controls without rebuilding their SwiftUI graph or reloading stores.
+        for tab in PreferenceTab.allCases {
+            let hostingView = NSHostingView(rootView: CMPreferencesPaneView(
+                for: tab,
+                paneDidAppear: { [weak self] in
+#if DEBUG
+                    self?.panes[tab]?.appearanceCount += 1
+#endif
+                },
+                contentHeightDidChange: { [weak self] height in
+                    self?.scheduleContentHeightUpdate(height, for: tab)
+                }
+            ))
+            if #available(macOS 13.0, *) {
+                hostingView.sizingOptions = tab == .actions ? [] : [.intrinsicContentSize]
+            }
+            let scrollView: NSScrollView?
+            if tab == .actions {
+                scrollView = nil
+                hostingView.autoresizingMask = [.width, .height]
+            } else {
+                let scrollingView = NSScrollView()
+                scrollingView.hasVerticalScroller = true
+                scrollingView.hasHorizontalScroller = false
+                scrollingView.autohidesScrollers = true
+                scrollingView.scrollerStyle = .overlay
+                scrollingView.drawsBackground = false
+                scrollingView.borderType = .noBorder
+                scrollingView.horizontalScrollElasticity = .none
+                scrollingView.verticalScrollElasticity = .automatic
+                hostingView.setFrameSize(Self.defaultContentSize)
+                scrollingView.documentView = hostingView
+                scrollView = scrollingView
+            }
+            let pane = Pane(hostingView: hostingView, scrollView: scrollView)
+            panes[tab] = pane
+            pane.view.frame = paneContainer.bounds
+            // Inactive panes retain their viewport instead of relaying out on every
+            // window resize. Only the selected pane needs the new viewport below.
+            pane.view.autoresizingMask = []
+            pane.view.isHidden = true
+            paneContainer.addSubview(pane.view)
+            if tab != .actions {
+                let height = ceil(hostingView.fittingSize.height)
+#if DEBUG
+                pane.naturalSizeMeasurements += 1
+#endif
+                if height.isFinite, height > 0 {
+                    pane.preferredHeight = height
+                }
+                hostingView.setFrameSize(NSSize(width: 760, height: pane.preferredHeight))
+            }
+            hostingView.layoutSubtreeIfNeeded()
+        }
+    }
+
+    private func presentPane(for tab: PreferenceTab) {
+        guard let window, let pane = panes[tab] else { return }
+        if let previousTab = presentedTab, previousTab != tab {
+            panes[previousTab]?.view.isHidden = true
+        }
+        presentedTab = tab
+        preferredContentHeight = pane.preferredHeight
+        window.title = tab.title
+        window.toolbar?.selectedItemIdentifier = tab.toolbarItemIdentifier
+        fitWindowToScreen()
+        pane.view.isHidden = false
+        if let scrollView = pane.scrollView {
+            scrollView.contentView.scroll(to: .zero)
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+        }
+        if UserDefaults.standard.string(forKey: CMSelectedPreferencePaneKey) != tab.rawValue {
+            UserDefaults.standard.set(tab.rawValue, forKey: CMSelectedPreferencePaneKey)
+        }
+    }
+
+    private func scheduleContentHeightUpdate(_ height: CGFloat, for tab: PreferenceTab) {
+        guard tab != .actions, height.isFinite, height > 0 else { return }
+        // Hidden panes stay live too: keep their height ready for the next click,
+        // but only resize the window when its visible pane actually changes height.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let pane = self.panes[tab] else { return }
+            let height = ceil(height)
+            guard pane.preferredHeight != height else { return }
+            pane.preferredHeight = height
+            pane.hostingView.setFrameSize(NSSize(width: 760, height: height))
+            guard self.presentedTab == tab else { return }
+            self.preferredContentHeight = height
+            self.fitWindowToScreen()
+        }
+    }
+
+    private func fitWindowToScreen() {
+        guard let window, let currentSize = window.contentView?.frame.size,
+              let screen = window.screen ?? NSScreen.main else { return }
+        var screenFrame = screen.visibleFrame
+#if DEBUG
+        screenFrame = debugVisibleFrame ?? screenFrame
+#endif
+        let contentSize = CMPreferencesContentSize(
+            preferredHeight: preferredContentHeight,
+            visibleFrame: screenFrame,
+            windowChromeHeight: window.frame.height - currentSize.height
+        )
+
+        // Apply size and position together without animation, keeping the toolbar in place.
+        let topLeft = NSPoint(x: window.frame.minX, y: window.frame.maxY)
+        let frameSize = window.frameRect(forContentRect: NSRect(origin: .zero, size: contentSize)).size
+        let insetFrame = screenFrame.insetBy(dx: 12, dy: 12)
+        let fittedTopLeft = NSPoint(
+            x: min(max(topLeft.x, insetFrame.minX), insetFrame.maxX - frameSize.width),
+            y: min(insetFrame.maxY, max(topLeft.y, insetFrame.minY + frameSize.height))
+        )
+        let frame = NSRect(
+            origin: NSPoint(x: fittedTopLeft.x, y: fittedTopLeft.y - frameSize.height),
+            size: frameSize
+        )
+        if window.frame != frame {
+            window.contentMinSize = NSSize(width: contentSize.width, height: min(currentSize.height, contentSize.height))
+            window.contentMaxSize = NSSize(width: contentSize.width, height: max(currentSize.height, contentSize.height))
+            // Geometry changes immediately; draw the newly revealed pane in the
+            // normal display pass instead of forcing a redraw during the click.
+            window.setFrame(frame, display: false, animate: false)
+        }
+        window.contentMinSize = contentSize
+        window.contentMaxSize = contentSize
+        if let presentedTab, let pane = panes[presentedTab] {
+            pane.view.frame = paneContainer.bounds
+        }
+    }
+}
+
+final class SwiftUISnippetEditorWindowController: NSWindowController, NSWindowDelegate {
+    let store = SnippetFileStore.shared
+    static let frameAutosaveName = "SnippetEditorWindow"
+    static let defaultContentSize = NSSize(width: 640, height: 480)
+    static let verticalDividerAutosaveName = "SnippetEditorVerticalDivider"
+    static let horizontalDividerAutosaveName = "SnippetEditorHorizontalDivider"
+    static let defaultVerticalPrimarySize: CGFloat = 244
+    static let defaultHorizontalPrimarySize: CGFloat = 235
+    private var dirtyStateObserver: AnyCancellable?
+    private var lastSelectionSnapshot: SnippetFileStore.SelectionSnapshot?
+    private let restoredFrameOnInit: Bool
+
+    init() {
+        let controller = NSHostingController(rootView: CMSnippetEditorRootView())
+        if #available(macOS 13.0, *) {
+            controller.sizingOptions = []
+        }
+        let window = ClipMenuUndoWindow(contentViewController: controller)
+        window.title = NSLocalizedString("Snippet Editor", comment: "")
+        window.setContentSize(Self.defaultContentSize)
+        window.minSize = NSSize(width: 560, height: 400)
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        window.collectionBehavior = [.canJoinAllSpaces]
+        window.titleVisibility = .visible
+        window.titlebarAppearsTransparent = false
+        window.isMovableByWindowBackground = false
+        window.isRestorable = false
+        window.toolbarStyle = .unifiedCompact
+        let restoredFrame = window.setFrameAutosaveName(Self.frameAutosaveName)
+        restoredFrameOnInit = restoredFrame
+        if !restoredFrame {
+            window.center()
+        }
+        window.providedUndoManager = { [weak store] in store?.undoManager }
+        super.init(window: window)
+        window.delegate = self
+        dirtyStateObserver = store.$hasUnsavedChanges
+            .receive(on: RunLoop.main)
+            .sink { [weak window] hasUnsavedChanges in
+                window?.isDocumentEdited = hasUnsavedChanges
+            }
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func showWindow(_ sender: Any?) {
+        store.reload()
+        let targetFrame = window?.frame
+        CMForegroundWindowActivationPolicyBridge.retainRegularActivationPolicy()
+        super.showWindow(sender)
+        window?.isDocumentEdited = store.hasUnsavedChanges
+        if let window, let targetFrame, restoredFrameOnInit {
+            let applyTargetFrame = {
+                var centeredFrame = targetFrame
+                let centeredOrigin = CMCenteredWindowOriginForDebug(frameSize: targetFrame.size, screen: window.screen)
+                centeredFrame.origin = centeredOrigin
+                window.setFrame(centeredFrame, display: false)
+            }
+            applyTargetFrame()
+            DispatchQueue.main.async {
+                applyTargetFrame()
+            }
+        } else {
+            window?.setContentSize(Self.defaultContentSize)
+            window?.center()
+            DispatchQueue.main.async { [weak window] in
+                window?.setContentSize(Self.defaultContentSize)
+                window?.center()
+            }
+        }
+        NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps])
+        NSApp.activate(ignoringOtherApps: true)
+        window?.orderFrontRegardless()
+        window?.makeMain()
+        window?.makeKeyAndOrderFront(self)
+        restoreSplitPositionsAfterWindowSetup()
+        if let lastSelectionSnapshot {
+            store.restoreSelectionSnapshot(lastSelectionSnapshot)
+        }
+    }
+
+    private func restoreSplitPositionsAfterWindowSetup() {
+        func savedPrimarySize(forKey key: String, fallback: CGFloat) -> CGFloat {
+            guard let savedNumber = UserDefaults.standard.object(forKey: key) as? NSNumber else {
+                return fallback
+            }
+            return CGFloat(savedNumber.doubleValue)
+        }
+
+        let applyRestoredPositions = { [weak self] in
+            guard let self,
+                  let rootView = self.window?.contentViewController?.view ?? self.window?.contentView else {
+                return
+            }
+
+            rootView.layoutSubtreeIfNeeded()
+
+            if let verticalSplit = CMFindSplitView(in: rootView, identifier: Self.verticalDividerAutosaveName) {
+                verticalSplit.setPosition(
+                    savedPrimarySize(
+                        forKey: Self.verticalDividerAutosaveName,
+                        fallback: Self.defaultVerticalPrimarySize
+                    ),
+                    ofDividerAt: 0
+                )
+            }
+
+            if let horizontalSplit = CMFindSplitView(in: rootView, identifier: Self.horizontalDividerAutosaveName) {
+                horizontalSplit.setPosition(
+                    savedPrimarySize(
+                        forKey: Self.horizontalDividerAutosaveName,
+                        fallback: Self.defaultHorizontalPrimarySize
+                    ),
+                    ofDividerAt: 0
+                )
+            }
+
+            rootView.layoutSubtreeIfNeeded()
+        }
+
+        let restoreDelays: [TimeInterval] = [0, 0.02, 0.08, 0.16, 0.5]
+        for delay in restoreDelays {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                applyRestoredPositions()
+            }
+        }
+    }
+
+    func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
+        store.undoManager
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        if let window, !window.makeFirstResponder(window) {
+            window.endEditing(for: nil)
+        }
+        CMForegroundWindowActivationPolicyBridge.releaseRegularActivationPolicy()
+        NSApp.deactivate()
+        lastSelectionSnapshot = store.currentSelectionSnapshot()
+        store.restoreSelectionSnapshot(.init(
+            selectedFolderIDs: [],
+            selectedSnippetIDs: [],
+            primarySelectedFolderID: nil,
+            primarySelectedSnippetID: nil
+        ))
+        store.save()
+        NotificationCenter.default.post(name: .CMSnippetEditorWillClose, object: nil)
+    }
+
+    @objc func saveDocument(_ sender: Any?) {
+        if let window, !window.makeFirstResponder(window) {
+            window.endEditing(for: nil)
+        }
+        store.save()
+    }
+
+    @objc func save(_ sender: Any?) {
+        saveDocument(sender)
+    }
+
+    @objc func saveDocumentAs(_ sender: Any?) {
+        if let window, !window.makeFirstResponder(window) {
+            window.endEditing(for: nil)
+        }
+        store.exportSnippetsToPanel()
+    }
+
+    @objc func saveAs(_ sender: Any?) {
+        saveDocumentAs(sender)
+    }
+
+    @objc func revertDocumentToSaved(_ sender: Any?) {
+        if let window, !window.makeFirstResponder(window) {
+            window.endEditing(for: nil)
+        }
+        store.reload()
+    }
+
+    @objc func revertToSaved(_ sender: Any?) {
+        revertDocumentToSaved(sender)
+    }
+
+    @objc func importSnippets(_ sender: Any?) {
+        if let window, !window.makeFirstResponder(window) {
+            window.endEditing(for: nil)
+        }
+        store.importSnippetsFromPanel()
+    }
+
+    func importSnippets(from url: URL) {
+        if let window, !window.makeFirstResponder(window) {
+            window.endEditing(for: nil)
+        }
+        store.importSnippets(from: url)
+    }
+
+    @objc func exportSnippets(_ sender: Any?) {
+        if let window, !window.makeFirstResponder(window) {
+            window.endEditing(for: nil)
+        }
+        store.exportSnippetsToPanel()
+    }
+}
+
+final class HotKeyRecorderNSView: NSView {
+    var keyCode = 0
+    var modifierFlags = 0
+    var onCapture: ((Int, Int) -> Void)?
+
+    private let label = NSTextField(labelWithString: "")
+    private var isRecording = false
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.cornerRadius = 7
+        layer?.borderWidth = 1
+
+        label.alignment = .center
+        label.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .medium)
+        label.lineBreakMode = .byTruncatingTail
+        addSubview(label)
+        refresh()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: 210, height: 26)
+    }
+
+    override func layout() {
+        super.layout()
+        label.frame = bounds.insetBy(dx: 8, dy: 4)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        isRecording = true
+        refresh()
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard isRecording else {
+            super.keyDown(with: event)
+            return
+        }
+
+        if event.keyCode == 53 {
+            isRecording = false
+            refresh()
+            return
+        }
+
+        if event.modifierFlags.normalizedShortcutFlags.isEmpty,
+           event.keyCode == 51 || event.keyCode == 117 {
+            keyCode = -1
+            modifierFlags = 0
+            isRecording = false
+            onCapture?(keyCode, modifierFlags)
+            refresh()
+            return
+        }
+
+        let flags = event.modifierFlags.normalizedShortcutFlags
+        guard !flags.isEmpty else {
+            NSSound.beep()
+            return
+        }
+
+        keyCode = Int(event.keyCode)
+        modifierFlags = Int(flags.rawValue)
+        isRecording = false
+        onCapture?(keyCode, modifierFlags)
+        refresh()
+    }
+
+    override func resignFirstResponder() -> Bool {
+        isRecording = false
+        refresh()
+        return true
+    }
+
+    func refresh() {
+        label.stringValue = isRecording
+            ? NSLocalizedString("Type shortcut", comment: "")
+            : Self.displayString(keyCode: keyCode, modifierFlags: modifierFlags)
+        label.textColor = (keyCode >= 0 && modifierFlags != 0) || isRecording
+            ? .labelColor
+            : .secondaryLabelColor
+        layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+        layer?.borderColor = (isRecording ? NSColor.keyboardFocusIndicatorColor : NSColor.separatorColor).cgColor
+    }
+
+    private static func displayString(keyCode: Int, modifierFlags: Int) -> String {
+        guard keyCode >= 0, modifierFlags != 0 else {
+            return NSLocalizedString("(None)", comment: "")
+        }
+
+        let flags = NSEvent.ModifierFlags(rawValue: UInt(modifierFlags))
+        var parts = ""
+        if flags.contains(.control) {
+            parts += "\u{2303}"
+        }
+        if flags.contains(.option) {
+            parts += "\u{2325}"
+        }
+        if flags.contains(.shift) {
+            parts += "\u{21E7}"
+        }
+        if flags.contains(.command) {
+            parts += "\u{2318}"
+        }
+        return parts + keyName(for: keyCode)
+    }
+
+    static func keyName(for keyCode: Int) -> String {
+        if let layoutName = keyboardLayoutKeyName(for: keyCode) {
+            return layoutName
+        }
+
+        let names: [Int: String] = [
+            0: "A", 1: "S", 2: "D", 3: "F", 4: "H", 5: "G", 6: "Z", 7: "X",
+            8: "C", 9: "V", 11: "B", 12: "Q", 13: "W", 14: "E", 15: "R",
+            16: "Y", 17: "T", 18: "1", 19: "2", 20: "3", 21: "4", 22: "6",
+            23: "5", 24: "=", 25: "9", 26: "7", 27: "-", 28: "8", 29: "0",
+            30: "]", 31: "O", 32: "U", 33: "[", 34: "I", 35: "P", 37: "L",
+            38: "J", 39: "'", 40: "K", 41: ";", 42: "\\", 43: ",", 44: "/",
+            45: "N", 46: "M", 47: ".", 49: "Space", 50: "`", 51: "Delete",
+            53: "Escape", 65: ".", 67: "*", 69: "+", 71: "Clear", 75: "/",
+            76: "Return", 78: "-", 81: "=", 82: "0", 83: "1", 84: "2",
+            85: "3", 86: "4", 87: "5", 88: "6", 89: "7", 91: "8", 92: "9",
+            96: "F5", 97: "F6", 98: "F7", 99: "F3", 100: "F8", 101: "F9",
+            103: "F11", 105: "F13", 106: "F16", 107: "F14", 109: "F10",
+            111: "F12", 113: "F15", 114: "Help", 115: "Home", 116: "Page Up",
+            117: "Forward Delete", 118: "F4", 119: "End", 120: "F2",
+            121: "Page Down", 122: "F1", 123: "Left", 124: "Right",
+            125: "Down", 126: "Up"
+        ]
+        return names[keyCode] ?? "Key \(keyCode)"
+    }
+
+    private static func keyboardLayoutKeyName(for keyCode: Int) -> String? {
+        guard keyCode >= 0,
+              let inputSource = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
+              let layoutData = TISGetInputSourceProperty(inputSource, kTISPropertyUnicodeKeyLayoutData) else {
+            return nil
+        }
+
+        let data = unsafeBitCast(layoutData, to: CFData.self)
+        guard let keyboardLayout = UnsafeRawPointer(CFDataGetBytePtr(data))?.assumingMemoryBound(to: UCKeyboardLayout.self) else {
+            return nil
+        }
+
+        var keysDown = UInt32(0)
+        var chars = [UniChar](repeating: 0, count: 4)
+        var realLength = 0
+        let status = UCKeyTranslate(
+            keyboardLayout,
+            UInt16(keyCode),
+            UInt16(kUCKeyActionDisplay),
+            0,
+            UInt32(LMGetKbdType()),
+            OptionBits(kUCKeyTranslateNoDeadKeysBit),
+            &keysDown,
+            chars.count,
+            &realLength,
+            &chars
+        )
+
+        guard status == noErr, realLength > 0 else { return nil }
+        let translated = String(utf16CodeUnits: chars, count: realLength)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return translated.isEmpty ? nil : translated.uppercased()
+    }
+}
+
+@objc(CMLegacyArchivedActionNode)
+final class LegacyArchivedActionNode: NSObject, NSCoding {
+    var nodeTitle = ""
+    var isLeaf = false
+    var children: [LegacyArchivedActionNode] = []
+    var action: [String: String]?
+
+    override init() {
+        super.init()
+    }
+
+    required init?(coder: NSCoder) {
+        nodeTitle = coder.decodeObject(forKey: CMActionNodeTitleKey) as? String ?? ""
+        isLeaf = (coder.decodeObject(forKey: CMActionNodeIsLeafKey) as? NSNumber)?.boolValue ?? false
+        let decodedChildren = coder.decodeObject(forKey: CMActionNodeChildrenKey)
+        if let childNodes = decodedChildren as? [LegacyArchivedActionNode] {
+            children = childNodes
+        } else if let childNodes = decodedChildren as? NSArray {
+            children = childNodes.compactMap { $0 as? LegacyArchivedActionNode }
+        }
+        action = CMLegacyActionDictionary(from: coder.decodeObject(forKey: CMActionNodeActionKey))
+        super.init()
+    }
+
+    func encode(with coder: NSCoder) {}
+
+}
+
+private struct CMSplitPaneHostingRoot: View {
+    let content: AnyView
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            content
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+final class AutoSavingSplitViewController: NSSplitViewController {
+    private let autosaveName: String
+    private let initialPrimarySize: CGFloat
+    private let primaryHost: NSHostingController<AnyView> = NSHostingController(rootView: AnyView(EmptyView()))
+    private let secondaryHost: NSHostingController<AnyView> = NSHostingController(rootView: AnyView(EmptyView()))
+    private var didApplyInitialPosition = false
+    private var didScheduleInitialPosition = false
+    private let savedPrimarySize: CGFloat?
+
+    init(
+        autosaveName: String,
+        isVertical: Bool,
+        dividerStyle: NSSplitView.DividerStyle,
+        initialPrimarySize: CGFloat,
+        primaryMin: CGFloat,
+        primaryMax: CGFloat?,
+        secondaryMin: CGFloat
+    ) {
+        self.autosaveName = autosaveName
+        self.initialPrimarySize = initialPrimarySize
+        if let savedNumber = UserDefaults.standard.object(forKey: autosaveName) as? NSNumber {
+            self.savedPrimarySize = CGFloat(savedNumber.doubleValue)
+        } else {
+            self.savedPrimarySize = nil
+        }
+        super.init(nibName: nil, bundle: nil)
+
+        if #available(macOS 13.0, *) {
+            primaryHost.sizingOptions = []
+            secondaryHost.sizingOptions = []
+        }
+
+        let primaryItem = NSSplitViewItem(viewController: primaryHost)
+        primaryItem.canCollapse = false
+        primaryItem.minimumThickness = primaryMin
+        if let primaryMax {
+            primaryItem.maximumThickness = primaryMax
+        }
+
+        let secondaryItem = NSSplitViewItem(viewController: secondaryHost)
+        secondaryItem.canCollapse = false
+        secondaryItem.minimumThickness = secondaryMin
+
+        addSplitViewItem(primaryItem)
+        addSplitViewItem(secondaryItem)
+
+        splitView.isVertical = isVertical
+        splitView.dividerStyle = dividerStyle
+        splitView.identifier = NSUserInterfaceItemIdentifier(autosaveName)
+        splitView.delegate = self
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func update(primary: AnyView, secondary: AnyView) {
+        primaryHost.rootView = AnyView(CMSplitPaneHostingRoot(content: primary))
+        secondaryHost.rootView = AnyView(CMSplitPaneHostingRoot(content: secondary))
+    }
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        applyInitialPositionIfNeeded()
+    }
+
+    private func applyInitialPositionIfNeeded() {
+        guard !didApplyInitialPosition else { return }
+        let totalPrimaryAxis = splitView.isVertical ? splitView.bounds.width : splitView.bounds.height
+        guard totalPrimaryAxis > splitView.dividerThickness else { return }
+        guard !didScheduleInitialPosition else { return }
+        let targetPrimarySize = savedPrimarySize ?? initialPrimarySize
+        didScheduleInitialPosition = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.splitView.setPosition(targetPrimarySize, ofDividerAt: 0)
+            self.splitView.layoutSubtreeIfNeeded()
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.splitView.setPosition(targetPrimarySize, ofDividerAt: 0)
+                self.splitView.layoutSubtreeIfNeeded()
+                self.didApplyInitialPosition = true
+                self.persistCurrentPrimarySize()
+            }
+        }
+    }
+
+    override func splitViewDidResizeSubviews(_ notification: Notification) {
+        super.splitViewDidResizeSubviews(notification)
+        guard didApplyInitialPosition else { return }
+        persistCurrentPrimarySize()
+    }
+
+    private func persistCurrentPrimarySize() {
+        guard let primarySubview = splitView.subviews.first else { return }
+        let primarySize = splitView.isVertical ? primarySubview.frame.width : primarySubview.frame.height
+        UserDefaults.standard.set(Double(primarySize), forKey: autosaveName)
+    }
+}

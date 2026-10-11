@@ -1,6 +1,6 @@
 var isExist = ClipMenu.require('JS-methods/char');
 if (!isExist) {
-    throw new Error('Could not find the library');
+    throw new Error('Cound not find the library');
 }
 
 return clipText.char2dec();

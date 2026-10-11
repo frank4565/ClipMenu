@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClipMenu 0.5.0 release notes</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 13px/1.55 -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 15px; margin-top: 22px; }
+    li + li { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>ClipMenu 0.5.0</h1>
+  <p>The first modern Swift release of ClipMenu, with native macOS windows and support for Intel and Apple silicon Macs running macOS 12 or later.</p>
+
+  <h2>Install this version manually</h2>
+  <p>When upgrading from an older Objective-C version, quit ClipMenu and install this release manually. The original updater uses a different feed and trust key and cannot deliver this first Swift release. Supported legacy history, snippets, actions, and preferences can be loaded by the new app.</p>
+  <p>The app uses a local ad-hoc code signature. If macOS blocks its first launch, use the app-specific Open Anyway option described in <a href="https://support.apple.com/en-us/102445">Apple's opening instructions</a>. Published update ZIPs use separate Sparkle Ed25519 signatures.</p>
+
+  <h2>What changed</h2>
+  <ul>
+    <li><strong>Native windows:</strong> modern preferences and snippet editing, with updated English and Japanese interfaces.</li>
+    <li><strong>Responsive preferences:</strong> faster tab switching while keeping each pane's own window height. Tall panes fit within the usable screen area and scroll to their last controls, with a native scrollbar indicator during scrolling. Action lists scroll independently.</li>
+    <li><strong>Clipboard history:</strong> restored history grouping, duplicate handling, ordering, and menu controls. Image entries offer a larger preview on hover.</li>
+    <li><strong>Snippets:</strong> edit and organize folders, search saved text, reorder items, and import or export snippets in the native editor.</li>
+    <li><strong>Actions:</strong> manage action folders and modifier-click mappings, and use built-in, bundled, or user JavaScript actions. Pending edits survive tab changes; committed action edits survive reopening preferences.</li>
+    <li><strong>Shortcuts and paste:</strong> configure global menu shortcuts and automatic paste, with an Accessibility permission status and setup controls.</li>
+    <li><strong>Capture controls:</strong> choose which clipboard types to store and exclude selected applications. Text, rich text, PDF, files, URLs, and images remain supported.</li>
+    <li><strong>Future updates:</strong> Sparkle 2 replaces the legacy updater and uses this fork's new update feed. After this manual installation, compatible future releases can use its update, installation, and relaunch flow, with optional pre-release updates.</li>
+  </ul>
+</body>
+</html>

@@ -1,0 +1,53 @@
+[
+  {
+    "id": "11111111-1111-1111-1111-111111111111",
+    "title": "Templates",
+    "isEnabled": true,
+    "snippets": [
+      {
+        "id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        "title": "Greeting",
+        "content": "Hello from fixture",
+        "isEnabled": true
+      },
+      {
+        "id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        "title": "Signature",
+        "content": "Kind regards,\nClipMenu",
+        "isEnabled": true
+      },
+      {
+        "id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+        "title": "Hidden",
+        "content": "You should not see this",
+        "isEnabled": false
+      }
+    ]
+  },
+  {
+    "id": "22222222-2222-2222-2222-222222222222",
+    "title": "Empty Enabled Folder",
+    "isEnabled": true,
+    "snippets": [
+      {
+        "id": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+        "title": "Suppressed Child",
+        "content": "Disabled child",
+        "isEnabled": false
+      }
+    ]
+  },
+  {
+    "id": "33333333-3333-3333-3333-333333333333",
+    "title": "Disabled Folder",
+    "isEnabled": false,
+    "snippets": [
+      {
+        "id": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+        "title": "Invisible",
+        "content": "You should not see this either",
+        "isEnabled": true
+      }
+    ]
+  }
+]
