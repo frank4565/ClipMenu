@@ -11,18 +11,14 @@ private extension UTType {
 }
 
 private func CMSnippetEditorFolderRowIcon() -> NSImage? {
-    let icon = NSWorkspace.shared.icon(
-        forFileType: NSFileTypeForHFSTypeCode(OSType(kGenericFolderIcon))
-    )
+    let icon = CMIconForLegacyHFSType(OSType(kGenericFolderIcon))
     let copiedIcon = icon.copy() as? NSImage
     copiedIcon?.size = NSSize(width: 16, height: 16)
     return copiedIcon
 }
 
 private func CMSnippetEditorSnippetRowIcon() -> NSImage? {
-    let icon = NSWorkspace.shared.icon(
-        forFileType: NSFileTypeForHFSTypeCode(OSType(kClippingTextTypeIcon))
-    )
+    let icon = CMIconForLegacyHFSType(OSType(kClippingTextTypeIcon))
     let copiedIcon = icon.copy() as? NSImage
     copiedIcon?.size = NSSize(width: 16, height: 16)
     return copiedIcon
@@ -715,7 +711,6 @@ final class ClipMenuUndoWindow: NSWindow {
 
 final class PreferencesPresentationState: ObservableObject {
     @Published var selection: PreferenceTab?
-    @Published var contentHeights: [PreferenceTab: CGFloat] = [:]
 
     init() {
         resetForPresentation()
@@ -1330,6 +1325,46 @@ func CMPreferencesRootView(state: PreferencesPresentationState) -> AnyView {
     AnyView(PreferencesView(state: state))
 }
 
+func CMPreferencesPaneView(
+    for tab: PreferenceTab,
+    paneDidAppear: (() -> Void)? = nil,
+    contentHeightDidChange: @escaping (CGFloat) -> Void
+) -> AnyView {
+    AnyView(
+        CMPreferencesPaneContent(for: tab)
+            .frame(width: 760, alignment: .topLeading)
+            .fixedSize(horizontal: false, vertical: tab != .actions)
+            .background {
+                GeometryReader { geometry in
+                    Color.clear
+                        .onAppear { contentHeightDidChange(geometry.size.height) }
+                        .onChange(of: geometry.size.height, perform: contentHeightDidChange)
+                }
+            }
+            .background(Color(NSColor.windowBackgroundColor))
+            .id(tab)
+            .onAppear { paneDidAppear?() }
+    )
+}
+
+@ViewBuilder
+private func CMPreferencesPaneContent(for tab: PreferenceTab) -> some View {
+    switch tab {
+    case .general:
+        GeneralPreferencesView()
+    case .menu:
+        MenuPreferencesView()
+    case .types:
+        TypePreferencesView()
+    case .actions:
+        ActionPreferencesView()
+    case .shortcuts:
+        ShortcutsPreferencesView()
+    case .updates:
+        UpdatePreferencesView()
+    }
+}
+
 func CMCommitPreferencesBeforeWindowClose() {
     RecordingPreferencesStore.shared.applyStoreTypes()
     ActionFileStore.shared.commitPendingChanges()
@@ -1358,47 +1393,22 @@ private struct PreferencesView: View {
     }
 
     private func selectedPane(for selection: PreferenceTab) -> some View {
-        paneContent(for: selection)
-            .frame(width: 760)
-            .fixedSize(horizontal: false, vertical: true)
-            .background {
-                GeometryReader { geometry in
-                    Color.clear
-                        .onAppear { updateContentHeight(geometry.size.height, for: selection) }
-                        .onChange(of: geometry.size.height) { height in
-                            updateContentHeight(height, for: selection)
-                        }
+        Group {
+            if selection == .actions {
+                // Action lists scroll independently inside the available viewport.
+                ActionPreferencesView()
+            } else {
+                ScrollView(.vertical, showsIndicators: true) {
+                    CMPreferencesPaneContent(for: selection)
+                        .frame(width: 760)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .id(selection)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    private func updateContentHeight(_ height: CGFloat, for tab: PreferenceTab) {
-        let height = ceil(height)
-        if height.isFinite, height > 0, state.contentHeights[tab] != height {
-            state.contentHeights[tab] = height
-        }
-    }
-
-    @ViewBuilder
-    private func paneContent(for selection: PreferenceTab) -> some View {
-        switch selection {
-        case .general:
-            GeneralPreferencesView()
-        case .menu:
-            MenuPreferencesView()
-        case .types:
-            TypePreferencesView()
-        case .actions:
-            // The two action collections scroll inside a stable list viewport.
-            ActionPreferencesView()
-                .frame(height: 640)
-        case .shortcuts:
-            ShortcutsPreferencesView()
-        case .updates:
-            UpdatePreferencesView()
-        }
-    }
 }
 
 private struct TypePreferencesView: View {
@@ -1928,6 +1938,12 @@ private struct PasteAutomationPreferencesView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
+            status.refresh()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            status.refresh()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
             status.refresh()
         }
     }
@@ -3832,6 +3848,13 @@ func CMReloadActionPreferences() {
     ActionFileStore.shared.reload()
 }
 
+func CMPreparePreferencesForPresentation() {
+    RecordingPreferencesStore.shared.reload()
+    let actionStore = ActionFileStore.shared
+    actionStore.prepareReservedActions()
+    ActionBehaviorDraft.shared.reload(from: ActionBehaviorOption.options(from: actionStore))
+}
+
 func CMAddActionFolderForTesting() {
     ActionFileStore.shared.addFolder()
 }
@@ -4457,7 +4480,7 @@ private struct ExcludedApplicationsEditorSheet: View {
            let url = runningApp.bundleURL {
             return NSWorkspace.shared.icon(forFile: url.path)
         }
-        return NSWorkspace.shared.icon(forFileType: "app")
+        return NSWorkspace.shared.icon(for: .applicationBundle)
     }
 
 }
@@ -5840,6 +5863,18 @@ private struct MenuIconTypeRow: View {
         .onChange(of: selectionTag) { _ in save() }
         .onChange(of: fileType) { _ in save() }
         .onAppear(perform: normalizeStoredStateIfNeeded)
+        .onReceive(
+            NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+                .receive(on: RunLoop.main)
+        ) { _ in
+            let preference = CMNormalizedMenuIconTypePreference(option: option)
+            if selectionTag != preference.selectionTag {
+                selectionTag = preference.selectionTag
+            }
+            if fileType != preference.fileType {
+                fileType = preference.fileType
+            }
+        }
     }
 
     private var isDefaultMapping: Bool {
@@ -5857,8 +5892,13 @@ private struct MenuIconTypeRow: View {
         if normalizedFileType != fileType {
             fileType = normalizedFileType
         }
-        UserDefaults.standard.set(normalizedSelectionTag, forKey: option.tagKey)
-        UserDefaults.standard.set(normalizedFileType, forKey: option.fileTypeKey)
+        let defaults = UserDefaults.standard
+        if defaults.integer(forKey: option.tagKey) != normalizedSelectionTag {
+            defaults.set(normalizedSelectionTag, forKey: option.tagKey)
+        }
+        if defaults.string(forKey: option.fileTypeKey) != normalizedFileType {
+            defaults.set(normalizedFileType, forKey: option.fileTypeKey)
+        }
     }
 
     private var normalizedSelectionTag: Int {
@@ -6768,7 +6808,8 @@ private final class ActionFileStore: ObservableObject {
         return true
     }
 
-    private func prepareReservedActions() {
+    fileprivate func prepareReservedActions() {
+        let previousSelectionPath = selectedPath(for: selectedReservedNodeID, in: reservedNodes)
         ActionTreePresentationState.shared.snapshotReservedExpansion(for: reservedKind, store: self)
 
         builtinNodes = [
@@ -6780,7 +6821,9 @@ private final class ActionFileStore: ObservableObject {
 
         bundledNodes = bundledActionsURL.map { makeScriptNodes(walking: $0) } ?? []
         usersNodes = makeScriptNodes(walking: userActionsURL)
-        selectedReservedNodeID = selectedReservedNodeID ?? reservedNodes.first?.id
+        selectedReservedNodeID = previousSelectionPath.flatMap {
+            findNode(in: reservedNodes, pathComponents: $0)?.id
+        } ?? reservedNodes.first?.id
         ActionTreePresentationState.shared.restoreReservedExpansion(for: reservedKind, store: self)
     }
 
@@ -7460,7 +7503,7 @@ private struct ActionPreferencesView: View {
             )
         }
         .onAppear {
-            store.reload()
+            store.prepareReservedActions()
             behaviorDraft.reload(from: behaviorOptions)
             inspectorState.activePane = .action
             reconcileExpandedReservedNodeIDs(resetIfEmpty: true)
@@ -10931,7 +10974,7 @@ private struct NativeSnippetFolderBrowser: NSViewRepresentable {
         outlineView.headerView = nil
         outlineView.rowHeight = 20
         outlineView.intercellSpacing = NSSize(width: 3, height: 0)
-        outlineView.selectionHighlightStyle = .sourceList
+        outlineView.style = .sourceList
         outlineView.draggingDestinationFeedbackStyle = .sourceList
         outlineView.focusRingType = .none
         outlineView.backgroundColor = .clear

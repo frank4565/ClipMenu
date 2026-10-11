@@ -97,7 +97,76 @@ final class PreferenceNormalizationTests: XCTestCase {
     }
 #endif
 
-#if TESTING
+#if DEBUG
+    @MainActor
+    func testRememberingSelectedPaneDoesNotReapplyPreferences() {
+        let defaults = UserDefaults.standard
+        let originalSelection = defaults.object(forKey: CMSelectedPreferencePaneKey)
+        defer {
+            if let originalSelection {
+                defaults.set(originalSelection, forKey: CMSelectedPreferencePaneKey)
+            } else {
+                defaults.removeObject(forKey: CMSelectedPreferencePaneKey)
+            }
+        }
+
+        let controller = AppController()
+        let initialGenerations = controller.debugUserDefaultsApplicationGenerations()
+        for tab in PreferenceTab.allCases {
+            defaults.set(tab.rawValue, forKey: CMSelectedPreferencePaneKey)
+            controller.debugUserDefaultsDidChangeForTesting()
+            XCTAssertEqual(defaults.string(forKey: CMSelectedPreferencePaneKey), tab.rawValue)
+            XCTAssertEqual(controller.debugUserDefaultsApplicationGenerations(), initialGenerations)
+        }
+        controller.debugUserDefaultsDidChangeForTesting()
+        XCTAssertEqual(controller.debugUserDefaultsApplicationGenerations(), initialGenerations)
+    }
+
+    @MainActor
+    func testChangedShortcutPreferenceStillAppliesOnce() {
+        let defaults = UserDefaults.standard
+        let keys = [
+            CMPrefHotKeyEnabledKey,
+            CMPrefHistoryHotKeyEnabledKey,
+            CMPrefSnippetsHotKeyEnabledKey,
+            CMPrefHotKeyKeyCodeKey,
+            CMPrefTimeIntervalKey,
+            CMPrefAutosaveDelayKey
+        ]
+        let originals = Dictionary(uniqueKeysWithValues: keys.map { ($0, defaults.object(forKey: $0)) })
+        defer {
+            for (key, value) in originals {
+                if let value {
+                    defaults.set(value, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            }
+        }
+
+        // Exercise the normal application pass without claiming system shortcuts
+        // or starting clipboard/autosave timers in this isolated controller.
+        defaults.set(false, forKey: CMPrefHotKeyEnabledKey)
+        defaults.set(false, forKey: CMPrefHistoryHotKeyEnabledKey)
+        defaults.set(false, forKey: CMPrefSnippetsHotKeyEnabledKey)
+        defaults.set(0.0, forKey: CMPrefTimeIntervalKey)
+        defaults.set(0, forKey: CMPrefAutosaveDelayKey)
+        let controller = AppController()
+        let initialGenerations = controller.debugUserDefaultsApplicationGenerations()
+
+        let nextKeyCode = defaults.integer(forKey: CMPrefHotKeyKeyCodeKey) == kVK_ANSI_V
+            ? kVK_ANSI_B : kVK_ANSI_V
+        defaults.set(nextKeyCode, forKey: CMPrefHotKeyKeyCodeKey)
+        controller.debugUserDefaultsDidChangeForTesting()
+
+        let appliedGenerations = controller.debugUserDefaultsApplicationGenerations()
+        XCTAssertEqual(appliedGenerations["applicationWork"], initialGenerations["applicationWork"].map { $0 + 1 })
+        XCTAssertEqual(appliedGenerations["hotKeyRegistration"], initialGenerations["hotKeyRegistration"].map { $0 + 1 })
+        XCTAssertEqual(defaults.integer(forKey: CMPrefHotKeyKeyCodeKey), nextKeyCode)
+        controller.debugUserDefaultsDidChangeForTesting()
+        XCTAssertEqual(controller.debugUserDefaultsApplicationGenerations(), appliedGenerations)
+    }
+
     @MainActor
     func testUserDefaultsDidChangeNormalizesStoredPreferences() {
         let defaults = UserDefaults.standard
@@ -130,6 +199,7 @@ final class PreferenceNormalizationTests: XCTestCase {
             }
         }
 
+        let controller = AppController()
         defaults.set(-10.0, forKey: CMPrefTimeIntervalKey)
         defaults.set(99, forKey: CMPrefTagOfSeparatorForExportHistoryToFileKey)
         defaults.set("yes", forKey: CMPrefExportHistoryAsSingleFileKey)
@@ -147,13 +217,17 @@ final class PreferenceNormalizationTests: XCTestCase {
         defaults.set(false, forKey: CMEnableAutomaticCheckKey)
         defaults.set(0, forKey: CMUpdateCheckIntervalKey)
 
-        AppController().debugUserDefaultsDidChangeForTesting()
+        controller.debugUserDefaultsDidChangeForTesting()
 
         XCTAssertEqual(defaults.integer(forKey: CMPrefMaxHistorySizeKey), 1)
         XCTAssertEqual(defaults.integer(forKey: CMPrefAutosaveDelayKey), 86_400)
         XCTAssertEqual(defaults.integer(forKey: CMPrefThumbnailWidthKey), 1)
         XCTAssertEqual(defaults.integer(forKey: CMPrefMaxLengthOfToolTipKey), 1)
         XCTAssertEqual(defaults.integer(forKey: CMPrefNumberOfItemsPlaceInlineKey), 0)
+        let appliedGenerations = controller.debugUserDefaultsApplicationGenerations()
+        XCTAssertEqual(appliedGenerations["applicationWork"], 1)
+        controller.debugUserDefaultsDidChangeForTesting()
+        XCTAssertEqual(controller.debugUserDefaultsApplicationGenerations(), appliedGenerations)
     }
 #endif
 }

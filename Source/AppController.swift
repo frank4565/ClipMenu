@@ -2344,6 +2344,11 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     private var snippetEditorController: SwiftUISnippetEditorWindowController?
     private var hotKeyRefs: [UInt32: EventHotKeyRef] = [:]
     private var hotKeyRegistrationGeneration = 0
+    private var lastAppliedUserDefaultsSnapshot: [String: Any] = [:]
+    private var isApplyingUserDefaultsChanges = false
+#if DEBUG || TESTING
+    private var userDefaultsApplicationGeneration = 0
+#endif
     private var hotKeyEventHandler: EventHandlerRef?
     private var actionTarget: ActionTarget?
     private var lastRequestedLoginItemState: Bool?
@@ -2405,6 +2410,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         AppController.migrateLegacyHotKeyDefaultsIfNeeded()
         AppController.migrateLegacyUpdateDefaultsIfNeeded()
         super.init()
+        lastAppliedUserDefaultsSnapshot = effectiveUserDefaultsSnapshot()
         AppController.shared = self
     }
 
@@ -2441,6 +2447,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         }
 #endif
 
+        lastAppliedUserDefaultsSnapshot = effectiveUserDefaultsSnapshot()
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handlePreferencePanelWillClose(_:)),
@@ -5074,9 +5081,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 case "update": expectedSelectedToolbarItemSuffix = "updates"
                 default: expectedSelectedToolbarItemSuffix = expectedSelectedTabRawValue
                 }
-                let frameHeight = window.frame.size.height
-                let contentHeight = window.contentLayoutRect.size.height
-                let layoutHeightWithinExpectedBounds = frameHeight <= 1200 && contentHeight <= 1200
+                let layoutHeightWithinExpectedBounds = window.screen?.visibleFrame.contains(window.frame) == true
                 let appIsActive = currentApplication.isActive || NSApp.isActive
                 report = [
                     "appIsActive": appIsActive,
@@ -11737,26 +11742,14 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         let runtimeFilenamesIcon = fileTypeIcon(for: .clipMenuFilenames)
         let runtimeURLIcon = fileTypeIcon(for: .clipMenuURL)
 
-        let expectedStringIcon = NSWorkspace.shared.icon(
-            forFileType: NSFileTypeForHFSTypeCode(legacyHFSTypeCode(from: "TEXT"))
-        )
-        let expectedRTFIcon = NSWorkspace.shared.icon(
-            forFileType: NSFileTypeForHFSTypeCode(legacyHFSTypeCode(from: "fold"))
-        )
-        let expectedRTFDIcon = NSWorkspace.shared.icon(forFileType: "rtfd")
-        let expectedPDFIcon = NSWorkspace.shared.icon(
-            forFileType: NSFileTypeForHFSTypeCode(legacyHFSTypeCode(from: "PDF "))
-        )
-        let expectedTIFFIcon = NSWorkspace.shared.icon(forFileType: "pdf")
-        let expectedPICTIcon = NSWorkspace.shared.icon(
-            forFileType: NSFileTypeForHFSTypeCode(legacyHFSTypeCode(from: "fold"))
-        )
-        let expectedFilenamesIcon = NSWorkspace.shared.icon(
-            forFileType: NSFileTypeForHFSTypeCode(legacyHFSTypeCode(from: "fold"))
-        )
-        let expectedURLIcon = NSWorkspace.shared.icon(
-            forFileType: NSFileTypeForHFSTypeCode(legacyHFSTypeCode(from: "gurl"))
-        )
+        let expectedStringIcon = CMIconForLegacyHFSType(legacyHFSTypeCode(from: "TEXT"))
+        let expectedRTFIcon = CMIconForLegacyHFSType(legacyHFSTypeCode(from: "fold"))
+        let expectedRTFDIcon = CMIconForFileType("rtfd")
+        let expectedPDFIcon = CMIconForLegacyHFSType(legacyHFSTypeCode(from: "PDF "))
+        let expectedTIFFIcon = CMIconForFileType("pdf")
+        let expectedPICTIcon = CMIconForLegacyHFSType(legacyHFSTypeCode(from: "fold"))
+        let expectedFilenamesIcon = CMIconForLegacyHFSType(legacyHFSTypeCode(from: "fold"))
+        let expectedURLIcon = CMIconForLegacyHFSType(legacyHFSTypeCode(from: "gurl"))
 
         let runtimeStringFingerprint = debugImageFingerprint(runtimeStringIcon)
         let runtimeRTFFingerprint = debugImageFingerprint(runtimeRTFIcon)
@@ -15025,26 +15018,14 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         let runtimePICTIcon = fileTypeIcon(for: .clipMenuPICT)
         let runtimeFilenamesIcon = fileTypeIcon(for: .clipMenuFilenames)
         let runtimeURLIcon = fileTypeIcon(for: .clipMenuURL)
-        let expectedStringIcon = NSWorkspace.shared.icon(
-            forFileType: NSFileTypeForHFSTypeCode(legacyHFSTypeCode(from: "TEXT"))
-        )
-        let expectedRTFIcon = NSWorkspace.shared.icon(
-            forFileType: NSFileTypeForHFSTypeCode(legacyHFSTypeCode(from: "fold"))
-        )
-        let expectedRTFDIcon = NSWorkspace.shared.icon(forFileType: "rtfd")
-        let expectedPDFIcon = NSWorkspace.shared.icon(
-            forFileType: NSFileTypeForHFSTypeCode(legacyHFSTypeCode(from: "PDF "))
-        )
-        let expectedTIFFIcon = NSWorkspace.shared.icon(forFileType: "pdf")
-        let expectedPICTIcon = NSWorkspace.shared.icon(
-            forFileType: NSFileTypeForHFSTypeCode(legacyHFSTypeCode(from: "fold"))
-        )
-        let expectedFilenamesIcon = NSWorkspace.shared.icon(
-            forFileType: NSFileTypeForHFSTypeCode(legacyHFSTypeCode(from: "fold"))
-        )
-        let expectedURLIcon = NSWorkspace.shared.icon(
-            forFileType: NSFileTypeForHFSTypeCode(legacyHFSTypeCode(from: "gurl"))
-        )
+        let expectedStringIcon = CMIconForLegacyHFSType(legacyHFSTypeCode(from: "TEXT"))
+        let expectedRTFIcon = CMIconForLegacyHFSType(legacyHFSTypeCode(from: "fold"))
+        let expectedRTFDIcon = CMIconForFileType("rtfd")
+        let expectedPDFIcon = CMIconForLegacyHFSType(legacyHFSTypeCode(from: "PDF "))
+        let expectedTIFFIcon = CMIconForFileType("pdf")
+        let expectedPICTIcon = CMIconForLegacyHFSType(legacyHFSTypeCode(from: "fold"))
+        let expectedFilenamesIcon = CMIconForLegacyHFSType(legacyHFSTypeCode(from: "fold"))
+        let expectedURLIcon = CMIconForLegacyHFSType(legacyHFSTypeCode(from: "gurl"))
         let runtimeStringFingerprint = debugImageFingerprint(runtimeStringIcon)
         let runtimeRTFFingerprint = debugImageFingerprint(runtimeRTFIcon)
         let runtimeRTFDFingerprint = debugImageFingerprint(runtimeRTFDIcon)
@@ -18710,6 +18691,19 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
     private func applyUserDefaultsChanges() {
+        guard !isApplyingUserDefaultsChanges else { return }
+        let snapshot = effectiveUserDefaultsSnapshot()
+        guard !(snapshot as NSDictionary).isEqual(to: lastAppliedUserDefaultsSnapshot) else { return }
+        isApplyingUserDefaultsChanges = true
+        defer {
+            // Normalization can publish more defaults notifications during this pass.
+            // Remember the final values so those notifications do not repeat the work.
+            lastAppliedUserDefaultsSnapshot = effectiveUserDefaultsSnapshot()
+            isApplyingUserDefaultsChanges = false
+        }
+#if DEBUG || TESTING
+        userDefaultsApplicationGeneration += 1
+#endif
         AppController.migrateLegacyHotKeyDefaultsIfNeeded()
         AppController.migrateLegacyUpdateDefaultsIfNeeded()
         let normalizedObserveInterval = CMNormalizedLegacyObserveInterval(
@@ -18824,7 +18818,24 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         rebuildMenu()
     }
 
-#if TESTING
+    private func effectiveUserDefaultsSnapshot() -> [String: Any] {
+        var snapshot = UserDefaults.standard.dictionaryRepresentation()
+        // Switching panes only remembers presentation state. It does not change
+        // menus, capture behavior, timers, or registered shortcuts.
+        snapshot.removeValue(forKey: CMSelectedPreferencePaneKey)
+        return snapshot
+    }
+
+#if DEBUG || TESTING
+    func debugUserDefaultsApplicationGenerations() -> [String: Int] {
+        [
+            "applicationWork": userDefaultsApplicationGeneration,
+            "hotKeyRegistration": hotKeyRegistrationGeneration
+        ]
+    }
+#endif
+
+#if DEBUG || TESTING
     func debugUserDefaultsDidChangeForTesting() {
         userDefaultsDidChange(Notification(name: UserDefaults.didChangeNotification))
     }
@@ -20340,19 +20351,19 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             defaults.set(fileType, forKey: preference.fileTypeKey)
         }
         if normalizedTag == 1 {
-            return NSWorkspace.shared.icon(forFileType: NSFileTypeForHFSTypeCode(legacyHFSTypeCode(from: fileType)))
+            return CMIconForLegacyHFSType(legacyHFSTypeCode(from: fileType))
         }
-        return NSWorkspace.shared.icon(forFileType: fileType)
+        return CMIconForFileType(fileType)
     }
 
     private func menuFolderIcon(open: Bool = false) -> NSImage {
         let hfsType = open ? kOpenFolderIcon : kGenericFolderIcon
-        let icon = NSWorkspace.shared.icon(forFileType: NSFileTypeForHFSTypeCode(OSType(hfsType)))
+        let icon = CMIconForLegacyHFSType(OSType(hfsType))
         return sizedMenuIcon(icon)
     }
 
     private func menuSnippetIcon() -> NSImage {
-        let icon = NSWorkspace.shared.icon(forFileType: NSFileTypeForHFSTypeCode(OSType(kClippingTextTypeIcon)))
+        let icon = CMIconForLegacyHFSType(OSType(kClippingTextTypeIcon))
         return sizedMenuIcon(icon)
     }
 
@@ -20366,7 +20377,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             }
             return nil
         case "js":
-            return sizedMenuIcon(NSWorkspace.shared.icon(forFileType: "js"))
+            return sizedMenuIcon(CMIconForFileType("js"))
         default:
             return nil
         }

@@ -2,6 +2,30 @@ import AppKit
 import Carbon
 import Combine
 import SwiftUI
+import UniformTypeIdentifiers
+
+func CMIconForLegacyHFSType(_ type: OSType) -> NSImage {
+    guard let fileType = NSFileTypeForHFSTypeCode(type) else {
+        return NSWorkspace.shared.icon(for: .data)
+    }
+    let hfsTag = String(fileType.dropFirst().dropLast())
+    // Resolve the original HFS tag so special icons such as open folders and clippings remain intact.
+    let contentType = UTType(
+        tag: hfsTag,
+        tagClass: UTTagClass(rawValue: "com.apple.ostype"),
+        conformingTo: nil
+    ) ?? .data
+    return NSWorkspace.shared.icon(for: contentType)
+}
+
+func CMIconForFileType(_ fileType: String) -> NSImage {
+    if fileType.count == 6, fileType.first == "'", fileType.last == "'" {
+        return CMIconForLegacyHFSType(NSHFSTypeCodeFromFileType(fileType))
+    }
+    // Existing icon preferences can contain either an extension or a uniform type identifier.
+    let contentType = UTType(fileType) ?? UTType(filenameExtension: fileType) ?? .data
+    return NSWorkspace.shared.icon(for: contentType)
+}
 
 func CMImageHoverPreviewLayout(
     imageSize: NSSize,
@@ -138,22 +162,59 @@ final class ImageHoverPreviewController {
 #endif
 }
 
+func CMPreferencesContentSize(
+    preferredHeight: CGFloat,
+    visibleFrame: NSRect,
+    windowChromeHeight: CGFloat
+) -> NSSize {
+    // Leave room around the window even on smaller or scaled laptop displays.
+    NSSize(
+        width: 760,
+        height: min(ceil(preferredHeight), max(1, floor(visibleFrame.height - windowChromeHeight - 24)))
+    )
+}
+
 final class SwiftUIPreferencesWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate {
+    private final class Pane {
+        let hostingView: NSHostingView<AnyView>
+        let view: NSView
+        let scrollView: NSScrollView?
+        var preferredHeight: CGFloat = 640
+#if DEBUG
+        var naturalSizeMeasurements = 0
+        var appearanceCount = 0
+#endif
+
+        init(hostingView: NSHostingView<AnyView>, scrollView: NSScrollView?) {
+            self.hostingView = hostingView
+            self.scrollView = scrollView
+            self.view = scrollView ?? hostingView
+        }
+    }
+
     static let shared = SwiftUIPreferencesWindowController()
     private static let defaultContentSize = NSSize(width: 760, height: 640)
     private static let toolbarIdentifier = NSToolbar.Identifier("com.naotaka.ClipMenu.preferences")
     private let presentationState = PreferencesPresentationState()
+    private let paneContainer = NSView()
+    private var panes: [PreferenceTab: Pane] = [:]
+    private var presentedTab: PreferenceTab?
+    private var preferredContentHeight: CGFloat = 640
     private var selectionObserver: AnyCancellable?
+    private var screenParametersObserver: AnyCancellable?
+#if DEBUG
+    private var debugVisibleFrame: NSRect?
+#endif
 
     private init() {
-        let controller = NSHostingController(rootView: CMPreferencesRootView(state: presentationState))
-        if #available(macOS 13.0, *) {
-            controller.sizingOptions = []
-        }
-        let window = NSWindow(contentViewController: controller)
+        let window = NSWindow(
+            contentRect: NSRect(origin: .zero, size: Self.defaultContentSize),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
         window.title = presentationState.selection?.title ?? NSLocalizedString("Preferences", comment: "")
-        window.setContentSize(Self.defaultContentSize)
-        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        window.isReleasedWhenClosed = false
         window.collectionBehavior = [.canJoinAllSpaces]
         window.titleVisibility = .visible
         window.titlebarAppearsTransparent = false
@@ -170,20 +231,24 @@ final class SwiftUIPreferencesWindowController: NSWindowController, NSWindowDele
         toolbar.sizeMode = .regular
         window.toolbar = toolbar
         window.setContentSize(Self.defaultContentSize)
-        window.contentMinSize = Self.defaultContentSize
-        window.contentMaxSize = Self.defaultContentSize
-        updateWindowChrome(for: presentationState.selection ?? .general)
+        window.contentView = paneContainer
+        preparePanes()
         window.standardWindowButton(.miniaturizeButton)?.isEnabled = false
         window.standardWindowButton(.zoomButton)?.isEnabled = false
 
         window.delegate = self
         selectionObserver = presentationState.$selection
-            .combineLatest(presentationState.$contentHeights)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] tab, contentHeights in
+            .sink { [weak self] tab in
                 guard let tab else { return }
-                self?.updateWindowChrome(for: tab, contentHeight: contentHeights[tab])
+                self?.presentPane(for: tab)
             }
+        screenParametersObserver = NotificationCenter.default.publisher(
+            for: NSApplication.didChangeScreenParametersNotification
+        )
+        .receive(on: RunLoop.main)
+        .sink { [weak self] _ in
+            self?.fitWindowToScreen()
+        }
     }
 
     required init?(coder: NSCoder) {
@@ -191,7 +256,11 @@ final class SwiftUIPreferencesWindowController: NSWindowController, NSWindowDele
     }
 
     override func showWindow(_ sender: Any?) {
+        if window?.isVisible != true {
+            CMPreparePreferencesForPresentation()
+        }
         presentationState.resetForPresentation()
+        fitWindowToScreen()
         window?.center()
         CMForegroundWindowActivationPolicyBridge.retainRegularActivationPolicy()
         super.showWindow(sender)
@@ -231,6 +300,10 @@ final class SwiftUIPreferencesWindowController: NSWindowController, NSWindowDele
         NotificationCenter.default.post(name: .CMPreferencePanelWillClose, object: nil)
     }
 
+    func windowDidChangeScreen(_ notification: Notification) {
+        fitWindowToScreen()
+    }
+
 #if DEBUG
     func debugSelectedTabTitle() -> String? {
         presentationState.selection?.title
@@ -238,6 +311,21 @@ final class SwiftUIPreferencesWindowController: NSWindowController, NSWindowDele
 
     func debugSelectTab(rawValue: String) {
         presentationState.selection = CMPreferenceTab(debugRawValue: rawValue)
+    }
+
+    func debugSetVisibleFrame(_ frame: NSRect?) {
+        debugVisibleFrame = frame
+        fitWindowToScreen()
+    }
+
+    func debugPaneCacheSnapshot() -> [String: [String: Int]] {
+        Dictionary(uniqueKeysWithValues: panes.map { tab, pane in
+            (tab.rawValue, [
+                "hostingViewIdentity": ObjectIdentifier(pane.hostingView).hashValue,
+                "naturalSizeMeasurements": pane.naturalSizeMeasurements,
+                "appearanceCount": pane.appearanceCount
+            ])
+        })
     }
 #endif
 
@@ -277,35 +365,143 @@ final class SwiftUIPreferencesWindowController: NSWindowController, NSWindowDele
         guard let tab = PreferenceTab.allCases.first(where: { $0.toolbarItemIdentifier == sender.itemIdentifier }) else {
             return
         }
+        if let window, !window.makeFirstResponder(window) {
+            return
+        }
         presentationState.selection = tab
     }
 
-    private func updateWindowChrome(for tab: PreferenceTab, contentHeight: CGFloat? = nil) {
-        window?.title = tab.title
-        window?.toolbar?.selectedItemIdentifier = tab.toolbarItemIdentifier
-        UserDefaults.standard.set(tab.rawValue, forKey: CMSelectedPreferencePaneKey)
-
-        guard let window else { return }
-        var contentSize = Self.defaultContentSize
-        if let contentHeight {
-            contentSize.height = contentHeight
+    private func preparePanes() {
+        // Keep every pane attached to the same window. Switching tabs can then reveal
+        // existing controls without rebuilding their SwiftUI graph or reloading stores.
+        for tab in PreferenceTab.allCases {
+            let hostingView = NSHostingView(rootView: CMPreferencesPaneView(
+                for: tab,
+                paneDidAppear: { [weak self] in
+#if DEBUG
+                    self?.panes[tab]?.appearanceCount += 1
+#endif
+                },
+                contentHeightDidChange: { [weak self] height in
+                    self?.scheduleContentHeightUpdate(height, for: tab)
+                }
+            ))
+            if #available(macOS 13.0, *) {
+                hostingView.sizingOptions = tab == .actions ? [] : [.intrinsicContentSize]
+            }
+            let scrollView: NSScrollView?
+            if tab == .actions {
+                scrollView = nil
+                hostingView.autoresizingMask = [.width, .height]
+            } else {
+                let scrollingView = NSScrollView()
+                scrollingView.hasVerticalScroller = true
+                scrollingView.hasHorizontalScroller = false
+                scrollingView.autohidesScrollers = true
+                scrollingView.scrollerStyle = .overlay
+                scrollingView.drawsBackground = false
+                scrollingView.borderType = .noBorder
+                scrollingView.horizontalScrollElasticity = .none
+                scrollingView.verticalScrollElasticity = .automatic
+                hostingView.setFrameSize(Self.defaultContentSize)
+                scrollingView.documentView = hostingView
+                scrollView = scrollingView
+            }
+            let pane = Pane(hostingView: hostingView, scrollView: scrollView)
+            panes[tab] = pane
+            pane.view.frame = paneContainer.bounds
+            // Inactive panes retain their viewport instead of relaying out on every
+            // window resize. Only the selected pane needs the new viewport below.
+            pane.view.autoresizingMask = []
+            pane.view.isHidden = true
+            paneContainer.addSubview(pane.view)
+            if tab != .actions {
+                let height = ceil(hostingView.fittingSize.height)
+#if DEBUG
+                pane.naturalSizeMeasurements += 1
+#endif
+                if height.isFinite, height > 0 {
+                    pane.preferredHeight = height
+                }
+                hostingView.setFrameSize(NSSize(width: 760, height: pane.preferredHeight))
+            }
+            hostingView.layoutSubtreeIfNeeded()
         }
-        guard let currentSize = window.contentView?.frame.size,
-              currentSize != contentSize else { return }
+    }
 
-        // Allow the programmatic resize, keeping the toolbar in place as the
-        // bottom edge follows the selected pane's content height.
+    private func presentPane(for tab: PreferenceTab) {
+        guard let window, let pane = panes[tab] else { return }
+        if let previousTab = presentedTab, previousTab != tab {
+            panes[previousTab]?.view.isHidden = true
+        }
+        presentedTab = tab
+        preferredContentHeight = pane.preferredHeight
+        window.title = tab.title
+        window.toolbar?.selectedItemIdentifier = tab.toolbarItemIdentifier
+        fitWindowToScreen()
+        pane.view.isHidden = false
+        if let scrollView = pane.scrollView {
+            scrollView.contentView.scroll(to: .zero)
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+        }
+        if UserDefaults.standard.string(forKey: CMSelectedPreferencePaneKey) != tab.rawValue {
+            UserDefaults.standard.set(tab.rawValue, forKey: CMSelectedPreferencePaneKey)
+        }
+    }
+
+    private func scheduleContentHeightUpdate(_ height: CGFloat, for tab: PreferenceTab) {
+        guard tab != .actions, height.isFinite, height > 0 else { return }
+        // Hidden panes stay live too: keep their height ready for the next click,
+        // but only resize the window when its visible pane actually changes height.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let pane = self.panes[tab] else { return }
+            let height = ceil(height)
+            guard pane.preferredHeight != height else { return }
+            pane.preferredHeight = height
+            pane.hostingView.setFrameSize(NSSize(width: 760, height: height))
+            guard self.presentedTab == tab else { return }
+            self.preferredContentHeight = height
+            self.fitWindowToScreen()
+        }
+    }
+
+    private func fitWindowToScreen() {
+        guard let window, let currentSize = window.contentView?.frame.size,
+              let screen = window.screen ?? NSScreen.main else { return }
+        var screenFrame = screen.visibleFrame
+#if DEBUG
+        screenFrame = debugVisibleFrame ?? screenFrame
+#endif
+        let contentSize = CMPreferencesContentSize(
+            preferredHeight: preferredContentHeight,
+            visibleFrame: screenFrame,
+            windowChromeHeight: window.frame.height - currentSize.height
+        )
+
+        // Apply size and position together without animation, keeping the toolbar in place.
         let topLeft = NSPoint(x: window.frame.minX, y: window.frame.maxY)
-        window.contentMinSize = NSSize(width: contentSize.width, height: min(currentSize.height, contentSize.height))
-        window.contentMaxSize = NSSize(width: contentSize.width, height: max(currentSize.height, contentSize.height))
-        window.setContentSize(contentSize)
-        var fittedTopLeft = topLeft
-        if let screenFrame = window.screen?.visibleFrame {
-            fittedTopLeft.y = min(screenFrame.maxY, max(topLeft.y, screenFrame.minY + window.frame.height))
+        let frameSize = window.frameRect(forContentRect: NSRect(origin: .zero, size: contentSize)).size
+        let insetFrame = screenFrame.insetBy(dx: 12, dy: 12)
+        let fittedTopLeft = NSPoint(
+            x: min(max(topLeft.x, insetFrame.minX), insetFrame.maxX - frameSize.width),
+            y: min(insetFrame.maxY, max(topLeft.y, insetFrame.minY + frameSize.height))
+        )
+        let frame = NSRect(
+            origin: NSPoint(x: fittedTopLeft.x, y: fittedTopLeft.y - frameSize.height),
+            size: frameSize
+        )
+        if window.frame != frame {
+            window.contentMinSize = NSSize(width: contentSize.width, height: min(currentSize.height, contentSize.height))
+            window.contentMaxSize = NSSize(width: contentSize.width, height: max(currentSize.height, contentSize.height))
+            // Geometry changes immediately; draw the newly revealed pane in the
+            // normal display pass instead of forcing a redraw during the click.
+            window.setFrame(frame, display: false, animate: false)
         }
-        window.setFrameTopLeftPoint(fittedTopLeft)
         window.contentMinSize = contentSize
         window.contentMaxSize = contentSize
+        if let presentedTab, let pane = panes[presentedTab] {
+            pane.view.frame = paneContainer.bounds
+        }
     }
 }
 
