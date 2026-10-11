@@ -159,6 +159,16 @@ This is a confirmed application-work delay. The log never reaches paste posting,
 
 The affected-machine result is the user's beta 4 confirmation, alongside the 111 passing local regressions. Mouse selection, hotkey-menu selection, TextEdit, and the other extended cases were not separately reported in that confirmation and remain additional coverage.
 
+## 0.5.2 release validation
+
+The stable release uses version `0.5.2`, build `6.2.99`, with the production app source and principal-class setting unchanged from the user-confirmed beta 4. The local production candidate built from clean commit `0127a3c0173cc5845c68725c97876985849d8954` passed universal architecture, ad-hoc and nested signature, bundle version, license, and extracted-package checks. Its normal Info.plist does not enable menu-paste diagnostics. All 27 release-helper tests passed, including the official Sparkle signing round trip with a fixed test key.
+
+The initial hosted Validate runs (`38152977292` and `38152989069`) passed Debug compilation but failed three scheduling tests. Two assumed one embedded CF wait would last until a 10 ms background trigger; on the hosted runner, a wait could finish or stop after 4–5 ms. The AppKit event-wait test could instead accept a delayed private wake from an earlier test while its own callback had not run.
+
+The test harness now keeps bounded waits in the same requested mode, uses a nonfiring keep-alive timer, and identifies the delayed AppKit probe by its exact callback ID under a lock. Main-thread, deadline, and exactly-once assertions remain. This correction changes test synchronization only and sends no keyboard or mouse input. Final hosted results are recorded in the checks on [PR #4](https://github.com/frank4565/ClipMenu/pull/4).
+
+The corrected full local suite passed **111 tests with no failures** (`build/release-0.5.2-unit-final.log`), including deliberate early stops and an already-claimed stale wake event in the affected regressions.
+
 ## MacBook Air follow-up
 
 Quit the existing app before replacing it with the test app. Confirm **0.5.2-beta.4** in About and **Granted** for Accessibility in General. This package is for validation of the revised source and has bounded diagnostics enabled.
