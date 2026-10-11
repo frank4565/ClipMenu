@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClipMenu 0.5.2 release notes</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 13px/1.55 -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 15px; margin-top: 22px; }
+    li + li { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>ClipMenu 0.5.2</h1>
+  <p>This patch fixes Command-number menu selection and delayed automatic paste. It supports Intel and Apple silicon Macs running macOS 12 or later.</p>
+
+  <h2>Updating</h2>
+  <p>ClipMenu 0.5.0 and 0.5.1 users can update through Sparkle normally. When upgrading from an older Objective-C version, quit ClipMenu and install this release manually; the original updater uses a different feed and trust key.</p>
+  <p>The app continues to use a local ad-hoc code signature, without Apple Developer ID signing or notarization. Published update ZIPs use separate Sparkle Ed25519 signatures.</p>
+
+  <h2>What changed</h2>
+  <ul>
+    <li><strong>Menu shortcuts and paste:</strong> Command-number shortcuts select the corresponding item and close the menu. With automatic paste enabled and Accessibility permission granted, the selected item pastes into the destination without requiring another keyboard event.</li>
+    <li><strong>History capture:</strong> selecting an existing history item no longer captures that same clipboard write again, avoiding redundant history saves and menu rebuilds. Later external copies, snippets, and action results remain eligible for normal history capture.</li>
+    <li><strong>Background work:</strong> history encoding and writes run in the background, and clipboard polling and menu rebuilding wait for an active paste to finish. Existing clip identifiers and saved-history formats are preserved; final saving at quit is ordered after pending writes.</li>
+  </ul>
+
+  <h2>Validation</h2>
+  <p>The unit suite passed 111 tests with no failures. The user confirmed the beta 4 fix on the affected MacBook Air running macOS 27.0.1, selecting with Command–1 and automatically pasting into Safari's address bar.</p>
+</body>
+</html>

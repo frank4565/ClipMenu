@@ -150,6 +150,178 @@ private struct PasteAutomationAccessState {
     }
 }
 
+func CMMakePasteKeyboardEvents(keyCode: CGKeyCode) -> [CGEvent]? {
+    guard let source = CGEventSource(stateID: .combinedSessionState) else { return nil }
+    let keys: [(CGKeyCode, Bool, CGEventFlags)] = [
+        (CGKeyCode(kVK_Command), true, .maskCommand),
+        (keyCode, true, .maskCommand),
+        (keyCode, false, .maskCommand),
+        (CGKeyCode(kVK_Command), false, [])
+    ]
+    var events: [CGEvent] = []
+    for (key, isDown, flags) in keys {
+        guard let event = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: isDown) else { return nil }
+        event.flags = flags
+        events.append(event)
+    }
+    return events
+}
+
+func CMCanDispatchPaste(
+    targetProcessIdentifier: pid_t?,
+    frontmostProcessIdentifier: pid_t?,
+    clipMenuProcessIdentifier: pid_t,
+    modifiersReleased: Bool,
+    menuIsTracking: Bool,
+    requestDeadline: TimeInterval = .infinity,
+    now: TimeInterval = ProcessInfo.processInfo.systemUptime
+) -> Bool {
+    guard now < requestDeadline, !menuIsTracking, modifiersReleased,
+          let targetProcessIdentifier,
+          let frontmostProcessIdentifier,
+          frontmostProcessIdentifier != clipMenuProcessIdentifier else { return false }
+    return targetProcessIdentifier == frontmostProcessIdentifier
+}
+
+private let CMAppKitWorkWakeSubtype: Int16 = 0x434D
+private let CMAppKitWorkWakeMarker = 0x434D5057
+private let CMAppKitWakeQueue = DispatchQueue(label: "com.naotaka.ClipMenu.appkit-wake", qos: .userInitiated)
+private let CMAppKitWorkLock = NSLock()
+private var CMAppKitWorkNextIdentifier = 0
+private var CMAppKitPendingWork: [Int: () -> Void] = [:]
+
+private func CMRegisterAppKitWork(_ work: @escaping () -> Void) -> Int {
+    CMAppKitWorkLock.lock()
+    defer { CMAppKitWorkLock.unlock() }
+    CMAppKitWorkNextIdentifier = CMAppKitWorkNextIdentifier == Int.max ? 1 : CMAppKitWorkNextIdentifier + 1
+    let identifier = CMAppKitWorkNextIdentifier
+    CMAppKitPendingWork[identifier] = work
+    return identifier
+}
+
+private func CMTakeAppKitWork(identifier: Int) -> (() -> Void)? {
+    CMAppKitWorkLock.lock()
+    let work = CMAppKitPendingWork.removeValue(forKey: identifier)
+    CMAppKitWorkLock.unlock()
+    // The registry is the one-shot gate. Claiming or expiring a callback removes
+    // its only retained copy before either delivery path can execute it again.
+    return work
+}
+
+func CMMakeAppKitWorkWakeEvent(identifier: Int) -> NSEvent? {
+    NSEvent.otherEvent(with: .applicationDefined, location: .zero, modifierFlags: [],
+                      timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: 0, context: nil,
+                      subtype: CMAppKitWorkWakeSubtype, data1: CMAppKitWorkWakeMarker, data2: identifier)
+}
+
+private func CMDeliverAppKitWork(identifier: Int, source: String) {
+    precondition(Thread.isMainThread)
+    guard let work = CMTakeAppKitWork(identifier: identifier) else { return }
+    CMTraceMenuPaste("app-work.run id=\(identifier) source=\(source)")
+    work()
+}
+
+func CMHandleAppKitWorkWakeEvent(_ event: NSEvent) -> Bool {
+    guard event.type == .applicationDefined,
+          event.subtype.rawValue == CMAppKitWorkWakeSubtype,
+          event.data1 == CMAppKitWorkWakeMarker else { return false }
+    CMTraceMenuPaste("app-wake.received id=\(event.data2)")
+    CMDeliverAppKitWork(identifier: event.data2, source: "appkit-event")
+    return true
+}
+
+@objc(CMApplication)
+final class CMApplication: NSApplication {
+    override func sendEvent(_ event: NSEvent) {
+        guard !CMHandleAppKitWorkWakeEvent(event) else { return }
+        super.sendEvent(event)
+    }
+}
+
+@discardableResult
+func CMPerformAfterMenuTracking(expiresAfter lifetime: TimeInterval = 2.5, _ work: @escaping () -> Void) -> Int {
+    let identifier = CMRegisterAppKitWork(work)
+    let runLoop = CFRunLoopGetMain()
+    let currentMode = CFRunLoopCopyCurrentMode(runLoop) ?? CFRunLoopMode.defaultMode!
+    CMTraceMenuPaste("app-work.enqueued id=\(identifier) mainMode=\(currentMode.rawValue) mainWaiting=\(CFRunLoopIsWaiting(runLoop))")
+    // AppKit's event wait can outlive a CF wakeup after a popup closes. Deliver
+    // through its own event queue, while preserving the CF path for nested modes.
+    // Both paths claim the same one-shot registry entry and run only on main.
+    let modes = [currentMode.rawValue, CFRunLoopMode.commonModes.rawValue] as CFArray
+    CFRunLoopPerformBlock(runLoop, modes) {
+        CMDeliverAppKitWork(identifier: identifier, source: "cf-fallback")
+    }
+    CFRunLoopWakeUp(runLoop)
+    let application = NSApp
+    CMAppKitWakeQueue.async {
+        guard let application, let event = CMMakeAppKitWorkWakeEvent(identifier: identifier) else { return }
+        // Posting from a run-loop observer on main can reenter AppKit before the
+        // captured-mode CF block runs. Always use its documented subthread path.
+        // Keep native posting separate from readiness and callback expiry, so
+        // an event-queue lock wait cannot defer those independent deadlines.
+        // This app-local event does not simulate input or activate any application.
+        application.postEvent(event, atStart: false)
+        CMTraceMenuPaste("app-wake.posted id=\(identifier)")
+    }
+    CMPasteReadinessQueue.asyncAfter(deadline: .now() + min(2.5, max(0, lifetime))) {
+        if CMTakeAppKitWork(identifier: identifier) != nil {
+            CMTraceMenuPaste("app-work.expired id=\(identifier)")
+        }
+    }
+    return identifier
+}
+
+private let CMPasteReadinessQueue = DispatchQueue(label: "com.naotaka.ClipMenu.paste-readiness", qos: .userInitiated)
+
+func CMTriggerPasteReadinessAfterDelay(_ delay: TimeInterval, _ work: @escaping () -> Void) {
+    // A background deadline must wake the inactive menu-bar application's main
+    // loop; waiting for an AppKit timer can defer the check until another input.
+    CMPasteReadinessQueue.asyncAfter(deadline: .now() + max(0, delay), execute: work)
+}
+
+func CMSchedulePasteReadinessCheck(after delay: TimeInterval, _ work: @escaping () -> Void) {
+    let due = ProcessInfo.processInfo.systemUptime + max(0, delay)
+    CMTraceMenuPaste(String(format: "paste-readiness.scheduled due=%.3f", due))
+    CMTriggerPasteReadinessAfterDelay(delay) {
+        CMTraceMenuPaste(String(format: "paste-readiness.due lateMs=%.1f", (ProcessInfo.processInfo.systemUptime - due) * 1000))
+        CMTraceMenuPaste("paste-readiness.enqueued")
+        // Snapshot the main loop's mode when the background deadline fires.
+        // AppKit state checks and key posting continue exclusively on main.
+        CMPerformAfterMenuTracking {
+            CMTraceMenuPaste(String(format: "paste-readiness.main-fired lateMs=%.1f", (ProcessInfo.processInfo.systemUptime - due) * 1000))
+            work()
+        }
+    }
+}
+
+private let CMMenuPasteDiagnosticQueue = DispatchQueue(label: "com.naotaka.ClipMenu.menu-paste-diagnostics")
+
+// Enabled only in a diagnostic package or explicitly through launch defaults.
+// Callers provide stages, key codes and process IDs, never clipboard contents.
+func CMTraceMenuPaste(_ stage: String) {
+    guard Bundle.main.object(forInfoDictionaryKey: "CMMenuPasteDiagnostics") as? Bool == true
+            || UserDefaults.standard.bool(forKey: "menuPasteDiagnostics") else { return }
+    let mode = CFRunLoopCopyCurrentMode(CFRunLoopGetCurrent()).map { $0.rawValue as String } ?? "none"
+    let line = String(format: "%.3f pid=%d mode=%@ %@\n",
+                      ProcessInfo.processInfo.systemUptime, getpid(), mode, stage)
+    CMMenuPasteDiagnosticQueue.async {
+        let directory = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Logs/ClipMenu", isDirectory: true)
+        guard (try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)) != nil else { return }
+        let url = directory.appendingPathComponent("menu-paste.log")
+        let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.intValue ?? 0
+        if size > 262_144 { try? FileManager.default.removeItem(at: url) }
+        let data = Data(line.utf8)
+        if let handle = try? FileHandle(forWritingTo: url) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: data)
+        } else {
+            try? data.write(to: url, options: .atomic)
+        }
+    }
+}
+
 private final class StatusMenuCommandRouter: NSObject {
     weak var appController: AppController?
 
@@ -887,7 +1059,8 @@ struct ClipItem: Codable, Identifiable, Equatable {
         }
     }
 
-    func write(to pasteboard: NSPasteboard) {
+    @discardableResult
+    func write(to pasteboard: NSPasteboard) -> Int {
         let originalPasteboardTypes = types.map { NSPasteboard.PasteboardType($0) }
         var pasteboardTypes = originalPasteboardTypes
         let shouldWriteStringFallback = !text.isEmpty
@@ -897,7 +1070,7 @@ struct ClipItem: Codable, Identifiable, Equatable {
             pasteboardTypes.append(.string)
         }
         pasteboard.clearContents()
-        pasteboard.declareTypes(pasteboardTypes, owner: nil)
+        let ownershipGeneration = pasteboard.declareTypes(pasteboardTypes, owner: nil)
 
         for type in pasteboardTypes {
             switch type {
@@ -932,6 +1105,7 @@ struct ClipItem: Codable, Identifiable, Equatable {
                 break
             }
         }
+        return ownershipGeneration
     }
 
     static let availablePasteboardTypes: [NSPasteboard.PasteboardType] = [
@@ -2334,13 +2508,19 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         }
     }
 
-    private let pasteboard = NSPasteboard.general
+    private let pasteboard: NSPasteboard
     private var statusItem: NSStatusItem?
     private var statusItemIconTag: Int?
     private let clipsStore = ClipStore()
     private var pollingTimer: Timer?
     private var autosaveTimer: Timer?
-    private var lastChangeCount = NSPasteboard.general.changeCount
+    private var historyAutosaveIsPending = false
+    private var lastChangeCount: Int
+    private var deferredMenuRebuildRequired = false
+#if DEBUG
+    private var debugMenuRebuildGeneration = 0
+    private var debugClipboardCaptureGeneration = 0
+#endif
     private var snippetEditorController: SwiftUISnippetEditorWindowController?
     private var hotKeyRefs: [UInt32: EventHotKeyRef] = [:]
     private var hotKeyRegistrationGeneration = 0
@@ -2362,6 +2542,19 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     private var lastExternalFrontmostApplication: NSRunningApplication?
     private var popupWindow: NSWindow?
     private var popupInteractionMonitor: Any?
+    private var popupNumericKeyEventTap: CFMachPort?
+    private var popupNumericKeyRunLoopSource: CFRunLoopSource?
+    private var popupNumericKeyReleaseTimer: Timer?
+    private var popupNumericShortcutItems: [String: NSMenuItem] = [:]
+    private var popupNumericShortcutRoot: NSMenu?
+    private var popupNumericDispatchGeneration = 0
+    private var popupNumericSelectionPending = false
+    private var popupNumericConsumedKeyCodes: Set<CGKeyCode> = []
+    private var trackedPopupMenus: [NSMenu] = []
+    private var isDispatchingPopupKeyEquivalent = false
+#if DEBUG || TESTING
+    private var debugNumericPopupKeyHandledCount = 0
+#endif
     private var popupInteractionEventTap: CFMachPort?
     private var popupInteractionRunLoopSource: CFRunLoopSource?
     private var lastPopupInteractionFlags: NSEvent.ModifierFlags = []
@@ -2370,7 +2563,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     private var debugCapturePopupMenus = false
     private var debugCapturedPopupMenuSummaries: [[String: Any]] = []
 #endif
-#if TESTING
+#if DEBUG || TESTING
     private var debugDirectPasteSynthesisBypassCount = 0
 #endif
 #if DEBUG
@@ -2380,6 +2573,11 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     private var debugQuitMenuItemReportDidWrite = false
 #endif
     private let pasteDispatchQueue = DispatchQueue(label: "com.naotaka.ClipMenu.paste-dispatch")
+    private let pasteRequestLock = NSLock()
+    private var pasteRequestGeneration = 0
+    private var pasteActivity: NSObjectProtocol?
+    private var pasteActivityGeneration: Int?
+    private let pasteActivityExpiryQueue = DispatchQueue(label: "com.naotaka.ClipMenu.paste-activity-expiry", qos: .userInitiated)
     private weak var highlightedFolderMenuItem: NSMenuItem?
     private let imageHoverPreviewController = ImageHoverPreviewController()
     private weak var imageHoverPreviewMenu: NSMenu?
@@ -2399,19 +2597,30 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }()
 
     static func main() {
-        let app = NSApplication.shared
+        let app = CMApplication.shared
         let delegate = AppController()
         app.delegate = delegate
         app.run()
     }
 
-    override init() {
+    override convenience init() {
+        self.init(pasteboard: .general)
+    }
+
+    init(pasteboard: NSPasteboard) {
+        self.pasteboard = pasteboard
+        lastChangeCount = pasteboard.changeCount
         AppController.registerDefaults()
         AppController.migrateLegacyHotKeyDefaultsIfNeeded()
         AppController.migrateLegacyUpdateDefaultsIfNeeded()
         super.init()
         lastAppliedUserDefaultsSnapshot = effectiveUserDefaultsSnapshot()
         AppController.shared = self
+    }
+
+    deinit {
+        finishPasteActivity(reason: "deinit")
+        removePopupNumericKeyEventTap()
     }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
@@ -2421,6 +2630,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let diagnosticVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+        CMTraceMenuPaste("launch version=\(diagnosticVersion) ax=\(AXIsProcessTrusted()) post=\(CGPreflightPostEventAccess()) appClass=\(NSStringFromClass(type(of: NSApp!)))")
         configureStatusItem()
 #if DEBUG
         applyDebugPreferenceOverridesIfNeeded()
@@ -2627,6 +2838,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        finishPasteActivity(reason: "termination")
 #if DEBUG
         if debugQuitMenuItemReportURL != nil {
             debugQuitMenuItemReport["applicationWillTerminateCalled"] = true
@@ -2634,6 +2846,11 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         }
 #endif
         unregisterHotKey()
+        for menu in trackedPopupMenus.filter({ $0.supermenu == nil }) {
+            stopTrackingPopupMenu(menu)
+        }
+        removePopupNumericKeyEventTap()
+        endTrackingPopupInteraction()
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         pollingTimer?.invalidate()
         autosaveTimer?.invalidate()
@@ -18420,6 +18637,15 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         return clipsStore.saveIfNeeded()
     }
 
+    private func persistCapturedHistoryAsynchronouslyIfPreferred() {
+        guard UserDefaults.standard.bool(forKey: CMPrefSaveHistoryOnQuitKey) else { return }
+        clipsStore.saveIfNeededAsync { saved in
+            if !saved {
+                NSLog("Could not immediately save captured clipboard history; will retry on autosave or quit.")
+            }
+        }
+    }
+
     @discardableResult
     private func persistHistoryForTermination() -> Bool {
         if UserDefaults.standard.bool(forKey: CMPrefSaveHistoryOnQuitKey) {
@@ -18694,6 +18920,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         guard !isApplyingUserDefaultsChanges else { return }
         let snapshot = effectiveUserDefaultsSnapshot()
         guard !(snapshot as NSDictionary).isEqual(to: lastAppliedUserDefaultsSnapshot) else { return }
+        let traceStarted = ProcessInfo.processInfo.systemUptime
+        CMTraceMenuPaste("main.defaults.begin")
+        defer { CMTraceMenuPaste(String(format: "main.defaults.end elapsedMs=%.1f", (ProcessInfo.processInfo.systemUptime - traceStarted) * 1000)) }
         isApplyingUserDefaultsChanges = true
         defer {
             // Normalization can publish more defaults notifications during this pass.
@@ -18919,6 +19148,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         }
         enforceLegacyMainMenuTitles()
         rememberPasteTargetApplicationForMenuOpen()
+        trackPopupMenuIfNeeded(menu)
     }
 
     func menuDidClose(_ menu: NSMenu) {
@@ -18931,7 +19161,277 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             previewMenu = current.supermenu
         }
         unhighlightFolderMenuItem()
+        stopTrackingPopupMenu(menu)
     }
+
+    private func popupRootMenu(for menu: NSMenu) -> NSMenu {
+        var root = menu
+        while let parent = root.supermenu {
+            root = parent
+        }
+        return root
+    }
+
+    private func trackPopupMenuIfNeeded(_ menu: NSMenu) {
+        let root = popupRootMenu(for: menu)
+        guard ["ClipMenu", "HistoryMenu", "SnippetsMenu", "ActionMenu"].contains(root.title),
+              !trackedPopupMenus.contains(where: { $0 === menu }) else { return }
+        if trackedPopupMenus.isEmpty {
+            lastPopupInteractionFlags = []
+            lastPopupInteractionType = nil
+        }
+        trackedPopupMenus.append(menu)
+        popupNumericKeyReleaseTimer?.invalidate()
+        popupNumericKeyReleaseTimer = nil
+        if popupNumericShortcutRoot !== root {
+            popupNumericDispatchGeneration &+= 1
+            popupNumericSelectionPending = false
+            popupNumericShortcutRoot = root
+        }
+        popupNumericShortcutItems = numericPopupShortcutItems(in: root)
+        CMTraceMenuPaste("menu.open tracked=\(trackedPopupMenus.count) numericItems=\(popupNumericShortcutItems.count)")
+        installPopupNumericKeyEventTap()
+    }
+
+    private func stopTrackingPopupMenu(_ menu: NSMenu) {
+        trackedPopupMenus.removeAll { candidate in
+            var current: NSMenu? = candidate
+            while let ancestor = current {
+                if ancestor === menu { return true }
+                current = ancestor.supermenu
+            }
+            return false
+        }
+        if let root = popupNumericShortcutRoot,
+           !trackedPopupMenus.contains(where: { $0 === root }) {
+            popupNumericDispatchGeneration &+= 1
+            popupNumericSelectionPending = false
+            popupNumericShortcutRoot = trackedPopupMenus.last(where: { $0.supermenu == nil })
+            popupNumericShortcutItems = popupNumericShortcutRoot.map { numericPopupShortcutItems(in: $0) } ?? [:]
+        }
+        CMTraceMenuPaste("menu.close tracked=\(trackedPopupMenus.count) pendingKeyUps=\(popupNumericConsumedKeyCodes.count)")
+        finishPopupNumericKeyEventTapIfIdle()
+    }
+
+    private func numericPopupShortcutItems(in menu: NSMenu) -> [String: NSMenuItem] {
+        var matches: [String: NSMenuItem] = [:]
+        func collect(from menu: NSMenu) {
+            for item in menu.items where item.isEnabled && !item.isHidden && !item.isSeparatorItem {
+                if let submenu = item.submenu {
+                    collect(from: submenu)
+                } else if item.action != nil,
+                          item.keyEquivalentModifierMask.normalizedShortcutFlags == [.command],
+                          item.keyEquivalent.count == 1,
+                          "0123456789".contains(item.keyEquivalent),
+                          matches[item.keyEquivalent] == nil {
+                    matches[item.keyEquivalent] = item
+                }
+            }
+        }
+        collect(from: menu)
+        return matches
+    }
+
+    private func installPopupNumericKeyEventTap() {
+        guard popupNumericKeyEventTap == nil else { return }
+        let mask = (CGEventMask(1) << CGEventType.keyDown.rawValue)
+            | (CGEventMask(1) << CGEventType.keyUp.rawValue)
+        let callback: CGEventTapCallBack = { _, type, event, userInfo in
+            guard let userInfo else { return Unmanaged.passUnretained(event) }
+            let controller = Unmanaged<AppController>.fromOpaque(userInfo).takeUnretainedValue()
+            if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                if let tap = controller.popupNumericKeyEventTap {
+                    CGEvent.tapEnable(tap: tap, enable: true)
+                    CMTraceMenuPaste("numeric.tap.reenabled")
+                }
+                return Unmanaged.passUnretained(event)
+            }
+            return controller.consumeNumericPopupKeyEvent(type: type, event: event)
+                ? nil : Unmanaged.passUnretained(event)
+        }
+        // An active tap uses the same Accessibility grant as automatic paste.
+        // Do not prompt here: native NSMenu key equivalents remain the fallback.
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
+            eventsOfInterest: mask, callback: callback,
+            userInfo: Unmanaged.passUnretained(self).toOpaque()
+        ) else {
+            CMTraceMenuPaste("numeric.tap.unavailable accessibility=\(AXIsProcessTrusted())")
+            return
+        }
+        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        popupNumericKeyEventTap = tap
+        popupNumericKeyRunLoopSource = source
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, CFRunLoopMode(rawValue: RunLoop.Mode.eventTracking.rawValue as CFString))
+        CGEvent.tapEnable(tap: tap, enable: true)
+        CMTraceMenuPaste("numeric.tap.installed")
+    }
+
+    private func consumeNumericPopupKeyEvent(type: CGEventType, event: CGEvent) -> Bool {
+        let rawKeyCode = event.getIntegerValueField(.keyboardEventKeycode)
+        guard rawKeyCode >= 0, rawKeyCode <= Int64(UInt16.max) else { return false }
+        let keyCode = CGKeyCode(rawKeyCode)
+        if type == .keyUp, popupNumericConsumedKeyCodes.remove(keyCode) != nil {
+            CMTraceMenuPaste("numeric.keyup.consumed keyCode=\(keyCode)")
+            // Return nil before invalidating the tap that filtered this keyup.
+            CMPerformAfterMenuTracking { [weak self] in
+                self?.finishPopupNumericKeyEventTapIfIdle()
+            }
+            return true
+        }
+        guard type == .keyDown else { return false }
+        if popupNumericConsumedKeyCodes.contains(keyCode) { return true }
+        guard popupNumericShortcutRoot != nil else { return false }
+        let flags = modifierFlags(for: event.flags).normalizedShortcutFlags
+        guard flags == [.command],
+              let character = numericPopupCharacter(for: event, keyCode: keyCode) else { return false }
+        CMTraceMenuPaste("numeric.keydown.received keyCode=\(keyCode) flags=\(flags.rawValue)")
+        guard let item = popupNumericShortcutItems[character],
+              let root = popupNumericShortcutRoot else { return false }
+
+        popupNumericConsumedKeyCodes.insert(keyCode)
+        if popupNumericSelectionPending {
+            CMTraceMenuPaste("numeric.keydown.consumed selectionPending=true keyCode=\(keyCode)")
+            return true
+        }
+        popupNumericSelectionPending = true
+        let generation = popupNumericDispatchGeneration
+        CMTraceMenuPaste("numeric.keydown.matched keyCode=\(keyCode)")
+        let runLoop = CFRunLoopGetMain()
+        let currentMode = CFRunLoopCopyCurrentMode(runLoop) ?? CFRunLoopMode.defaultMode!
+        // Menu cancellation and AppKit action dispatch must run after the tap
+        // returns, in the mode that is currently tracking this native menu.
+        let modes = [currentMode.rawValue, CFRunLoopMode.commonModes.rawValue] as CFArray
+        CFRunLoopPerformBlock(runLoop, modes) { [weak self, weak root, weak item] in
+            guard let self else { return }
+            guard let root, let item,
+                  self.popupNumericDispatchGeneration == generation,
+                  self.popupNumericShortcutRoot === root,
+                  self.trackedPopupMenus.contains(where: { $0 === root }),
+                  self.numericPopupShortcutItems(in: root)[character] === item,
+                  let action = item.action else {
+                if self.popupNumericDispatchGeneration == generation {
+                    self.popupNumericSelectionPending = false
+                }
+                CMTraceMenuPaste("numeric.action.cancelled staleSelection=true")
+                return
+            }
+            self.lastPopupInteractionFlags = [.command]
+            self.lastPopupInteractionType = .keyDown
+            self.popupNumericSelectionPending = false
+            root.cancelTrackingWithoutAnimation()
+            self.isDispatchingPopupKeyEquivalent = true
+            defer { self.isDispatchingPopupKeyEquivalent = false }
+            let dispatched = NSApp.sendAction(action, to: item.target, from: item)
+#if DEBUG || TESTING
+            if dispatched { self.debugNumericPopupKeyHandledCount += 1 }
+#endif
+            CMTraceMenuPaste("numeric.action.dispatched success=\(dispatched)")
+        }
+        CFRunLoopWakeUp(runLoop)
+        return true
+    }
+
+    private func numericPopupCharacter(for event: CGEvent, keyCode: CGKeyCode) -> String? {
+        let character: String?
+        if let cocoaCharacter = NSEvent(cgEvent: event)?.charactersIgnoringModifiers,
+           !cocoaCharacter.isEmpty {
+            character = cocoaCharacter
+        } else {
+            var length = 0
+            var characters = [UniChar](repeating: 0, count: 4)
+            event.keyboardGetUnicodeString(maxStringLength: characters.count, actualStringLength: &length, unicodeString: &characters)
+            character = length > 0 ? String(utf16CodeUnits: characters, count: length) : stringForKeyCode(keyCode)
+        }
+        guard let character, character.count == 1, "0123456789".contains(character) else { return nil }
+        return character
+    }
+
+    private func finishPopupNumericKeyEventTapIfIdle() {
+        guard trackedPopupMenus.isEmpty else { return }
+        guard !popupNumericConsumedKeyCodes.isEmpty else {
+            removePopupNumericKeyEventTap()
+            return
+        }
+        guard popupNumericKeyReleaseTimer == nil else { return }
+        // Keep only the selected key's keyup filtered after the menu closes.
+        // A bounded timeout also cleans up if the hardware keyup is lost.
+        let timer = Timer(timeInterval: 2, repeats: false) { [weak self] _ in
+            guard let self, self.trackedPopupMenus.isEmpty else { return }
+            self.removePopupNumericKeyEventTap()
+        }
+        popupNumericKeyReleaseTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+        RunLoop.main.add(timer, forMode: .eventTracking)
+    }
+
+    private func removePopupNumericKeyEventTap() {
+        popupNumericKeyReleaseTimer?.invalidate()
+        popupNumericKeyReleaseTimer = nil
+        popupNumericConsumedKeyCodes.removeAll()
+        if let source = popupNumericKeyRunLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, CFRunLoopMode(rawValue: RunLoop.Mode.eventTracking.rawValue as CFString))
+            popupNumericKeyRunLoopSource = nil
+        }
+        if let tap = popupNumericKeyEventTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            CFMachPortInvalidate(tap)
+            popupNumericKeyEventTap = nil
+            CMTraceMenuPaste("numeric.tap.removed")
+        }
+    }
+
+#if DEBUG || TESTING
+    func debugNumericShortcutMenuForTesting(itemCount: Int, foldered: Bool) -> NSMenu {
+        let menu = NSMenu(title: "ClipMenu")
+        menu.delegate = self
+        let itemsMenu = foldered ? NSMenu(title: "History Folder") : menu
+        itemsMenu.delegate = self
+        let firstIndex = UserDefaults.standard.bool(forKey: CMPrefMenuItemsTitleStartWithZeroKey) ? 0 : 1
+        for index in 0..<max(0, itemCount) {
+            itemsMenu.addItem(makeClipMenuItem(
+                clip: ClipItem(text: "Shortcut fixture \(index)"),
+                globalIndex: index,
+                listNumber: firstIndex + index
+            ))
+        }
+        if foldered {
+            let folder = NSMenuItem(title: "History Folder", action: nil, keyEquivalent: "")
+            folder.submenu = itemsMenu
+            menu.addItem(folder)
+        }
+        return menu
+    }
+
+    func debugTrackPopupMenuForTesting(_ menu: NSMenu) {
+        trackPopupMenuIfNeeded(menu)
+    }
+
+    func debugStopTrackingPopupMenuForTesting(_ menu: NSMenu) {
+        stopTrackingPopupMenu(menu)
+    }
+
+    func debugRecordPopupInteractionForTesting(_ event: NSEvent) {
+        recordPopupInteraction(event: event)
+    }
+
+    func debugModifiedClickActionRequestedForTesting(_ sender: NSMenuItem) -> Bool {
+        applyActionIfRequested(to: .clip(UUID()), sender: sender)
+    }
+
+    // Exercises the same filter and queued action as the Quartz callback.
+    // It does not stand in for permission or physical event-delivery coverage.
+    func debugConsumeNumericPopupKeyEventForTesting(type: CGEventType, event: CGEvent) -> Bool {
+        consumeNumericPopupKeyEvent(type: type, event: event)
+    }
+
+    var debugTrackedPopupMenuCountForTesting: Int { trackedPopupMenus.count }
+    var debugHasNumericKeyEventHandlerForTesting: Bool { popupNumericKeyEventTap != nil }
+    var debugHandledNumericPopupKeyCountForTesting: Int { debugNumericPopupKeyHandledCount }
+    var debugConsumedNumericPopupKeyCountForTesting: Int { popupNumericConsumedKeyCodes.count }
+#endif
 
     private func updateImageHoverPreview(for item: NSMenuItem?, in menu: NSMenu) {
         // Parent menus can lose their highlight as a submenu starts tracking.
@@ -19699,26 +20199,61 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         }
     }
 
-    private func autosaveHistory() {
-        guard !clipsStore.saveIfNeeded() else { return }
-
-        autosaveTimer?.invalidate()
-        autosaveTimer = nil
-        NSApp.activate(ignoringOtherApps: true)
-        let alert = makeHistoryPersistenceFailureAlert()
-        alert.runModal()
-        startAutosaveTimer()
+    private func tracePendingPasteOperation<T>(_ stage: String, _ work: () -> T) -> T {
+        guard pasteIsPending else { return work() }
+        let started = ProcessInfo.processInfo.systemUptime
+        CMTraceMenuPaste("\(stage).begin")
+        defer { CMTraceMenuPaste(String(format: "%@.end elapsedMs=%.1f", stage, (ProcessInfo.processInfo.systemUptime - started) * 1000)) }
+        return work()
     }
 
-    private func pollClipboard() {
-        guard pasteboard.changeCount != lastChangeCount else { return }
-        lastChangeCount = pasteboard.changeCount
-        guard let clip = capturedClip(from: pasteboard) else { return }
-        clipsStore.add(clip)
-        if !persistCapturedHistoryIfPreferred() {
-            NSLog("Could not immediately save captured clipboard history; will retry on autosave or quit.")
+    private var pasteIsPending: Bool {
+        pasteRequestLock.lock()
+        let pending = pasteActivity != nil
+        pasteRequestLock.unlock()
+        return pending
+    }
+
+    private func autosaveHistory() {
+        guard !pasteIsPending, !historyAutosaveIsPending else { return }
+        historyAutosaveIsPending = true
+        clipsStore.saveIfNeededAsync { [weak self] saved in
+            guard let self else { return }
+            self.historyAutosaveIsPending = false
+            guard !saved else { return }
+            // A failed background save must not steal focus from a newer paste.
+            guard !self.pasteIsPending else {
+                NSLog("Could not autosave clipboard history; will retry after the pending paste.")
+                return
+            }
+            self.autosaveTimer?.invalidate()
+            self.autosaveTimer = nil
+            NSApp.activate(ignoringOtherApps: true)
+            let alert = self.makeHistoryPersistenceFailureAlert()
+            alert.runModal()
+            self.startAutosaveTimer()
         }
-        rebuildMenu()
+    }
+
+    private func pollClipboard(frontmostBundleIdentifier: String? = NSWorkspace.shared.frontmostApplication?.bundleIdentifier) {
+        // Capturing snippet/action output and rebuilding menus can be expensive.
+        // Leave its generation unacknowledged until the requested paste finishes.
+        guard !pasteIsPending else {
+            CMTraceMenuPaste("main.poll.deferred-paste")
+            return
+        }
+        tracePendingPasteOperation("main.poll") {
+            let changeCount = pasteboard.changeCount
+            guard changeCount != lastChangeCount else { return }
+            lastChangeCount = changeCount
+            guard let clip = capturedClip(from: pasteboard, frontmostBundleIdentifier: frontmostBundleIdentifier) else { return }
+#if DEBUG
+            debugClipboardCaptureGeneration += 1
+#endif
+            clipsStore.add(clip)
+            persistCapturedHistoryAsynchronouslyIfPreferred()
+            rebuildMenu()
+        }
     }
 
     private func frontmostAppIsExcluded() -> Bool {
@@ -19737,6 +20272,19 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
     @objc private func rebuildMenu() {
+        guard !pasteIsPending else {
+            deferredMenuRebuildRequired = true
+            CMTraceMenuPaste("main.rebuild.deferred-paste")
+            return
+        }
+        deferredMenuRebuildRequired = false
+#if DEBUG
+        debugMenuRebuildGeneration += 1
+#endif
+        tracePendingPasteOperation("main.rebuild") { rebuildMenuContents() }
+    }
+
+    private func rebuildMenuContents() {
         dismissImageHoverPreview()
         guard UserDefaults.standard.integer(forKey: CMPrefShowStatusItemKey) != 0 else {
             statusItem?.menu = nil
@@ -19905,6 +20453,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             }
             applyPreferredFont(to: item)
             let submenu = NSMenu(title: folder.title)
+            submenu.delegate = self
             for (offset, snippet) in folder.snippets.filter(\.isEnabled).enumerated() {
                 let listNumber = firstIndex + offset
                 let snippetTitle = snippetMenuTitle(for: snippet.title, listNumber: listNumber)
@@ -20634,6 +21183,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
     @objc(selectMenuItem:) fileprivate func selectClip(_ sender: NSMenuItem) {
+        let traceStarted = ProcessInfo.processInfo.systemUptime
+        CMTraceMenuPaste("selection.begin")
+        defer { CMTraceMenuPaste(String(format: "selection.end elapsedMs=%.1f", (ProcessInfo.processInfo.systemUptime - traceStarted) * 1000)) }
         dismissImageHoverPreview()
         guard let id = sender.representedObject as? String,
               let clip = clipsStore.clip(with: id) else { return }
@@ -20641,7 +21193,11 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         if applyActionIfRequested(to: .clip(clip.id), sender: sender) {
             return
         }
-        clip.write(to: pasteboard)
+        CMTraceMenuPaste("selection.pasteboard.begin")
+        // The item is already in history. Acknowledge exactly our ownership
+        // generation so polling neither recaptures it nor skips a later copy.
+        lastChangeCount = clip.write(to: pasteboard)
+        CMTraceMenuPaste("selection.pasteboard.end")
         debugPasteFlow("selectClip wroteToPasteboard")
 
         let defaults = UserDefaults.standard
@@ -20654,14 +21210,19 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         }
 
         if shouldReorder {
+            CMTraceMenuPaste("selection.reorder.begin")
             clipsStore.promote(clip.id)
-            rebuildMenu()
+            CMTraceMenuPaste("selection.reorder.end")
+            persistCapturedHistoryAsynchronouslyIfPreferred()
         }
 
         let shouldSynthesizePaste = defaults.bool(forKey: CMPrefInputPasteCommandKey)
         debugPasteFlow("selectClip shouldSynthesizePaste=\(shouldSynthesizePaste)")
         if shouldSynthesizePaste {
             synthesizePasteIfEnabled()
+        }
+        if shouldReorder {
+            rebuildMenu()
         }
     }
 
@@ -20690,8 +21251,17 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         }
 
         let event = NSApp.currentEvent
+        let interactionType = lastPopupInteractionType ?? event?.type
+        if isDispatchingPopupKeyEquivalent || interactionType == .keyDown {
+            debugPasteFlow("applyActionIfRequested keyboardSelection")
+            return false
+        }
         if event == nil && lastPopupInteractionType == nil {
             debugPasteFlow("applyActionIfRequested noPopupEventContext")
+            return false
+        }
+        guard interactionType == .leftMouseDown || interactionType == .leftMouseUp
+                || interactionType == .rightMouseDown || interactionType == .rightMouseUp else {
             return false
         }
         let modifierFlags = currentModifierFlags(for: event)
@@ -20748,8 +21318,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         lastPopupInteractionFlags = []
         lastPopupInteractionType = nil
         popupInteractionMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp, .keyDown, .flagsChanged]) { [weak self] event in
-            self?.lastPopupInteractionFlags = event.modifierFlags.normalizedShortcutFlags
-            self?.lastPopupInteractionType = event.type
+            self?.recordPopupInteraction(event: event)
             return event
         }
         installPopupInteractionEventTap()
@@ -20822,9 +21391,18 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         popupInteractionRunLoopSource = runLoopSource
     }
 
+    private func recordPopupInteraction(event: NSEvent) {
+        lastPopupInteractionFlags = event.modifierFlags.normalizedShortcutFlags
+        if event.type != .flagsChanged {
+            lastPopupInteractionType = event.type
+        }
+    }
+
     private func recordPopupInteraction(type: CGEventType, event: CGEvent) {
         lastPopupInteractionFlags = modifierFlags(for: event.flags)
-        lastPopupInteractionType = menuInteractionEventType(for: type)
+        if type != .flagsChanged {
+            lastPopupInteractionType = menuInteractionEventType(for: type)
+        }
     }
 
     private func modifierFlags(for flags: CGEventFlags) -> NSEvent.ModifierFlags {
@@ -21071,8 +21649,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         let hasStoredFrontProcessAfterReset = hasStoredPreviousFrontProcessSerialNumber()
         let modifiersReleased = hotKeyModifiersAreReleased()
 
-        waitForPasteTargetActivation(bundleIdentifier: nil, remainingChecks: 0)
-        waitForPasteTargetActivation(bundleIdentifier: "com.example.ClipMenuTests", remainingChecks: 0)
+        debugDispatchResolvedPasteForTesting(keyCode: firstPasteKeyCode)
+        debugDispatchResolvedPasteForTesting(keyCode: secondPasteKeyCode)
         let deadline = Date(timeIntervalSinceNow: 1.0)
         while debugDirectPasteSynthesisBypassCount < originalBypassCount + 2 && Date() < deadline {
             RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02))
@@ -21104,6 +21682,32 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 && actualState["hasStoredFrontProcessAfterReset"] as? Bool == false
                 && (actualState["directPasteBypassCount"] as? Int ?? 0) >= 2
         ]
+    }
+
+#endif
+
+#if DEBUG || TESTING
+    func debugBeginPasteActivityForTesting(duration: TimeInterval) -> Int {
+        let generation = beginPasteRequest()
+        beginPasteActivity(generation: generation, duration: duration)
+        return generation
+    }
+
+    func debugFinishPasteActivityForTesting(generation: Int) {
+        finishPasteActivity(generation: generation, reason: "test-complete")
+    }
+
+    var debugPasteActivityIsActiveForTesting: Bool {
+        pasteRequestLock.lock()
+        defer { pasteRequestLock.unlock() }
+        return pasteActivity != nil
+    }
+
+    func debugDispatchResolvedPasteForTesting(keyCode: CGKeyCode, completion: (() -> Void)? = nil) {
+        pasteDispatchQueue.async {
+            self.synthesizePaste(keyCode: keyCode)
+            completion?()
+        }
     }
 
 #endif
@@ -21144,6 +21748,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         }
 
         let submenu = NSMenu(title: node.nodeTitle)
+        submenu.delegate = self
         for child in node.children {
             if let item = makeActionMenuItem(from: child) {
                 submenu.addItem(item)
@@ -22072,41 +22677,40 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         return javaScriptPromptResult(response: result, input: dialog.input)
     }
 
-    private func synthesizePaste() {
-#if TESTING
+    private func synthesizePaste(keyCode: CGKeyCode, targetProcessIdentifier: pid_t? = nil) {
+        // Build from the captured layout key before the test-only posting bypass.
+        // This keeps the background regression test on the real preparation path.
+        guard let events = CMMakePasteKeyboardEvents(keyCode: keyCode) else { return }
+#if DEBUG || TESTING
         if UserDefaults.standard.bool(forKey: "debugBypassDirectPasteSynthesisForTesting") {
             debugDirectPasteSynthesisBypassCount += 1
             debugPasteFlow("synthesizePaste testingBypass")
             return
         }
 #endif
-        let keyCode = pasteKeyCode()
         debugPasteFlow("synthesizePaste keyCode=\(keyCode)")
-        let shouldUseAccessibilityFallback: Bool
 #if DEBUG
-        shouldUseAccessibilityFallback = debugBoolArgumentValue(forKey: "debugForceAccessibilityPasteFallback") == true
-            || UserDefaults.standard.bool(forKey: "debugForceAccessibilityPasteFallback")
-            || (!CGPreflightPostEventAccess() && AXIsProcessTrusted())
-#else
-        shouldUseAccessibilityFallback = !CGPreflightPostEventAccess() && AXIsProcessTrusted()
-#endif
-        if shouldUseAccessibilityFallback,
-           synthesizePasteUsingAccessibility(keyCode: keyCode) {
+        if (debugBoolArgumentValue(forKey: "debugForceAccessibilityPasteFallback") == true
+            || UserDefaults.standard.bool(forKey: "debugForceAccessibilityPasteFallback")),
+           synthesizePasteUsingAccessibility(keyCode: keyCode, targetProcessIdentifier: targetProcessIdentifier) {
             debugPasteFlow("synthesizePaste accessibilityPost")
             return
         }
-        guard ensurePasteEventAccess() else {
+#endif
+        guard CGPreflightPostEventAccess() || AXIsProcessTrusted() else {
             debugPasteFlow("synthesizePaste directPostDenied")
+            CMTraceMenuPaste("paste-post-denied")
             return
         }
-        guard let source = CGEventSource(stateID: .combinedSessionState) else { return }
-        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true)
-        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
-        keyDown?.flags = .maskCommand
-        keyUp?.flags = .maskCommand
         debugPasteFlow("synthesizePaste directPost")
-        keyDown?.post(tap: .cgSessionEventTap)
-        keyUp?.post(tap: .cgSessionEventTap)
+        CMTraceMenuPaste("paste-post-session key=\(keyCode) target=\(targetProcessIdentifier ?? 0)")
+        // Use the login session's normal keyboard stream. PID-only posting and
+        // the deprecated AX keyboard API bypass normal session event delivery.
+        // The main-thread handoff has already verified the destination process.
+        for event in events {
+            event.post(tap: .cgSessionEventTap)
+        }
+        CMTraceMenuPaste("paste-post-complete")
 
 #if DEBUG
         if UserDefaults.standard.bool(forKey: "debugPasteHelperFallback") {
@@ -22121,7 +22725,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
 #endif
     }
 
-    private func synthesizePasteUsingAccessibility(keyCode: CGKeyCode) -> Bool {
+#if DEBUG
+    private func synthesizePasteUsingAccessibility(keyCode: CGKeyCode, targetProcessIdentifier: pid_t?) -> Bool {
         guard AXIsProcessTrusted() else {
             debugPasteFlow("synthesizePasteUsingAccessibility denied")
             return false
@@ -22133,20 +22738,20 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         }
         let postKeyboardEvent = unsafeBitCast(symbol, to: AXPostKeyboardEventFunction.self)
 
-        let systemWideElement = AXUIElementCreateSystemWide()
+        let applicationElement = targetProcessIdentifier.map(AXUIElementCreateApplication)
+            ?? AXUIElementCreateSystemWide()
         let commandKey = CGKeyCode(kVK_Command)
         let results = [
-            postKeyboardEvent(systemWideElement, 0, commandKey, true),
-            postKeyboardEvent(systemWideElement, 0, keyCode, true),
-            postKeyboardEvent(systemWideElement, 0, keyCode, false),
-            postKeyboardEvent(systemWideElement, 0, commandKey, false)
+            postKeyboardEvent(applicationElement, 0, commandKey, true),
+            postKeyboardEvent(applicationElement, 0, keyCode, true),
+            postKeyboardEvent(applicationElement, 0, keyCode, false),
+            postKeyboardEvent(applicationElement, 0, commandKey, false)
         ]
         let succeeded = results.allSatisfy { $0 == .success }
         debugPasteFlow("synthesizePasteUsingAccessibility results=\(results.map { String($0.rawValue) }.joined(separator: ",")) succeeded=\(succeeded)")
         return succeeded
     }
 
-#if DEBUG
     private func synthesizePasteUsingAppleScriptHelper(keyCode: CGKeyCode) -> Bool {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
@@ -22221,18 +22826,77 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
     private func synthesizePasteAfterPasteboardWrite() {
+        guard Thread.isMainThread else {
+            CMPerformAfterMenuTracking { [weak self] in
+                self?.synthesizePasteAfterPasteboardWrite()
+            }
+            return
+        }
+        let generation = beginPasteRequest()
+        let deadline = ProcessInfo.processInfo.systemUptime + 2.5
+        beginPasteActivity(generation: generation, duration: 2.5)
+        CMTraceMenuPaste("paste-request generation=\(generation) tracking=\(!trackedPopupMenus.isEmpty)")
 #if TESTING
         if UserDefaults.standard.bool(forKey: "debugBypassPasteSynthesisForTesting") {
             debugPasteFlow("synthesizePasteAfterPasteboardWrite testingBypass")
+            finishPasteActivity(generation: generation, reason: "testing-bypass")
             return
         }
 #endif
         guard ensurePasteAutomationAccess() else {
             debugPasteFlow("synthesizePasteAfterPasteboardWrite permissionDenied")
+            CMTraceMenuPaste("paste-permission-denied")
+            finishPasteActivity(generation: generation, reason: "permission-denied")
             return
         }
-        let targetBundleIdentifier = restorePasteTargetApplication()
-        waitForPasteTargetActivation(bundleIdentifier: targetBundleIdentifier, remainingChecks: 80)
+        // Resolve the input layout while already on main. The background event
+        // poster must never synchronously wait for a menu's main-queue block.
+        let keyCode = resolvedPasteKeyCode()
+        guard let targetApplication = takePasteTargetApplication() else {
+            debugPasteFlow("synthesizePasteAfterPasteboardWrite cancelled without a destination")
+            CMTraceMenuPaste("paste-cancel-no-target")
+            finishPasteActivity(generation: generation, reason: "no-target")
+            return
+        }
+        CMPerformAfterMenuTracking { [weak self] in
+            guard let self else { return }
+            guard self.isCurrentPasteRequest(generation) else {
+                self.finishPasteActivity(generation: generation, reason: "superseded")
+                return
+            }
+            self.handoffPasteWhenMenuCloses(to: targetApplication, keyCode: keyCode,
+                                           generation: generation, deadline: deadline, remainingChecks: 80)
+        }
+    }
+
+    private func handoffPasteWhenMenuCloses(to application: NSRunningApplication, keyCode: CGKeyCode,
+                                          generation: Int, deadline: TimeInterval, remainingChecks: Int) {
+        guard isCurrentPasteRequest(generation), !application.isTerminated else {
+            finishPasteActivity(generation: generation, reason: "superseded-or-terminated-target")
+            return
+        }
+        guard ProcessInfo.processInfo.systemUptime < deadline else {
+            CMTraceMenuPaste("paste-cancel-expired-handoff")
+            finishPasteActivity(generation: generation, reason: "expired-handoff")
+            return
+        }
+        CMTraceMenuPaste("paste-handoff generation=\(generation) tracking=\(!trackedPopupMenus.isEmpty)")
+        guard trackedPopupMenus.isEmpty else {
+            guard remainingChecks > 0 else {
+                CMTraceMenuPaste("paste-cancel-menu-still-open")
+                finishPasteActivity(generation: generation, reason: "menu-still-open")
+                return
+            }
+            CMSchedulePasteReadinessCheck(after: 0.03) { [weak self] in
+                self?.handoffPasteWhenMenuCloses(to: application, keyCode: keyCode,
+                                               generation: generation, deadline: deadline, remainingChecks: remainingChecks - 1)
+            }
+            return
+        }
+        bringApplicationToFront(application)
+        schedulePasteActivationCheck(targetProcessIdentifier: application.processIdentifier,
+                                     keyCode: keyCode, generation: generation,
+                                     deadline: deadline, remainingChecks: remainingChecks, delay: 0.05)
     }
 
     private func rememberPasteTargetApplication() {
@@ -22297,31 +22961,36 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     }
 
     private func restorePasteTargetApplication() -> String? {
+        guard let application = takePasteTargetApplication() else { return nil }
+        bringApplicationToFront(application)
+        return application.bundleIdentifier
+    }
+
+    private func takePasteTargetApplication() -> NSRunningApplication? {
         if let application = previousPasteTargetApplication {
             previousPasteTargetApplication = nil
             guard !application.isTerminated else { return nil }
             let bundleIdentifier = application.bundleIdentifier ?? "nil"
-            debugPasteFlow("restorePasteTargetApplication activating=\(bundleIdentifier)")
-            bringApplicationToFront(application)
-            return application.bundleIdentifier
+            debugPasteFlow("takePasteTargetApplication captured=\(bundleIdentifier)")
+            return application
         }
 
         guard hasStoredPreviousFrontProcessSerialNumber() else { return nil }
         var serialNumber = previousFrontProcessSerialNumber
-        let bundleIdentifier = carbonProcessIdentifier(for: &serialNumber)
-            .flatMap { NSRunningApplication(processIdentifier: $0)?.bundleIdentifier }
-        let restored = restorePreviousFrontProcess()
-        debugPasteFlow("restorePasteTargetApplication frontProcessFallback restored=\(restored) bundle=\(bundleIdentifier ?? "nil")")
-        return bundleIdentifier
+        resetPreviousFrontProcessSerialNumber()
+        return carbonProcessIdentifier(for: &serialNumber)
+            .flatMap { NSRunningApplication(processIdentifier: $0) }
     }
 
     private func bringApplicationToFront(_ application: NSRunningApplication) {
-        var serialNumber = ProcessSerialNumber()
-        let status = carbonGetProcessForPID(application.processIdentifier, &serialNumber)
-        if status == noErr {
-            _ = carbonSetFrontProcess(&serialNumber)
+        // A status menu often leaves the destination active. Reactivating that
+        // same app needlessly can disturb the address bar's existing focus.
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier != application.processIdentifier else { return }
+        CMTraceMenuPaste("paste-activate target=\(application.processIdentifier)")
+        if #available(macOS 14.0, *) {
+            NSApp.yieldActivation(to: application)
+            application.activate(from: NSRunningApplication.current, options: [])
         } else {
-            debugPasteFlow("bringApplicationToFront fallback status=\(status)")
             application.activate(options: [.activateIgnoringOtherApps])
         }
     }
@@ -22379,35 +23048,140 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         previousFrontProcessSerialNumber.lowLongOfPSN != UInt32(kNoProcess)
     }
 
-    private func waitForPasteTargetActivation(bundleIdentifier: String?, remainingChecks: Int) {
-        let frontmostBundleIdentifier = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+    private func beginPasteRequest() -> Int {
+        pasteRequestLock.lock()
+        pasteRequestGeneration += 1
+        let generation = pasteRequestGeneration
+        let previousActivity = pasteActivity
+        pasteActivity = nil
+        pasteActivityGeneration = nil
+        pasteRequestLock.unlock()
+        if let previousActivity { ProcessInfo.processInfo.endActivity(previousActivity) }
+        return generation
+    }
+
+    private func beginPasteActivity(generation: Int, duration: TimeInterval) {
+        // This asynchronous user operation must not be deferred when the menu
+        // closes and this accessory app becomes idle. System sleep is allowed.
+        let activity = ProcessInfo.processInfo.beginActivity(
+            options: .userInitiatedAllowingIdleSystemSleep, reason: "Pasting a selected clipboard item"
+        )
+        pasteRequestLock.lock()
+        guard generation == pasteRequestGeneration else {
+            pasteRequestLock.unlock()
+            ProcessInfo.processInfo.endActivity(activity)
+            return
+        }
+        let previousActivity = pasteActivity
+        pasteActivity = activity
+        pasteActivityGeneration = generation
+        pasteRequestLock.unlock()
+        if let previousActivity { ProcessInfo.processInfo.endActivity(previousActivity) }
+        CMTraceMenuPaste("paste-activity.begin generation=\(generation)")
+        // Release independently of main: even a blocked UI or a lost callback
+        // must not leave the process's power-management assertion outstanding.
+        pasteActivityExpiryQueue.asyncAfter(deadline: .now() + duration) { [weak self] in
+            self?.finishPasteActivity(generation: generation, reason: "deadline-watchdog")
+        }
+    }
+
+    private func finishPasteActivity(generation: Int? = nil, reason: String) {
+        pasteRequestLock.lock()
+        guard generation == nil || generation == pasteActivityGeneration else {
+            pasteRequestLock.unlock()
+            return
+        }
+        let activity = pasteActivity
+        let finishedGeneration = pasteActivityGeneration
+        pasteActivity = nil
+        pasteActivityGeneration = nil
+        pasteRequestLock.unlock()
+        guard let activity else { return }
+        ProcessInfo.processInfo.endActivity(activity)
+        CMTraceMenuPaste("paste-activity.end generation=\(finishedGeneration ?? 0) reason=\(reason)")
+        let flushMenuUpdate = { [weak self] in
+            guard let self, self.deferredMenuRebuildRequired, !self.pasteIsPending else { return }
+            self.rebuildMenu()
+        }
+        // Wake idle AppKit promptly, but retain a main-queue fallback: cleanup
+        // must still run if unrelated work outlasts the wake registry's expiry.
+        CMPerformAfterMenuTracking(flushMenuUpdate)
+        DispatchQueue.main.async(execute: flushMenuUpdate)
+    }
+
+    private func isCurrentPasteRequest(_ generation: Int) -> Bool {
+        pasteRequestLock.lock()
+        defer { pasteRequestLock.unlock() }
+        return generation == pasteRequestGeneration
+    }
+
+    private func schedulePasteActivationCheck(
+        targetProcessIdentifier: pid_t?,
+        keyCode: CGKeyCode,
+        generation: Int,
+        deadline: TimeInterval,
+        remainingChecks: Int,
+        delay: TimeInterval = 0.03
+    ) {
+        CMSchedulePasteReadinessCheck(after: delay) { [weak self] in
+            self?.waitForPasteTargetActivation(
+                targetProcessIdentifier: targetProcessIdentifier,
+                keyCode: keyCode,
+                generation: generation,
+                deadline: deadline,
+                remainingChecks: remainingChecks
+            )
+        }
+    }
+
+    private func waitForPasteTargetActivation(
+        targetProcessIdentifier: pid_t?,
+        keyCode: CGKeyCode,
+        generation: Int,
+        deadline: TimeInterval,
+        remainingChecks: Int
+    ) {
+        guard isCurrentPasteRequest(generation) else {
+            finishPasteActivity(generation: generation, reason: "superseded")
+            return
+        }
+        guard ProcessInfo.processInfo.systemUptime < deadline else {
+            CMTraceMenuPaste("paste-cancel-expired-readiness")
+            finishPasteActivity(generation: generation, reason: "expired-readiness")
+            return
+        }
+        let frontmostProcessIdentifier = NSWorkspace.shared.frontmostApplication?.processIdentifier
         let modifiersReleased = hotKeyModifiersAreReleased()
-        let clipMenuActive = NSRunningApplication.current.isActive
-        debugPasteFlow("waitForPasteTargetActivation target=\(bundleIdentifier ?? "nil") frontmost=\(frontmostBundleIdentifier ?? "nil") modifiersReleased=\(modifiersReleased) clipMenuActive=\(clipMenuActive) remaining=\(remainingChecks)")
-
-        guard let bundleIdentifier else {
-            guard (!clipMenuActive && modifiersReleased) || remainingChecks <= 0 else {
-                pasteDispatchQueue.asyncAfter(deadline: .now() + 0.03) {
-                    self.waitForPasteTargetActivation(bundleIdentifier: nil, remainingChecks: remainingChecks - 1)
-                }
-                return
-            }
-            pasteDispatchQueue.asyncAfter(deadline: .now() + 0.05) {
-                self.synthesizePaste()
-            }
+        CMTraceMenuPaste("paste-check target=\(targetProcessIdentifier ?? 0) front=\(frontmostProcessIdentifier ?? 0) released=\(modifiersReleased) tracking=\(!trackedPopupMenus.isEmpty) remaining=\(remainingChecks)")
+        debugPasteFlow("waitForPasteTargetActivation targetPID=\(targetProcessIdentifier ?? 0) frontmostPID=\(frontmostProcessIdentifier ?? 0) modifiersReleased=\(modifiersReleased) remaining=\(remainingChecks)")
+        if CMCanDispatchPaste(
+            targetProcessIdentifier: targetProcessIdentifier,
+            frontmostProcessIdentifier: frontmostProcessIdentifier,
+            clipMenuProcessIdentifier: NSRunningApplication.current.processIdentifier,
+            modifiersReleased: modifiersReleased,
+            menuIsTracking: !trackedPopupMenus.isEmpty,
+            requestDeadline: deadline
+        ) {
+            // Keep the foreground check and the short event sequence in one
+            // main run-loop callback; a queued session paste could otherwise
+            // start after the user has already activated another application.
+            synthesizePaste(keyCode: keyCode, targetProcessIdentifier: targetProcessIdentifier)
+            finishPasteActivity(generation: generation, reason: "dispatch-finished")
             return
         }
-
-        if (frontmostBundleIdentifier == bundleIdentifier && modifiersReleased && !clipMenuActive) || remainingChecks <= 0 {
-            pasteDispatchQueue.asyncAfter(deadline: .now() + 0.05) {
-                self.synthesizePaste()
-            }
+        guard remainingChecks > 0 else {
+            debugPasteFlow("waitForPasteTargetActivation cancelled without verified activation or released modifiers")
+            CMTraceMenuPaste("paste-cancel-readiness-timeout")
+            finishPasteActivity(generation: generation, reason: "readiness-timeout")
             return
         }
-
-        pasteDispatchQueue.asyncAfter(deadline: .now() + 0.03) {
-            self.waitForPasteTargetActivation(bundleIdentifier: bundleIdentifier, remainingChecks: remainingChecks - 1)
-        }
+        schedulePasteActivationCheck(
+            targetProcessIdentifier: targetProcessIdentifier,
+            keyCode: keyCode,
+            generation: generation,
+            deadline: deadline,
+            remainingChecks: remainingChecks - 1
+        )
     }
 
     private func hotKeyModifiersAreReleased() -> Bool {
@@ -22421,7 +23195,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             CGKeyCode(kVK_Shift),
             CGKeyCode(kVK_RightShift)
         ]
-        return modifierKeyCodes.allSatisfy { !CGEventSource.keyState(.combinedSessionState, key: $0) }
+        return modifierKeyCodes.allSatisfy { !CGEventSource.keyState(.hidSystemState, key: $0) }
     }
 
     private func ensurePasteEventAccess(requestIfMissing: Bool = true) -> Bool {
@@ -22472,6 +23246,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
     private func ensurePasteAutomationAccess() -> Bool {
         let accessState = currentPasteAutomationAccessState()
         debugPasteFlow("ensurePasteAutomationAccess accessibility=\(accessState.accessibilityGranted) postEvent=\(accessState.postEventGranted)")
+        CMTraceMenuPaste("paste-access ax=\(accessState.accessibilityGranted) post=\(accessState.postEventGranted)")
 
         if !accessState.canSynthesizePaste {
             presentPastePermissionAlertIfNeeded(accessState: accessState)
@@ -23331,6 +24106,30 @@ enum CMDebugAppControllerReportForTesting: String, CaseIterable {
 }
 
 extension AppController {
+    static var debugSharedControllerForTesting: AppController? {
+        get { shared }
+        set { shared = newValue }
+    }
+
+    func debugPollClipboardForTesting(frontmostBundleIdentifier: String? = nil) {
+        pollClipboard(frontmostBundleIdentifier: frontmostBundleIdentifier)
+    }
+
+    func debugSelectHistoryClipForTesting(_ id: UUID) {
+        let item = NSMenuItem(title: "History fixture", action: nil, keyEquivalent: "")
+        item.representedObject = id.uuidString
+        selectClip(item)
+    }
+
+    func debugSelectSnippetForTesting(_ content: String) {
+        let item = NSMenuItem(title: "Snippet fixture", action: nil, keyEquivalent: "")
+        item.representedObject = SnippetActionReference(folderID: UUID(), snippetID: UUID(), content: content)
+        selectSnippet(item)
+    }
+
+    var debugMenuRebuildCountForTesting: Int { debugMenuRebuildGeneration }
+    var debugClipboardCaptureCountForTesting: Int { debugClipboardCaptureGeneration }
+
     func debugMakeHistoryMenuForTesting() -> NSMenu {
         makeHistoryMenu()
     }
@@ -23587,6 +24386,32 @@ private extension CMDebugAppControllerReportForTesting {
 final class ClipStore {
     private(set) var clips: [ClipItem] = []
     private var hasUnsavedChanges = false
+    private var persistenceRevision: UInt64 = 0
+    private var pendingAsyncSaves: [PersistenceIdentity: [(Bool) -> Void]] = [:]
+
+    // Store state belongs to the main thread. Only immutable snapshots cross this queue.
+    // Sharing the queue also orders saves, loads, and deletion across store instances.
+    private static let persistenceQueue = DispatchQueue(label: "ClipMenu.history-persistence", qos: .utility)
+
+    private struct PersistenceIdentity: Hashable {
+        let revision: UInt64
+        let archiveURL: URL
+        let jsonURL: URL
+    }
+
+    private struct PersistenceSnapshot {
+        let identity: PersistenceIdentity
+        let clips: [ClipItem]
+        let orderedClips: [ClipItem]
+#if DEBUG || TESTING
+        var beforeWrite: (() -> Void)?
+#endif
+    }
+
+#if DEBUG || TESTING
+    var debugPersistenceDirectoryForTesting: URL?
+    var debugBeforePersistenceWriteForTesting: (() -> Void)?
+#endif
 
 #if DEBUG
     struct DebugSnapshot {
@@ -23599,6 +24424,7 @@ final class ClipStore {
     }
 
     func debugRestoreSnapshotForTesting(_ snapshot: DebugSnapshot) {
+        persistenceRevision &+= 1
         clips = snapshot.clips
         hasUnsavedChanges = snapshot.hasUnsavedChanges
     }
@@ -23634,7 +24460,12 @@ final class ClipStore {
     }
 
     private var supportDirectory: URL {
-        clipMenuApplicationSupportDirectory()
+#if DEBUG || TESTING
+        if let debugPersistenceDirectoryForTesting {
+            return debugPersistenceDirectoryForTesting
+        }
+#endif
+        return clipMenuApplicationSupportDirectory()
     }
 
     private var fileURL: URL {
@@ -23646,6 +24477,8 @@ final class ClipStore {
     }
 
     func load() {
+        persistenceRevision &+= 1
+        Self.persistenceQueue.sync {}
         if shouldPreferJSONStore(),
            let jsonClips = loadJSONClips(from: jsonFileURL) {
             clips = jsonClips
@@ -23681,17 +24514,12 @@ final class ClipStore {
 
     @discardableResult
     func save() -> Bool {
-        trim()
-        guard let data = try? JSONEncoder().encode(clips) else { return false }
-        do {
-            try saveLegacyCompatibleArchive(to: fileURL)
-            try? data.write(to: jsonFileURL, options: .atomic)
-            hasUnsavedChanges = false
-            return true
-        } catch {
-            NSLog("Could not save clipboard history: \(error.localizedDescription)")
-            return false
-        }
+        // A final synchronous save supersedes completions from earlier async saves.
+        persistenceRevision &+= 1
+        let snapshot = makePersistenceSnapshot()
+        let saved = Self.persistenceQueue.sync { Self.writePersistenceSnapshot(snapshot) }
+        hasUnsavedChanges = !saved
+        return saved
     }
 
     @discardableResult
@@ -23700,9 +24528,42 @@ final class ClipStore {
         return save()
     }
 
+    func saveIfNeededAsync(completion: @escaping (Bool) -> Void) {
+        guard hasUnsavedChanges else {
+            DispatchQueue.main.async { completion(true) }
+            return
+        }
+
+        let snapshot = makePersistenceSnapshot()
+        let identity = snapshot.identity
+        if pendingAsyncSaves[identity] != nil {
+            pendingAsyncSaves[identity]?.append(completion)
+            return
+        }
+        pendingAsyncSaves[identity] = [completion]
+
+        Self.persistenceQueue.async {
+            let saved = Self.writePersistenceSnapshot(snapshot)
+            DispatchQueue.main.async {
+                let completions = self.pendingAsyncSaves.removeValue(forKey: identity) ?? []
+                if self.currentPersistenceIdentity == identity {
+                    self.hasUnsavedChanges = !saved
+                }
+                for completion in completions {
+                    completion(saved)
+                }
+            }
+        }
+    }
+
     func removeSavedHistory() {
-        try? FileManager.default.removeItem(at: fileURL)
-        try? FileManager.default.removeItem(at: jsonFileURL)
+        let archiveURL = fileURL
+        let jsonURL = jsonFileURL
+        persistenceRevision &+= 1
+        Self.persistenceQueue.sync {
+            try? FileManager.default.removeItem(at: archiveURL)
+            try? FileManager.default.removeItem(at: jsonURL)
+        }
         hasUnsavedChanges = false
     }
 
@@ -23713,13 +24574,13 @@ final class ClipStore {
             clips.append(clip)
         }
         trim()
-        hasUnsavedChanges = true
+        markUnsavedChanges()
     }
 
     func promote(_ id: UUID) {
         guard let index = clips.firstIndex(where: { $0.id == id }) else { return }
         clips[index].lastUsedAt = Date()
-        hasUnsavedChanges = true
+        markUnsavedChanges()
     }
 
     func clip(with uuidString: String) -> ClipItem? {
@@ -23729,19 +24590,19 @@ final class ClipStore {
 
     func clear() {
         clips.removeAll()
-        hasUnsavedChanges = true
+        markUnsavedChanges()
     }
 
     func remove(_ id: UUID) {
         clips.removeAll { $0.id == id }
-        hasUnsavedChanges = true
+        markUnsavedChanges()
     }
 
     func trimToCurrentHistoryLimit() {
         let oldCount = clips.count
         trim()
         if clips.count != oldCount {
-            hasUnsavedChanges = true
+            markUnsavedChanges()
         }
     }
 
@@ -23829,10 +24690,60 @@ final class ClipStore {
         (try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate]) as? Date
     }
 
-    private func saveLegacyCompatibleArchive(to url: URL) throws {
-        let archivedClips = orderedClips.map { ArchivedClip(clip: $0) }
-        let data = try NSKeyedArchiver.archivedData(withRootObject: archivedClips, requiringSecureCoding: false)
-        try data.write(to: url, options: .atomic)
+    private func markUnsavedChanges() {
+        persistenceRevision &+= 1
+        hasUnsavedChanges = true
+    }
+
+    private func makePersistenceSnapshot() -> PersistenceSnapshot {
+        let oldCount = clips.count
+        trim()
+        if clips.count != oldCount {
+            markUnsavedChanges()
+        }
+        let identity = currentPersistenceIdentity
+#if DEBUG || TESTING
+        var snapshot = PersistenceSnapshot(identity: identity, clips: clips, orderedClips: orderedClips)
+        snapshot.beforeWrite = debugBeforePersistenceWriteForTesting
+#else
+        let snapshot = PersistenceSnapshot(identity: identity, clips: clips, orderedClips: orderedClips)
+#endif
+        return snapshot
+    }
+
+    private var currentPersistenceIdentity: PersistenceIdentity {
+        let directory = supportDirectory
+        return PersistenceIdentity(
+            revision: persistenceRevision,
+            archiveURL: directory.appendingPathComponent("clips.data"),
+            jsonURL: directory.appendingPathComponent("clips.json")
+        )
+    }
+
+    private static func writePersistenceSnapshot(_ snapshot: PersistenceSnapshot) -> Bool {
+        let started = ProcessInfo.processInfo.systemUptime
+        CMTraceMenuPaste("history.persist.begin")
+        let saved: Bool = autoreleasepool {
+#if DEBUG || TESTING
+            snapshot.beforeWrite?()
+#endif
+            do {
+                let jsonData = try JSONEncoder().encode(snapshot.clips)
+                let archivedClips = snapshot.orderedClips.map { ArchivedClip(clip: $0) }
+                let archiveData = try NSKeyedArchiver.archivedData(withRootObject: archivedClips, requiringSecureCoding: false)
+                try archiveData.write(to: snapshot.identity.archiveURL, options: .atomic)
+                // The legacy archive remains authoritative, matching the existing save contract.
+                try? jsonData.write(to: snapshot.identity.jsonURL, options: .atomic)
+                return true
+            } catch {
+                NSLog("Could not save clipboard history: \(error.localizedDescription)")
+                return false
+            }
+        }
+        CMTraceMenuPaste(String(format: "history.persist.end elapsedMs=%.1f saved=%@",
+                               (ProcessInfo.processInfo.systemUptime - started) * 1000,
+                               saved ? "true" : "false"))
+        return saved
     }
 
     private func loadLegacyClips() -> [ClipItem]? {

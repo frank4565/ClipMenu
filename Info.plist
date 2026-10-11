@@ -31,7 +31,7 @@
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
-	<string>NSApplication</string>
+	<string>CMApplication</string>
 	<key>SUFeedURL</key>
 	<string>$(CLIPMENU_UPDATE_FEED_URL)</string>
 	<key>SUPublicEDKey</key>

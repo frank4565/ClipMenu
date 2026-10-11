@@ -1,8 +1,322 @@
 import AppKit
+import Carbon
 import XCTest
 @testable import ClipMenu
 
 #if DEBUG
+// This probe exposes only the controller's lock-protected activity state to a
+// background assertion; the controller's AppKit operations remain on main.
+private struct PasteActivityProbe: @unchecked Sendable {
+    private let controller: AppController
+
+    init(_ controller: AppController) {
+        self.controller = controller
+    }
+
+    var isActive: Bool { controller.debugPasteActivityIsActiveForTesting }
+}
+
+@MainActor
+final class PasteActivityLifetimeTests: XCTestCase {
+    func testActivityWatchdogReleasesWhileMainThreadIsBlocked() {
+        let controller = AppController()
+        let generation = controller.debugBeginPasteActivityForTesting(duration: 0.03)
+        defer { controller.debugFinishPasteActivityForTesting(generation: generation) }
+        XCTAssertTrue(controller.debugPasteActivityIsActiveForTesting)
+        let probe = PasteActivityProbe(controller)
+        let released = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let deadline = ProcessInfo.processInfo.systemUptime + 1
+            while probe.isActive,
+                  ProcessInfo.processInfo.systemUptime < deadline {
+                Thread.sleep(forTimeInterval: 0.005)
+            }
+            released.signal()
+        }
+        // This deliberately blocks main; expiry must be independent of the
+        // UI loop whose delayed callbacks caused the affected-machine bug.
+        XCTAssertEqual(released.wait(timeout: .now() + 2), .success)
+        XCTAssertFalse(controller.debugPasteActivityIsActiveForTesting)
+    }
+
+    func testSupersededWatchdogCannotEndNewPasteActivity() {
+        let controller = AppController()
+        let oldGeneration = controller.debugBeginPasteActivityForTesting(duration: 0.02)
+        let newGeneration = controller.debugBeginPasteActivityForTesting(duration: 2)
+        defer { controller.debugFinishPasteActivityForTesting(generation: newGeneration) }
+        controller.debugFinishPasteActivityForTesting(generation: oldGeneration)
+        let oldDeadlinePassed = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.1) {
+            oldDeadlinePassed.signal()
+        }
+        XCTAssertEqual(oldDeadlinePassed.wait(timeout: .now() + 1), .success)
+        XCTAssertTrue(controller.debugPasteActivityIsActiveForTesting)
+        controller.debugFinishPasteActivityForTesting(generation: newGeneration)
+        XCTAssertFalse(controller.debugPasteActivityIsActiveForTesting)
+    }
+
+    func testFinishedActivityStaysReleasedOnRepeatedCompletion() {
+        let controller = AppController()
+        let generation = controller.debugBeginPasteActivityForTesting(duration: 2)
+        controller.debugFinishPasteActivityForTesting(generation: generation)
+        controller.debugFinishPasteActivityForTesting(generation: generation)
+        XCTAssertFalse(controller.debugPasteActivityIsActiveForTesting)
+    }
+}
+
+@MainActor
+final class AppControllerClipboardOwnershipTests: XCTestCase {
+    func testSelectingExistingClipWithoutReorderingDoesNotRecaptureOrRebuild() throws {
+        try withController { controller, pasteboard in
+            let history = fixtureHistory()
+            controller.debugReplaceHistoryClipsForTesting(history)
+            let rebuildCount = controller.debugMenuRebuildCountForTesting
+
+            controller.debugSelectHistoryClipForTesting(history[0].id)
+
+            XCTAssertEqual(pasteboard.string(forType: .string), history[0].text)
+            XCTAssertEqual(controller.debugHistoryClipsForTesting, history)
+            XCTAssertEqual(controller.debugMenuRebuildCountForTesting, rebuildCount)
+            controller.debugPollClipboardForTesting()
+            controller.debugPollClipboardForTesting()
+            XCTAssertEqual(controller.debugClipboardCaptureCountForTesting, 0)
+            XCTAssertEqual(controller.debugMenuRebuildCountForTesting, rebuildCount)
+            XCTAssertEqual(controller.debugHistoryClipsForTesting, history)
+        }
+    }
+
+    func testSelectingExistingClipWithReorderingPromotesItWithoutRecapture() throws {
+        try withController { controller, pasteboard in
+            UserDefaults.standard.set(true, forKey: CMPrefReorderClipsAfterPasting)
+            let history = fixtureHistory()
+            controller.debugReplaceHistoryClipsForTesting(history)
+            let rebuildCount = controller.debugMenuRebuildCountForTesting
+
+            controller.debugSelectHistoryClipForTesting(history[0].id)
+
+            let promotedHistory = controller.debugHistoryClipsForTesting
+            let promotedClip = try XCTUnwrap(promotedHistory.first { $0.id == history[0].id })
+            XCTAssertEqual(pasteboard.string(forType: .string), history[0].text)
+            XCTAssertEqual(promotedHistory.map(\.id), history.map(\.id))
+            XCTAssertGreaterThan(promotedClip.lastUsedAt, history[1].lastUsedAt)
+            XCTAssertEqual(promotedClip.createdAt, history[0].createdAt)
+            XCTAssertEqual(promotedHistory[1], history[1])
+            XCTAssertEqual(controller.debugMenuRebuildCountForTesting, rebuildCount + 1)
+
+            controller.debugPollClipboardForTesting()
+            controller.debugPollClipboardForTesting()
+
+            XCTAssertEqual(controller.debugClipboardCaptureCountForTesting, 0)
+            XCTAssertEqual(controller.debugMenuRebuildCountForTesting, rebuildCount + 1)
+            XCTAssertEqual(controller.debugHistoryClipsForTesting, promotedHistory)
+        }
+    }
+
+    func testForeignCopyAfterHistorySelectionIsCapturedExactlyOnce() throws {
+        try withController { controller, pasteboard in
+            let history = fixtureHistory()
+            controller.debugReplaceHistoryClipsForTesting(history)
+            controller.debugSelectHistoryClipForTesting(history[0].id)
+            controller.debugPollClipboardForTesting()
+            let rebuildCount = controller.debugMenuRebuildCountForTesting
+            let externalWriter = NSPasteboard(name: pasteboard.name)
+            externalWriter.clearContents()
+            XCTAssertTrue(externalWriter.setString("Foreign copy after selection", forType: .string))
+
+            controller.debugPollClipboardForTesting()
+
+            let capturedHistory = controller.debugHistoryClipsForTesting
+            XCTAssertEqual(capturedHistory.prefix(history.count).map(\.id), history.map(\.id))
+            XCTAssertEqual(capturedHistory.last?.text, "Foreign copy after selection")
+            XCTAssertEqual(capturedHistory.count, history.count + 1)
+            XCTAssertEqual(controller.debugClipboardCaptureCountForTesting, 1)
+            XCTAssertEqual(controller.debugMenuRebuildCountForTesting, rebuildCount + 1)
+
+            controller.debugPollClipboardForTesting()
+
+            XCTAssertEqual(controller.debugHistoryClipsForTesting, capturedHistory)
+            XCTAssertEqual(controller.debugClipboardCaptureCountForTesting, 1)
+            XCTAssertEqual(controller.debugMenuRebuildCountForTesting, rebuildCount + 1)
+        }
+    }
+
+    func testSnippetOutputStillEntersHistoryThroughClipboardPolling() throws {
+        try withController { controller, pasteboard in
+            let history = fixtureHistory()
+            controller.debugReplaceHistoryClipsForTesting(history)
+            let rebuildCount = controller.debugMenuRebuildCountForTesting
+
+            controller.debugSelectSnippetForTesting("Snippet output remains capturable")
+
+            XCTAssertEqual(pasteboard.string(forType: .string), "Snippet output remains capturable")
+            XCTAssertEqual(controller.debugHistoryClipsForTesting, history)
+            XCTAssertEqual(controller.debugClipboardCaptureCountForTesting, 0)
+            XCTAssertEqual(controller.debugMenuRebuildCountForTesting, rebuildCount)
+
+            controller.debugPollClipboardForTesting()
+
+            let capturedHistory = controller.debugHistoryClipsForTesting
+            XCTAssertEqual(capturedHistory.last?.text, "Snippet output remains capturable")
+            XCTAssertEqual(capturedHistory.count, history.count + 1)
+            XCTAssertEqual(controller.debugClipboardCaptureCountForTesting, 1)
+            XCTAssertEqual(controller.debugMenuRebuildCountForTesting, rebuildCount + 1)
+            controller.debugPollClipboardForTesting()
+            XCTAssertEqual(controller.debugHistoryClipsForTesting, capturedHistory)
+            XCTAssertEqual(controller.debugClipboardCaptureCountForTesting, 1)
+        }
+    }
+
+    func testPendingPasteDefersPollingWithoutAcknowledgingForeignCopy() throws {
+        try withController { controller, pasteboard in
+            let history = fixtureHistory()
+            controller.debugReplaceHistoryClipsForTesting(history)
+            let rebuildCount = controller.debugMenuRebuildCountForTesting
+            let generation = controller.debugBeginPasteActivityForTesting(duration: 2)
+            defer { controller.debugFinishPasteActivityForTesting(generation: generation) }
+            let externalWriter = NSPasteboard(name: pasteboard.name)
+            externalWriter.clearContents()
+            XCTAssertTrue(externalWriter.setString("Copy while paste is pending", forType: .string))
+
+            controller.debugPollClipboardForTesting()
+            controller.debugPollClipboardForTesting()
+
+            XCTAssertTrue(controller.debugPasteActivityIsActiveForTesting)
+            XCTAssertEqual(controller.debugHistoryClipsForTesting, history)
+            XCTAssertEqual(controller.debugClipboardCaptureCountForTesting, 0)
+            XCTAssertEqual(controller.debugMenuRebuildCountForTesting, rebuildCount)
+
+            controller.debugFinishPasteActivityForTesting(generation: generation)
+            controller.debugPollClipboardForTesting()
+
+            XCTAssertFalse(controller.debugPasteActivityIsActiveForTesting)
+            XCTAssertEqual(controller.debugHistoryClipsForTesting.last?.text, "Copy while paste is pending")
+            XCTAssertEqual(controller.debugClipboardCaptureCountForTesting, 1)
+            XCTAssertEqual(controller.debugMenuRebuildCountForTesting, rebuildCount + 1)
+        }
+    }
+
+    func testReorderingDefersMenuRebuildUntilPasteCompletesOnMain() throws {
+        try withController { controller, _ in
+            UserDefaults.standard.set(true, forKey: CMPrefReorderClipsAfterPasting)
+            let history = fixtureHistory()
+            controller.debugReplaceHistoryClipsForTesting(history)
+            let rebuildCount = controller.debugMenuRebuildCountForTesting
+            let generation = controller.debugBeginPasteActivityForTesting(duration: 2)
+            defer { controller.debugFinishPasteActivityForTesting(generation: generation) }
+
+            controller.debugSelectHistoryClipForTesting(history[0].id)
+
+            let promotedHistory = controller.debugHistoryClipsForTesting
+            XCTAssertGreaterThan(promotedHistory[0].lastUsedAt, history[0].lastUsedAt)
+            XCTAssertEqual(controller.debugMenuRebuildCountForTesting, rebuildCount)
+            XCTAssertEqual(controller.debugClipboardCaptureCountForTesting, 0)
+
+            controller.debugFinishPasteActivityForTesting(generation: generation)
+
+            XCTAssertEqual(controller.debugMenuRebuildCountForTesting, rebuildCount,
+                           "Finishing must queue the deferred AppKit rebuild on main.")
+            pumpMainUntil { controller.debugMenuRebuildCountForTesting == rebuildCount + 1 }
+            controller.debugFinishPasteActivityForTesting(generation: generation)
+            controller.debugPollClipboardForTesting()
+            XCTAssertEqual(controller.debugMenuRebuildCountForTesting, rebuildCount + 1)
+            XCTAssertEqual(controller.debugClipboardCaptureCountForTesting, 0)
+            XCTAssertEqual(controller.debugHistoryClipsForTesting, promotedHistory)
+        }
+    }
+
+    func testExistingHistorySelectionWorksWhenFrontmostAppIsExcluded() throws {
+        try withController { controller, pasteboard in
+            let excludedBundle = "com.example.clipmenu.excluded-fixture"
+            UserDefaults.standard.set([["bundleIdentifier": excludedBundle]], forKey: "excludeApps")
+            let history = fixtureHistory()
+            controller.debugReplaceHistoryClipsForTesting(history)
+            let rebuildCount = controller.debugMenuRebuildCountForTesting
+
+            controller.debugSelectHistoryClipForTesting(history[0].id)
+            controller.debugPollClipboardForTesting(frontmostBundleIdentifier: excludedBundle)
+
+            XCTAssertEqual(pasteboard.string(forType: .string), history[0].text)
+            XCTAssertEqual(controller.debugHistoryClipsForTesting, history)
+            XCTAssertEqual(controller.debugClipboardCaptureCountForTesting, 0)
+            XCTAssertEqual(controller.debugMenuRebuildCountForTesting, rebuildCount)
+
+            let externalWriter = NSPasteboard(name: pasteboard.name)
+            externalWriter.clearContents()
+            XCTAssertTrue(externalWriter.setString("Copy from excluded app", forType: .string))
+            controller.debugPollClipboardForTesting(frontmostBundleIdentifier: excludedBundle)
+            XCTAssertEqual(controller.debugHistoryClipsForTesting, history)
+            XCTAssertEqual(controller.debugClipboardCaptureCountForTesting, 0)
+            XCTAssertEqual(controller.debugMenuRebuildCountForTesting, rebuildCount)
+        }
+    }
+
+    func testExistingHistorySelectionWorksWhenStringCaptureIsDisabled() throws {
+        try withController { controller, pasteboard in
+            var storeTypes = ClipItem.defaultStoreTypes()
+            storeTypes["String"] = false
+            UserDefaults.standard.set(storeTypes, forKey: "storeTypes")
+            let history = fixtureHistory()
+            controller.debugReplaceHistoryClipsForTesting(history)
+            let rebuildCount = controller.debugMenuRebuildCountForTesting
+
+            controller.debugSelectHistoryClipForTesting(history[0].id)
+            XCTAssertNil(ClipItem.fromPasteboard(pasteboard))
+            controller.debugPollClipboardForTesting()
+
+            XCTAssertEqual(pasteboard.string(forType: .string), history[0].text)
+            XCTAssertEqual(controller.debugHistoryClipsForTesting, history)
+            XCTAssertEqual(controller.debugClipboardCaptureCountForTesting, 0)
+            XCTAssertEqual(controller.debugMenuRebuildCountForTesting, rebuildCount)
+        }
+    }
+
+    private func withController(_ body: (AppController, NSPasteboard) throws -> Void) throws {
+        let defaults = UserDefaults.standard
+        let domainName = try XCTUnwrap(Bundle.main.bundleIdentifier)
+        let originalDomain = defaults.persistentDomain(forName: domainName)
+        let originalController = AppController.debugSharedControllerForTesting
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("ClipMenuControllerOwnership-\(UUID().uuidString)"))
+        defer {
+            AppController.debugSharedControllerForTesting = originalController
+            if let originalDomain {
+                defaults.setPersistentDomain(originalDomain, forName: domainName)
+            } else {
+                defaults.removePersistentDomain(forName: domainName)
+            }
+            pasteboard.releaseGlobally()
+        }
+        defaults.set(false, forKey: CMPrefInputPasteCommandKey)
+        defaults.set(false, forKey: CMPrefSaveHistoryOnQuitKey)
+        defaults.set(false, forKey: CMPrefEnableActionKey)
+        defaults.set(false, forKey: CMPrefReorderClipsAfterPasting)
+        defaults.set(0, forKey: CMPrefShowStatusItemKey)
+        defaults.set(20, forKey: CMPrefMaxHistorySizeKey)
+        defaults.set(ClipItem.defaultStoreTypes(), forKey: "storeTypes")
+        defaults.set([], forKey: "excludeApps")
+
+        try body(AppController(pasteboard: pasteboard), pasteboard)
+    }
+
+    private func fixtureHistory() -> [ClipItem] {
+        ["Older history fixture", "Newer history fixture"].enumerated().map { index, text in
+            let date = Date(timeIntervalSince1970: TimeInterval(index + 1))
+            return ClipItem(text: text, createdAt: date, lastUsedAt: date)
+        }
+    }
+
+    private func pumpMainUntil(
+        _ condition: () -> Bool,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let deadline = ProcessInfo.processInfo.systemUptime + 1
+        while !condition(), ProcessInfo.processInfo.systemUptime < deadline {
+            CFRunLoopRunInMode(.defaultMode, 0.01, false)
+        }
+        XCTAssertTrue(condition(), "Deferred work did not run on main before the deadline.", file: file, line: line)
+    }
+}
+
 @MainActor
 final class AppControllerDebugReportTests: XCTestCase {
     func testMaxHistoryNormalizationReportPreservesPreferencesAndExistingHistory() throws {
@@ -157,9 +471,207 @@ final class AppControllerDebugReportTests: XCTestCase {
 }
 #endif
 
+#if DEBUG
+@MainActor
+private final class NumericShortcutSelectionReceiver: NSObject {
+    var selectedIndexes: [Int] = []
+    var onSelection: ((NSMenuItem) -> Void)?
+
+    @objc func selectItem(_ sender: NSMenuItem) {
+        selectedIndexes.append(sender.tag)
+        onSelection?(sender)
+    }
+}
+
+@MainActor
+final class AppControllerNumericShortcutTests: XCTestCase {
+    // These tests exercise the Quartz filter and its queued native action.
+    // Actual keyboard delivery and Accessibility permission require UI coverage.
+    func testQuartzCommandNumberQueuesOneOrdinarySelectionAndConsumesItsKeyUp() throws {
+        let controller = AppController()
+        let originals = captureDefaults([CMPrefMenuItemsAreMarkedWithNumbersKey, CMPrefMenuItemsTitleStartWithZeroKey,
+                                         CMPrefEnableActionKey, CMPrefCommandClickBehaviorKey])
+        defer { restoreDefaults(originals) }
+        UserDefaults.standard.set(true, forKey: CMPrefMenuItemsAreMarkedWithNumbersKey)
+        UserDefaults.standard.set(false, forKey: CMPrefMenuItemsTitleStartWithZeroKey)
+        UserDefaults.standard.set(true, forKey: CMPrefEnableActionKey)
+        UserDefaults.standard.set(["type": "builtin", "name": "pasteAsPlainText:"], forKey: CMPrefCommandClickBehaviorKey)
+        let menu = controller.debugNumericShortcutMenuForTesting(itemCount: 11, foldered: false)
+        let receiver = NumericShortcutSelectionReceiver()
+        var invokedModifiedClickActions: [Bool] = []
+        receiver.onSelection = { item in
+            invokedModifiedClickActions.append(controller.debugModifiedClickActionRequestedForTesting(item))
+        }
+        attach(receiver, to: menu)
+        defer { controller.debugStopTrackingPopupMenuForTesting(menu) }
+
+        XCTAssertFalse(try filter(controller, "1", keyCode: 18))
+        XCTAssertFalse(try filter(controller, "1", keyCode: 18, type: .keyUp))
+        controller.debugTrackPopupMenuForTesting(menu)
+        XCTAssertFalse(try filter(controller, "v", keyCode: 9))
+        XCTAssertFalse(try filter(controller, "1", keyCode: 18, modifiers: []))
+        XCTAssertFalse(try filter(controller, "1", keyCode: 18, modifiers: [.command, .shift]))
+        XCTAssertFalse(try filter(controller, "1", keyCode: 18, modifiers: [.command, .control]))
+        XCTAssertFalse(try filter(controller, "1", keyCode: 18, modifiers: [.command, .option]))
+        XCTAssertTrue(try filter(controller, "1", keyCode: 18))
+        XCTAssertTrue(try filter(controller, "1", keyCode: 18, isRepeat: true))
+        XCTAssertTrue(try filter(controller, "2", keyCode: 19), "A second eligible shortcut must not trigger native dispatch while selection is queued")
+        XCTAssertEqual(receiver.selectedIndexes, [], "The tap callback must defer AppKit action dispatch")
+        drainQueuedActions()
+        XCTAssertEqual(receiver.selectedIndexes, [0])
+        XCTAssertEqual(invokedModifiedClickActions, [false], "Command-number must stay an ordinary selection when Command-click has an action")
+        XCTAssertEqual(controller.debugHandledNumericPopupKeyCountForTesting, 1)
+        XCTAssertEqual(menu.items[10].keyEquivalent, "")
+        controller.menuDidClose(menu)
+        XCTAssertEqual(controller.debugTrackedPopupMenuCountForTesting, 0)
+        XCTAssertTrue(try filter(controller, "1", keyCode: 18, type: .keyUp))
+        XCTAssertFalse(try filter(controller, "1", keyCode: 18, type: .keyUp), "Only the keyup associated with a consumed keydown is filtered")
+        XCTAssertTrue(try filter(controller, "2", keyCode: 19, type: .keyUp))
+        drainQueuedActions()
+        XCTAssertEqual(controller.debugConsumedNumericPopupKeyCountForTesting, 0)
+        XCTAssertFalse(controller.debugHasNumericKeyEventHandlerForTesting)
+        XCTAssertFalse(try filter(controller, "1", keyCode: 18))
+        XCTAssertEqual(receiver.selectedIndexes, [0])
+
+        controller.debugTrackPopupMenuForTesting(menu)
+        XCTAssertTrue(try filter(controller, "0", keyCode: 29))
+        drainQueuedActions()
+        controller.menuDidClose(menu)
+        XCTAssertTrue(try filter(controller, "0", keyCode: 29, type: .keyUp))
+        drainQueuedActions()
+        XCTAssertEqual(receiver.selectedIndexes, [0, 9])
+        XCTAssertEqual(invokedModifiedClickActions, [false, false])
+    }
+
+    func testQuartzZeroBasedNumbersReachFolderedItemsUsingEventCharacters() throws {
+        let controller = AppController()
+        let originals = captureDefaults([CMPrefMenuItemsAreMarkedWithNumbersKey, CMPrefMenuItemsTitleStartWithZeroKey])
+        defer { restoreDefaults(originals) }
+        UserDefaults.standard.set(true, forKey: CMPrefMenuItemsAreMarkedWithNumbersKey)
+        UserDefaults.standard.set(true, forKey: CMPrefMenuItemsTitleStartWithZeroKey)
+        let menu = controller.debugNumericShortcutMenuForTesting(itemCount: 10, foldered: true)
+        let submenu = try XCTUnwrap(menu.items.first?.submenu)
+        let receiver = NumericShortcutSelectionReceiver()
+        attach(receiver, to: submenu)
+        defer { controller.debugStopTrackingPopupMenuForTesting(menu) }
+
+        for (character, keyCode) in [("0", CGKeyCode(29)), ("0", CGKeyCode(18)), ("9", CGKeyCode(25))] {
+            controller.debugTrackPopupMenuForTesting(menu)
+            controller.debugTrackPopupMenuForTesting(submenu)
+            XCTAssertEqual(controller.debugTrackedPopupMenuCountForTesting, 2)
+            XCTAssertTrue(try filter(controller, character, keyCode: keyCode))
+            drainQueuedActions()
+            controller.menuDidClose(menu)
+            XCTAssertEqual(controller.debugTrackedPopupMenuCountForTesting, 0, "Closing a root closes its tracked descendants")
+            XCTAssertTrue(try filter(controller, character, keyCode: keyCode, type: .keyUp))
+            drainQueuedActions()
+            XCTAssertFalse(controller.debugHasNumericKeyEventHandlerForTesting)
+        }
+        XCTAssertEqual(receiver.selectedIndexes, [0, 0, 9], "Injected event characters must take precedence over US physical-key assumptions")
+    }
+
+    func testClosingMenuBeforeQueuedActionCancelsItAndLeavesUnrelatedKeysAlone() throws {
+        let controller = AppController()
+        let originals = captureDefaults([CMPrefMenuItemsAreMarkedWithNumbersKey, CMPrefMenuItemsTitleStartWithZeroKey])
+        defer { restoreDefaults(originals) }
+        UserDefaults.standard.set(true, forKey: CMPrefMenuItemsAreMarkedWithNumbersKey)
+        UserDefaults.standard.set(false, forKey: CMPrefMenuItemsTitleStartWithZeroKey)
+        let menu = controller.debugNumericShortcutMenuForTesting(itemCount: 3, foldered: false)
+        let receiver = NumericShortcutSelectionReceiver()
+        attach(receiver, to: menu)
+        menu.items[0].isEnabled = false
+        menu.items[1].isHidden = true
+        controller.debugTrackPopupMenuForTesting(menu)
+        defer { controller.debugStopTrackingPopupMenuForTesting(menu) }
+        XCTAssertFalse(try filter(controller, "1", keyCode: 18), "Disabled items are not intercepted")
+        XCTAssertFalse(try filter(controller, "2", keyCode: 19), "Hidden items are not intercepted")
+        XCTAssertFalse(try filter(controller, "9", keyCode: 25), "Unassigned digits are not intercepted")
+        XCTAssertTrue(try filter(controller, "3", keyCode: 20))
+        controller.menuDidClose(menu)
+        XCTAssertFalse(try filter(controller, "v", keyCode: 9))
+        XCTAssertFalse(try filter(controller, "1", keyCode: 18, type: .keyUp), "Unmatched keyups pass through even while a consumed keyup is pending")
+        drainQueuedActions()
+        XCTAssertEqual(receiver.selectedIndexes, [], "A stale queued selection must not dispatch after its menu closes")
+        XCTAssertTrue(try filter(controller, "3", keyCode: 20, type: .keyUp))
+        drainQueuedActions()
+        XCTAssertFalse(controller.debugHasNumericKeyEventHandlerForTesting)
+        XCTAssertFalse(try filter(controller, "3", keyCode: 20))
+        drainQueuedActions()
+        XCTAssertEqual(receiver.selectedIndexes, [])
+    }
+
+    func testCommandMouseActionRetainsItsInteractionTypeAcrossModifierChanges() throws {
+        let controller = AppController()
+        let originals = captureDefaults([CMPrefEnableActionKey, CMPrefCommandClickBehaviorKey])
+        defer { restoreDefaults(originals) }
+        UserDefaults.standard.set(true, forKey: CMPrefEnableActionKey)
+        UserDefaults.standard.set(["type": "builtin", "name": "pasteAsPlainText:"], forKey: CMPrefCommandClickBehaviorKey)
+        let mouseItem = NSMenuItem(title: "Mouse fixture", action: nil, keyEquivalent: "")
+        mouseItem.tag = -1
+        let mouseEvent = try XCTUnwrap(NSEvent.mouseEvent(
+            with: .leftMouseUp, location: .zero, modifierFlags: [.command], timestamp: 0,
+            windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 0
+        ))
+        controller.debugRecordPopupInteractionForTesting(mouseEvent)
+        let flagsEvent = try XCTUnwrap(NSEvent.keyEvent(
+            with: .flagsChanged, location: .zero, modifierFlags: [.command], timestamp: 0,
+            windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "",
+            isARepeat: false, keyCode: 55
+        ))
+        controller.debugRecordPopupInteractionForTesting(flagsEvent)
+        XCTAssertTrue(controller.debugModifiedClickActionRequestedForTesting(mouseItem))
+    }
+
+    private func attach(_ receiver: NumericShortcutSelectionReceiver, to menu: NSMenu) {
+        for item in menu.items {
+            item.target = receiver
+            item.action = #selector(NumericShortcutSelectionReceiver.selectItem(_:))
+        }
+    }
+
+    private func filter(
+        _ controller: AppController, _ character: String, keyCode: CGKeyCode,
+        modifiers: NSEvent.ModifierFlags = [.command], type: CGEventType = .keyDown,
+        isRepeat: Bool = false
+    ) throws -> Bool {
+        let source = try XCTUnwrap(CGEventSource(stateID: .privateState))
+        let event = try XCTUnwrap(CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: type == .keyDown))
+        var flags: CGEventFlags = []
+        if modifiers.contains(.command) { flags.insert(.maskCommand) }
+        if modifiers.contains(.shift) { flags.insert(.maskShift) }
+        if modifiers.contains(.control) { flags.insert(.maskControl) }
+        if modifiers.contains(.option) { flags.insert(.maskAlternate) }
+        event.flags = flags
+        event.setIntegerValueField(.keyboardEventAutorepeat, value: isRepeat ? 1 : 0)
+        let characters = Array(character.utf16)
+        characters.withUnsafeBufferPointer {
+            event.keyboardSetUnicodeString(stringLength: $0.count, unicodeString: $0.baseAddress)
+        }
+        return controller.debugConsumeNumericPopupKeyEventForTesting(type: type, event: event)
+    }
+
+    private func drainQueuedActions() {
+        CFRunLoopRunInMode(.defaultMode, 0.01, false)
+    }
+
+    private func captureDefaults(_ keys: [String]) -> [String: Any] {
+        Dictionary(uniqueKeysWithValues: keys.map { ($0, UserDefaults.standard.object(forKey: $0) ?? NSNull()) })
+    }
+
+    private func restoreDefaults(_ originals: [String: Any]) {
+        for (key, value) in originals {
+            if value is NSNull { UserDefaults.standard.removeObject(forKey: key) }
+            else { UserDefaults.standard.set(value, forKey: key) }
+        }
+    }
+}
+
+#endif
+
 #if TESTING
 @MainActor
 final class AppControllerMenuSurfaceTests: XCTestCase {
+
     func testMenuSurfaceExerciseBuildsRepresentativeMenus() throws {
         let appController = try XCTUnwrap(NSApp.delegate as? AppController)
         let report = appController.debugExerciseMenuSurfaceForTesting()

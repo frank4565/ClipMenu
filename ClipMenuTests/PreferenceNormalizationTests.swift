@@ -3,7 +3,328 @@ import Carbon
 import XCTest
 @testable import ClipMenu
 
+private final class WeakProbeReference {
+    weak var object: NSObject?
+
+    init(_ object: NSObject?) {
+        self.object = object
+    }
+}
+
+private final class AppKitWorkIdentifierProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedIdentifier: Int?
+
+    var identifier: Int? {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedIdentifier
+    }
+
+    func enqueue(_ work: @escaping () -> Void) {
+        // Publish the identifier before the event waiter can inspect it. The
+        // background poster may enqueue its wake before CMPerform returns.
+        lock.lock()
+        defer { lock.unlock() }
+        storedIdentifier = CMPerformAfterMenuTracking(work)
+    }
+}
+
 final class PreferenceNormalizationTests: XCTestCase {
+    func testPasteKeyboardEventsReleaseCommandAndUseCapturedLayoutKey() throws {
+        let keyCode = CGKeyCode(kVK_ANSI_B)
+        let events = try XCTUnwrap(CMMakePasteKeyboardEvents(keyCode: keyCode))
+        XCTAssertEqual(events.map(\.type), [.flagsChanged, .keyDown, .keyUp, .flagsChanged])
+        XCTAssertEqual(events.map { $0.getIntegerValueField(.keyboardEventKeycode) },
+                       [Int64(kVK_Command), Int64(keyCode), Int64(keyCode), Int64(kVK_Command)])
+        XCTAssertEqual(events.map(\.flags), [.maskCommand, .maskCommand, .maskCommand, []])
+    }
+
+    func testPasteWaitsForPhysicalModifiersAndTheExactTargetProcess() {
+        func canPaste(target: pid_t? = 42, frontmost: pid_t? = 42,
+                      released: Bool = true, tracking: Bool = false) -> Bool {
+            CMCanDispatchPaste(targetProcessIdentifier: target,
+                               frontmostProcessIdentifier: frontmost,
+                               clipMenuProcessIdentifier: 7,
+                               modifiersReleased: released,
+                               menuIsTracking: tracking)
+        }
+        XCTAssertTrue(canPaste())
+        XCTAssertFalse(canPaste(released: false))
+        XCTAssertFalse(canPaste(tracking: true))
+        XCTAssertFalse(canPaste(frontmost: 43))
+        XCTAssertFalse(canPaste(frontmost: 7))
+        XCTAssertFalse(canPaste(frontmost: nil))
+        XCTAssertFalse(canPaste(target: nil))
+        XCTAssertFalse(canPaste(target: nil, frontmost: 7))
+        XCTAssertFalse(CMCanDispatchPaste(targetProcessIdentifier: 42,
+                                         frontmostProcessIdentifier: 42,
+                                         clipMenuProcessIdentifier: 7,
+                                         modifiersReleased: true, menuIsTracking: false,
+                                         requestDeadline: 100, now: 100.1))
+    }
+
+    @MainActor
+    func testPasteReadinessDeadlineRunsWhileMainThreadIsBlocked() {
+        let triggered = DispatchSemaphore(value: 0)
+        CMTriggerPasteReadinessAfterDelay(0.01) {
+            XCTAssertFalse(Thread.isMainThread)
+            triggered.signal()
+        }
+        // Deliberately prevent all main run-loop timers and main-queue blocks
+        // from progressing. The deadline must still fire independently.
+        XCTAssertEqual(triggered.wait(timeout: .now() + 0.5), .success)
+    }
+
+    @MainActor
+    func testPasteReadinessWakesAnActualAppKitEventWait() throws {
+        XCTAssertTrue(NSApp is CMApplication)
+        // Drain already-queued wakes without waiting for older posters. Exact
+        // identifier matching below also rejects events arriving after this.
+        let drainDeadline = Date(timeIntervalSinceNow: 0.05)
+        while Date() < drainDeadline,
+              let event = NSApp.nextEvent(matching: .applicationDefined, until: .distantPast,
+                                         inMode: .default, dequeue: true) {
+            NSApp.sendEvent(event)
+        }
+        let privateWakeMarker = try XCTUnwrap(CMMakeAppKitWorkWakeEvent(identifier: 0))
+        let staleIdentifier = CMPerformAfterMenuTracking {}
+        let staleWake = try XCTUnwrap(CMMakeAppKitWorkWakeEvent(identifier: staleIdentifier))
+        NSApp.sendEvent(staleWake)
+        // Deliberately leave an already-claimed private wake ahead of the new
+        // probe, just like an older background poster finishing after a drain.
+        NSApp.postEvent(staleWake, atStart: true)
+        let probe = AppKitWorkIdentifierProbe()
+        var callbackCount = 0
+        var receivedStaleWake = false
+        var receivedPrivateWake = false
+        let started = ProcessInfo.processInfo.systemUptime
+        // Use the same background-trigger/main-work bridge as readiness, with
+        // its returned identifier so late events from old tests cannot count.
+        CMTriggerPasteReadinessAfterDelay(0.01) {
+            probe.enqueue {
+                XCTAssertTrue(Thread.isMainThread)
+                callbackCount += 1
+            }
+        }
+        let deadline = Date(timeIntervalSinceNow: 0.5)
+        // Exercise AppKit's event queue instead of supplying CF run-loop ticks.
+        // A CF fallback callback alone cannot satisfy this test: a new private
+        // wake event must actually arrive and interrupt the AppKit queue wait.
+        while (!receivedPrivateWake || callbackCount == 0) && Date() < deadline {
+            let waitDeadline = min(deadline, Date(timeIntervalSinceNow: 0.05))
+            guard let event = NSApp.nextEvent(matching: .applicationDefined, until: waitDeadline,
+                                             inMode: .default, dequeue: true) else { continue }
+            if event.subtype == privateWakeMarker.subtype,
+               event.data1 == privateWakeMarker.data1,
+               event.data2 == staleIdentifier {
+                receivedStaleWake = true
+            }
+            if event.subtype == privateWakeMarker.subtype,
+               event.data1 == privateWakeMarker.data1,
+               let identifier = probe.identifier,
+               event.data2 == identifier {
+                receivedPrivateWake = true
+            }
+            NSApp.sendEvent(event)
+        }
+        XCTAssertTrue(receivedStaleWake)
+        XCTAssertTrue(receivedPrivateWake)
+        XCTAssertEqual(callbackCount, 1)
+        XCTAssertLessThan(ProcessInfo.processInfo.systemUptime - started, 0.4)
+        pumpMainRunLoop(in: .defaultMode, for: 0.02)
+        XCTAssertEqual(callbackCount, 1)
+    }
+
+    @MainActor
+    func testAppKitWorkEventAndCFFallbackDeliverOnlyOnce() throws {
+        XCTAssertTrue(NSApp is CMApplication)
+        var callbackCount = 0
+        let identifier = CMPerformAfterMenuTracking {
+            XCTAssertTrue(Thread.isMainThread)
+            callbackCount += 1
+        }
+        let event = try XCTUnwrap(CMMakeAppKitWorkWakeEvent(identifier: identifier))
+        NSApp.sendEvent(event)
+        NSApp.sendEvent(event)
+        XCTAssertEqual(callbackCount, 1)
+        CFRunLoopRunInMode(.defaultMode, 0.02, false)
+        XCTAssertEqual(callbackCount, 1)
+    }
+
+    @MainActor
+    func testAppKitWorkCFFallbackWinsBeforeTheQueuedWakeEvent() throws {
+        var callbackCount = 0
+        let identifier = CMPerformAfterMenuTracking { callbackCount += 1 }
+        CFRunLoopRunInMode(.defaultMode, 0.02, false)
+        XCTAssertEqual(callbackCount, 1)
+        NSApp.sendEvent(try XCTUnwrap(CMMakeAppKitWorkWakeEvent(identifier: identifier)))
+        XCTAssertEqual(callbackCount, 1)
+    }
+
+    @MainActor
+    func testUnrelatedAppKitEventsDoNotClaimPendingWork() throws {
+        var callbackCount = 0
+        let identifier = CMPerformAfterMenuTracking { callbackCount += 1 }
+        let unrelated = try XCTUnwrap(NSEvent.otherEvent(with: .applicationDefined, location: .zero,
+                                                       modifierFlags: [], timestamp: 0, windowNumber: 0,
+                                                       context: nil, subtype: 0, data1: 0, data2: identifier))
+        XCTAssertFalse(CMHandleAppKitWorkWakeEvent(unrelated))
+        NSApp.sendEvent(unrelated)
+        XCTAssertEqual(callbackCount, 0)
+        NSApp.sendEvent(try XCTUnwrap(CMMakeAppKitWorkWakeEvent(identifier: identifier)))
+        XCTAssertEqual(callbackCount, 1)
+    }
+
+    @MainActor
+    func testAppKitWorkExpiresAndReleasesItsClosureWhileMainIsBlocked() throws {
+        var probe: NSObject? = NSObject()
+        let retainedProbe = WeakProbeReference(probe)
+        var callbackCount = 0
+        let identifier = CMPerformAfterMenuTracking(expiresAfter: 0.01) { [capturedProbe = probe!] in
+            withExtendedLifetime(capturedProbe) { callbackCount += 1 }
+        }
+        probe = nil
+        XCTAssertNotNil(retainedProbe.object)
+        let expiryFinished = DispatchSemaphore(value: 0)
+        CMTriggerPasteReadinessAfterDelay(0.08) { expiryFinished.signal() }
+        // No main run-loop processing occurs while the registry expiry runs.
+        XCTAssertEqual(expiryFinished.wait(timeout: .now() + 0.5), .success)
+        XCTAssertNil(retainedProbe.object)
+        NSApp.sendEvent(try XCTUnwrap(CMMakeAppKitWorkWakeEvent(identifier: identifier)))
+        CFRunLoopRunInMode(.defaultMode, 0.02, false)
+        XCTAssertEqual(callbackCount, 0)
+    }
+
+    @MainActor
+    func testPasteReadinessRunsOnMainWhileDefaultLoopIsIdle() {
+        var callbackCount = 0
+        // XCTest can stop or finish an embedded loop before the delayed work
+        // arrives. Keep waiting in the same mode for this specific callback.
+        let stoppedEarly = pumpMainRunLoop(in: .defaultMode, for: 0.3, onFirstEntry: {
+            CMSchedulePasteReadinessCheck(after: 0.01) {
+                XCTAssertTrue(Thread.isMainThread)
+                callbackCount += 1
+            }
+            CMTriggerPasteReadinessAfterDelay(0.005) { CFRunLoopStop(CFRunLoopGetMain()) }
+        }) { callbackCount > 0 }
+        XCTAssertTrue(stoppedEarly, "The harness must retry a stop before readiness becomes due.")
+        XCTAssertEqual(callbackCount, 1)
+        pumpMainRunLoop(in: .defaultMode, for: 0.02)
+        XCTAssertEqual(callbackCount, 1)
+    }
+
+    @MainActor
+    func testPasteHandoffAndReadinessRunWhileTrackingLoopIsIdle() {
+        let trackingMode = CFRunLoopMode(rawValue: RunLoop.Mode.eventTracking.rawValue as CFString)
+        CFRunLoopAddCommonMode(CFRunLoopGetMain(), trackingMode)
+        var handoffCount = 0
+        var readinessCount = 0
+        // AppKit can remain in this mode after visually closing the menu. Both
+        // stages must progress without a transition to default or another
+        // keyboard/mouse event, even if XCTest stops an embedded wait early.
+        let stoppedEarly = pumpMainRunLoop(in: trackingMode, for: 0.3, onFirstEntry: {
+            CMPerformAfterMenuTracking {
+                XCTAssertTrue(Thread.isMainThread)
+                handoffCount += 1
+            }
+            CMSchedulePasteReadinessCheck(after: 0.01) {
+                XCTAssertTrue(Thread.isMainThread)
+                readinessCount += 1
+            }
+            CMTriggerPasteReadinessAfterDelay(0.005) { CFRunLoopStop(CFRunLoopGetMain()) }
+        }) { handoffCount > 0 && readinessCount > 0 }
+        XCTAssertTrue(stoppedEarly, "The harness must retry a stop before readiness becomes due.")
+        XCTAssertEqual(handoffCount, 1)
+        XCTAssertEqual(readinessCount, 1)
+        pumpMainRunLoop(in: trackingMode, for: 0.02)
+        XCTAssertEqual(handoffCount, 1)
+        XCTAssertEqual(readinessCount, 1)
+    }
+
+    @discardableResult
+    @MainActor
+    private func pumpMainRunLoop(in mode: CFRunLoopMode, for timeout: TimeInterval,
+                                 onFirstEntry: (() -> Void)? = nil,
+                                 until condition: () -> Bool = { false }) -> Bool {
+        let deadline = ProcessInfo.processInfo.systemUptime + timeout
+        // With no pending source, CFRunLoopRunInMode can return .finished
+        // immediately. This timer keeps the mode alive and never fires here.
+        let keepAlive = Timer(timeInterval: timeout + 1, repeats: false) { _ in }
+        RunLoop.main.add(keepAlive, forMode: RunLoop.Mode(mode.rawValue as String))
+        defer { keepAlive.invalidate() }
+        let observer = onFirstEntry.map { work in
+            CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.entry.rawValue, false, 0) { _, _ in work() }!
+        }
+        if let observer { CFRunLoopAddObserver(CFRunLoopGetMain(), observer, mode) }
+        defer {
+            if let observer { CFRunLoopRemoveObserver(CFRunLoopGetMain(), observer, mode) }
+        }
+        var stoppedEarly = false
+        while !condition(), ProcessInfo.processInfo.systemUptime < deadline {
+            let remaining = deadline - ProcessInfo.processInfo.systemUptime
+            if CFRunLoopRunInMode(mode, min(0.02, max(0, remaining)), false) == .stopped {
+                stoppedEarly = true
+            }
+        }
+        return stoppedEarly
+    }
+
+    @MainActor
+    func testMenuPasteWorkRunsInTheCurrentCustomMode() {
+        let mode = CFRunLoopMode(rawValue: "ClipMenuIdleTrackingRegression" as CFString)
+        var scheduled = false
+        var handoffRan = false
+        var readinessCount = 0
+        var entryMode = "none"
+        var afterSchedulingMode = "none"
+        let observer = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.entry.rawValue, false, 0) { _, _ in
+            entryMode = CFRunLoopCopyCurrentMode(CFRunLoopGetMain()).map { $0.rawValue as String } ?? "none"
+            scheduled = true
+            CMPerformAfterMenuTracking { handoffRan = true }
+            CMSchedulePasteReadinessCheck(after: 0.01) {
+                XCTAssertTrue(Thread.isMainThread)
+                readinessCount += 1
+            }
+            afterSchedulingMode = CFRunLoopCopyCurrentMode(CFRunLoopGetMain()).map { $0.rawValue as String } ?? "none"
+        }!
+        CFRunLoopAddObserver(CFRunLoopGetMain(), observer, mode)
+        let keepAlive = Timer(timeInterval: 10, repeats: false) { _ in }
+        RunLoop.main.add(keepAlive, forMode: RunLoop.Mode(mode.rawValue as String))
+        defer { keepAlive.invalidate() }
+        // This mode is deliberately absent from the common set. The keep-alive
+        // timer never fires; only the background trigger can wake this wait.
+        let result = CFRunLoopRunInMode(mode, 0.3, false)
+        CFRunLoopRemoveObserver(CFRunLoopGetMain(), observer, mode)
+        XCTAssertTrue(scheduled)
+        let context = "runResult=\(result.rawValue) entryMode=\(entryMode) afterSchedulingMode=\(afterSchedulingMode)"
+        XCTAssertEqual(entryMode, mode.rawValue as String, context)
+        XCTAssertEqual(afterSchedulingMode, mode.rawValue as String, context)
+        XCTAssertTrue(handoffRan, context)
+        XCTAssertEqual(readinessCount, 1, context)
+    }
+
+#if DEBUG || TESTING
+    @MainActor
+    func testBackgroundPasteWithCapturedKeyDoesNotWaitForMainQueue() throws {
+        let defaults = UserDefaults.standard
+        let key = "debugBypassDirectPasteSynthesisForTesting"
+        let original = defaults.object(forKey: key)
+        defer {
+            if let original { defaults.set(original, forKey: key) }
+            else { defaults.removeObject(forKey: key) }
+        }
+        defaults.set(true, forKey: key)
+        let controller = try XCTUnwrap(NSApp.delegate as? AppController)
+        let completed = DispatchSemaphore(value: 0)
+        controller.debugDispatchResolvedPasteForTesting(keyCode: CGKeyCode(kVK_ANSI_V)) {
+            completed.signal()
+        }
+        // Deliberately keep main occupied, as it is in a synchronous menu popup.
+        XCTAssertEqual(completed.wait(timeout: .now() + 0.5), .success)
+    }
+#endif
+
     func testMenuCountAndLengthPreferencesClampToSafeMinimums() {
         XCTAssertEqual(CMNormalizedLegacyMenuTooltipLength(-40), 1)
         XCTAssertEqual(CMNormalizedLegacyMenuTitleLength(0), 1)
