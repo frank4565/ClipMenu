@@ -25,15 +25,14 @@ See [GitHub Releases](https://github.com/frank4565/ClipMenu/releases) for packag
 
 Release apps use a local **ad-hoc code signature**, without an Apple developer certificate. If macOS blocks the first launch, attempt to open the app, then choose **Open Anyway** in **System Settings → Privacy & Security** and confirm. On macOS 12, use **System Preferences → Security & Privacy → General**. Follow [Apple's instructions for opening an app from an unknown developer](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac) for your macOS version.
 
-Use the menu-bar icon or these default shortcuts:
+Use the menu-bar icon or these two default menu shortcuts:
 
 | Shortcut | Opens |
 | --- | --- |
 | Command–Shift–V | Full ClipMenu menu |
-| Command–Control–V | Clipboard history |
-| Command–Shift–B | Snippets |
+| Command–Shift–B | Snippets menu |
 
-The full-menu and snippets shortcuts can be changed in Preferences → Shortcuts.
+Clipboard history is available through the full ClipMenu menu. Both shortcuts can be changed in Preferences → Shortcuts.
 
 For automatic paste, allow ClipMenu in the macOS Accessibility settings when prompted. Preferences → General shows permission status and provides a shortcut to those settings. Relaunch ClipMenu after granting access. If automatic paste is disabled, selecting an item puts it on the clipboard so you can paste with Command–V.
 

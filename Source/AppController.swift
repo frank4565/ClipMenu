@@ -11,9 +11,6 @@ import WebKit
 let CMPrefHotKeyEnabledKey = "hotKeyEnabled"
 let CMPrefHotKeyKeyCodeKey = "hotKeyKeyCode"
 let CMPrefHotKeyModifierFlagsKey = "hotKeyModifierFlags"
-let CMPrefHistoryHotKeyEnabledKey = "historyHotKeyEnabled"
-let CMPrefHistoryHotKeyKeyCodeKey = "historyHotKeyKeyCode"
-let CMPrefHistoryHotKeyModifierFlagsKey = "historyHotKeyModifierFlags"
 let CMPrefSnippetsHotKeyEnabledKey = "snippetsHotKeyEnabled"
 let CMPrefSnippetsHotKeyKeyCodeKey = "snippetsHotKeyKeyCode"
 let CMPrefSnippetsHotKeyModifierFlagsKey = "snippetsHotKeyModifierFlags"
@@ -2471,15 +2468,12 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
 
     private enum HotKeyKind: UInt32, CaseIterable {
         case mainMenu = 1
-        case historyMenu = 2
         case snippetsMenu = 3
 
         var enabledKey: String {
             switch self {
             case .mainMenu:
                 return CMPrefHotKeyEnabledKey
-            case .historyMenu:
-                return CMPrefHistoryHotKeyEnabledKey
             case .snippetsMenu:
                 return CMPrefSnippetsHotKeyEnabledKey
             }
@@ -2489,8 +2483,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             switch self {
             case .mainMenu:
                 return CMPrefHotKeyKeyCodeKey
-            case .historyMenu:
-                return CMPrefHistoryHotKeyKeyCodeKey
             case .snippetsMenu:
                 return CMPrefSnippetsHotKeyKeyCodeKey
             }
@@ -2500,8 +2492,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             switch self {
             case .mainMenu:
                 return CMPrefHotKeyModifierFlagsKey
-            case .historyMenu:
-                return CMPrefHistoryHotKeyModifierFlagsKey
             case .snippetsMenu:
                 return CMPrefSnippetsHotKeyModifierFlagsKey
             }
@@ -5429,8 +5419,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 ]
                 let snapshotVisibleRowTitles = paneSnapshot["visibleRowTitles"] as? [String] ?? []
                 let snapshotRows = paneSnapshot["rows"] as? [[String: String]] ?? []
-                let snapshotHiddenHistoryDisplay = paneSnapshot["hiddenHistoryShortcutDisplay"] as? String
-                let snapshotReservedHistoryBadge = paneSnapshot["reservedHistoryBadge"] as? String
                 let snapshotSectionTitle = paneSnapshot["sectionTitle"] as? String
                 let expectedRows = [
                     [
@@ -5442,7 +5430,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                         "display": currentDisplays.snippets
                     ]
                 ]
-                let expectedReservedHistoryBadge = CMShortcutReservedHistoryBadgeTitle(historyDisplay: currentDisplays.history)
                 let matchesExpected = window.title == expectedPaneTitle
                     && self.debugToolbarStyleName(window.toolbarStyle) == "preference"
                     && window.isVisible
@@ -5451,10 +5438,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                     && snapshotSectionTitle == expectedPaneTitle
                     && snapshotRows == expectedRows
                     && snapshotVisibleRowTitles == expectedVisibleRowTitles
-                    && currentDisplays.history == snapshotHiddenHistoryDisplay
-                    && snapshotReservedHistoryBadge == expectedReservedHistoryBadge
                     && visibleTextValues == [expectedPaneTitle]
-                    && !snapshotRows.contains(where: { $0["display"] == snapshotHiddenHistoryDisplay })
 
                 report = [
                     "title": window.title,
@@ -5465,7 +5449,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                     "visibleTextValues": visibleTextValues,
                     "clipShortcutDisplay": currentDisplays.clip,
                     "snippetsShortcutDisplay": currentDisplays.snippets,
-                    "historyShortcutDisplay": currentDisplays.history,
                     "matchesExpected": matchesExpected
                 ]
             } else {
@@ -6557,7 +6540,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         ]
     }
 
-    private func debugCurrentShortcutDisplays() -> (clip: String, snippets: String, history: String) {
+    private func debugCurrentShortcutDisplays() -> (clip: String, snippets: String) {
         let defaults = UserDefaults.standard
         let clipEnabled = defaults.object(forKey: CMPrefHotKeyEnabledKey) as? Bool ?? true
         let clipKeyCode = clipEnabled ? defaults.object(forKey: CMPrefHotKeyKeyCodeKey) as? Int ?? 9 : -1
@@ -6573,12 +6556,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 ?? Int(NSEvent.ModifierFlags([.command, .shift]).rawValue)
             : 0
 
-        let historyModifierFlags = Int(NSEvent.ModifierFlags([.command, .control]).rawValue)
-
         return (
             clip: CMHotKeyDisplayStringForDebug(keyCode: clipKeyCode, modifierFlags: clipModifierFlags),
-            snippets: CMHotKeyDisplayStringForDebug(keyCode: snippetsKeyCode, modifierFlags: snippetsModifierFlags),
-            history: CMHotKeyDisplayStringForDebug(keyCode: 9, modifierFlags: historyModifierFlags)
+            snippets: CMHotKeyDisplayStringForDebug(keyCode: snippetsKeyCode, modifierFlags: snippetsModifierFlags)
         )
     }
 
@@ -13469,10 +13449,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                     "keyCode": 9,
                     "modifiers": cmdKey | shiftKey
                 ],
-                "HistoryMenu": [
-                    "keyCode": 9,
-                    "modifiers": cmdKey | controlKey
-                ],
                 "SnippetsMenu": [
                     "keyCode": 11,
                     "modifiers": cmdKey | shiftKey
@@ -13497,11 +13473,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         let afterRefs = debugHotKeyRefAddresses()
         let afterGeneration = hotKeyRegistrationGeneration
         let afterIDs = hotKeyRefs.keys.sorted()
-        let historyDefaults: [String: Any] = [
-            "enabled": defaults.bool(forKey: CMPrefHistoryHotKeyEnabledKey),
-            "keyCode": defaults.integer(forKey: CMPrefHistoryHotKeyKeyCodeKey),
-            "modifierFlags": defaults.integer(forKey: CMPrefHistoryHotKeyModifierFlagsKey)
-        ]
         let visibleDefaults: [String: Any] = [
             "clipMenuKeyCode": defaults.integer(forKey: CMPrefHotKeyKeyCodeKey),
             "clipMenuModifierFlags": defaults.integer(forKey: CMPrefHotKeyModifierFlagsKey),
@@ -13512,8 +13483,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             && afterIDs == HotKeyKind.allCases.map(\.rawValue).sorted()
             && defaults.integer(forKey: CMPrefHotKeyKeyCodeKey) == 8
             && defaults.integer(forKey: CMPrefSnippetsHotKeyKeyCodeKey) == 7
-            && defaults.integer(forKey: CMPrefHistoryHotKeyKeyCodeKey) == 9
-            && hotKeyRefs[HotKeyKind.historyMenu.rawValue] != nil
             && afterGeneration > beforeGeneration
 
         let report: [String: Any] = [
@@ -13524,8 +13493,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             "beforeHotKeyRegistrationGeneration": beforeGeneration,
             "afterHotKeyRegistrationGeneration": afterGeneration,
             "visibleShortcutDefaultsAfterCustomization": visibleDefaults,
-            "historyShortcutDefaultsAfterCustomization": historyDefaults,
-            "historyHotKeyStillRegistered": hotKeyRefs[HotKeyKind.historyMenu.rawValue] != nil,
             "allHotKeysRegisteredAfterCustomization": afterIDs == HotKeyKind.allCases.map(\.rawValue).sorted(),
             "visibleHotKeysChanged": defaults.integer(forKey: CMPrefHotKeyKeyCodeKey) == 8
                 && defaults.integer(forKey: CMPrefSnippetsHotKeyKeyCodeKey) == 7,
@@ -13611,14 +13578,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
 #endif
         let afterMainAttachedMenuTitle = statusItem?.menu?.title ?? ""
 
-        showMenu(for: .historyMenu)
-#if DEBUG
-        let historyCapture = debugCapturedPopupMenuSummaries.last ?? [:]
-#else
-        let historyCapture: [String: Any] = [:]
-#endif
-        let afterHistoryAttachedMenuTitle = statusItem?.menu?.title ?? ""
-
         showMenu(for: .snippetsMenu)
 #if DEBUG
         let snippetsCapture = debugCapturedPopupMenuSummaries.last ?? [:]
@@ -13628,7 +13587,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         let afterSnippetsAttachedMenuTitle = statusItem?.menu?.title ?? ""
 
         let mainTopLevelTitles = mainCapture["topLevelTitles"] as? [String] ?? []
-        let historyTopLevelTitles = historyCapture["topLevelTitles"] as? [String] ?? []
         let snippetsTopLevelTitles = snippetsCapture["topLevelTitles"] as? [String] ?? []
         let snippetsSubmenuTitlesByParent = snippetsCapture["submenuTitlesByParent"] as? [String: [String]] ?? [:]
 
@@ -13643,7 +13601,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             "<separator>",
             NSLocalizedString("Quit ClipMenu", comment: "")
         ]
-        let expectedHistoryTopLevelTitles = ["1. hotkey-clip"]
         let expectedSnippetsTopLevelTitles = ["Hotkey Snippets"]
         let expectedSnippetSubmenuTitles = ["1. Hotkey Greeting"]
         let capturedPopupCount: Int
@@ -13652,8 +13609,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
 #else
         capturedPopupCount = 0
 #endif
-        let allHotKeyMenusMatchExpected = mainTopLevelTitles == expectedMainTopLevelTitles
-            && historyTopLevelTitles == expectedHistoryTopLevelTitles
+        let allHotKeyMenusMatchExpected = capturedPopupCount == HotKeyKind.allCases.count
+            && mainTopLevelTitles == expectedMainTopLevelTitles
             && snippetsTopLevelTitles == expectedSnippetsTopLevelTitles
             && snippetsSubmenuTitlesByParent["Hotkey Snippets"] == expectedSnippetSubmenuTitles
             && afterMainAttachedMenuTitle == "ClipMenu"
@@ -13661,16 +13618,12 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         let report: [String: Any] = [
             "beforeAttachedStatusMenuTitle": beforeAttachedMenuTitle,
             "afterMainAttachedStatusMenuTitle": afterMainAttachedMenuTitle,
-            "afterHistoryAttachedStatusMenuTitle": afterHistoryAttachedMenuTitle,
             "afterSnippetsAttachedStatusMenuTitle": afterSnippetsAttachedMenuTitle,
             "capturedPopupCount": capturedPopupCount,
             "mainHotKeyMenu": mainCapture,
-            "historyHotKeyMenu": historyCapture,
             "snippetsHotKeyMenu": snippetsCapture,
             "mainHotKeyShowsExpectedSurface": mainTopLevelTitles == expectedMainTopLevelTitles
                 && afterMainAttachedMenuTitle == "ClipMenu",
-            "historyHotKeyShowsExpectedSurface": historyTopLevelTitles == expectedHistoryTopLevelTitles
-                && !historyTopLevelTitles.contains("Clear History"),
             "snippetsHotKeyShowsExpectedSurface": snippetsTopLevelTitles == expectedSnippetsTopLevelTitles
                 && snippetsSubmenuTitlesByParent["Hotkey Snippets"] == expectedSnippetSubmenuTitles,
             "allHotKeyMenusMatchExpected": allHotKeyMenusMatchExpected,
@@ -13730,10 +13683,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                     "keyCode": 9,
                     "modifiers": cmdKey | shiftKey
                 ],
-                "HistoryMenu": [
-                    "keyCode": 9,
-                    "modifiers": cmdKey | controlKey
-                ],
                 "SnippetsMenu": [
                     "keyCode": 11,
                     "modifiers": cmdKey | shiftKey
@@ -13772,11 +13721,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             "snippetsEnabled": defaults.bool(forKey: CMPrefSnippetsHotKeyEnabledKey),
             "snippetsKeyCode": defaults.integer(forKey: CMPrefSnippetsHotKeyKeyCodeKey),
             "snippetsModifierFlags": defaults.integer(forKey: CMPrefSnippetsHotKeyModifierFlagsKey)
-        ]
-        let historyShortcutDefaults: [String: Any] = [
-            "enabled": defaults.bool(forKey: CMPrefHistoryHotKeyEnabledKey),
-            "keyCode": defaults.integer(forKey: CMPrefHistoryHotKeyKeyCodeKey),
-            "modifierFlags": defaults.integer(forKey: CMPrefHistoryHotKeyModifierFlagsKey)
         ]
 
         let scratchPasteboard = NSPasteboard(name: NSPasteboard.Name("com.naotaka.ClipMenu.debug.legacy-prefs.\(UUID().uuidString)"))
@@ -13858,11 +13802,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             "snippetsKeyCode": 11,
             "snippetsModifierFlags": Int(NSEvent.ModifierFlags([.command, .shift]).rawValue)
         ]
-        let expectedHistoryShortcutDefaults: [String: Any] = [
-            "enabled": true,
-            "keyCode": 9,
-            "modifierFlags": Int(NSEvent.ModifierFlags([.command, .control]).rawValue)
-        ]
         let expectedRegisteredHotKeyIDs = HotKeyKind.allCases.map(\.rawValue).sorted()
         let expectedTrimmedOrderedTexts = ["legacy-four", "legacy-three", "legacy-two"]
         let expectedHistoryMenuTitles = [
@@ -13889,9 +13828,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         ]
         let expectedImportedShiftSelectionTitle = "2. legacy-three"
         let legacyPreferencesMigrationMatchesExpected = visibleShortcutDefaults as NSDictionary == expectedVisibleShortcutDefaults as NSDictionary
-            && historyShortcutDefaults as NSDictionary == expectedHistoryShortcutDefaults as NSDictionary
             && hotKeyRefs.keys.sorted() == expectedRegisteredHotKeyIDs
-            && hotKeyRefs[HotKeyKind.historyMenu.rawValue] != nil
             && defaults.bool(forKey: CMPrefInputPasteCommandKey) == false
             && defaults.integer(forKey: CMPrefMaxHistorySizeKey) == 3
             && defaults.integer(forKey: CMPrefShowStatusItemKey) == 0
@@ -13926,9 +13863,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
 
         let report: [String: Any] = [
             "importedVisibleShortcutDefaults": visibleShortcutDefaults,
-            "importedHistoryShortcutDefaults": historyShortcutDefaults,
             "registeredHotKeyIDs": hotKeyRefs.keys.sorted(),
-            "historyHotKeyRegistered": hotKeyRefs[HotKeyKind.historyMenu.rawValue] != nil,
             "importedAutomaticPasteEnabled": defaults.bool(forKey: CMPrefInputPasteCommandKey),
             "importedMaxHistorySize": defaults.integer(forKey: CMPrefMaxHistorySizeKey),
             "importedShowStatusItemTag": defaults.integer(forKey: CMPrefShowStatusItemKey),
@@ -13960,7 +13895,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             "migratedLegacyAutomaticChecks": defaults.bool(forKey: CMLegacyAutomaticChecksEnabledKey),
             "migratedLegacyAutomaticChecksOld": defaults.bool(forKey: CMLegacyAutomaticChecksEnabledOldKey),
             "expectedVisibleShortcutDefaults": expectedVisibleShortcutDefaults,
-            "expectedHistoryShortcutDefaults": expectedHistoryShortcutDefaults,
             "expectedRegisteredHotKeyIDs": expectedRegisteredHotKeyIDs,
             "expectedTrimmedOrderedTextsAfterImport": expectedTrimmedOrderedTexts,
             "expectedHistoryMenuTitlesAfterImport": expectedHistoryMenuTitles,
@@ -15767,10 +15701,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         let mainCapture = debugCapturedPopupMenuSummaries.last ?? [:]
 
         debugCapturedPopupMenuSummaries.removeAll()
-        popUpHistoryMenu(nil)
-        let historyCapture = debugCapturedPopupMenuSummaries.last ?? [:]
-
-        debugCapturedPopupMenuSummaries.removeAll()
         popUpSnippetsMenu(nil)
         let snippetsCapture = debugCapturedPopupMenuSummaries.last ?? [:]
 
@@ -15781,7 +15711,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
 
         let popUpClipMenuSelector = #selector(popUpClipMenu(_:))
         let popUpActionMenuSelector = #selector(popUpActionMenu(_:))
-        let popUpHistoryMenuSelector = #selector(popUpHistoryMenu(_:))
         let popUpSnippetsMenuSelector = #selector(popUpSnippetsMenu(_:))
         let keepCurrentFrontProcessSelector = #selector(keepCurrentFrontProcessAndActivate)
         let restorePreviousFrontProcessSelector = #selector(restorePreviousFrontProcess)
@@ -15822,16 +15751,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 "Public Actions": ["1. Public Greeting"]
             ]
         ]
-        let expectedHistoryMenuCapture: [String: Any] = [
-            "menuTitle": "HistoryMenu",
-            "style": "hotKey",
-            "topLevelCount": 2,
-            "topLevelTitles": [
-                localizedHistoryTitle,
-                "1. public-action-clip"
-            ],
-            "submenuTitlesByParent": [String: [String]]()
-        ]
         let expectedSnippetsMenuCapture: [String: Any] = [
             "menuTitle": "SnippetsMenu",
             "style": "hotKey",
@@ -15869,14 +15788,11 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             ]
         ]
         let mainScreenLocation = mainCapture["screenLocation"] as? [String: Any]
-        let historyScreenLocation = historyCapture["screenLocation"] as? [String: Any]
         let snippetsScreenLocation = snippetsCapture["screenLocation"] as? [String: Any]
         let actionScreenLocation = actionCapture["screenLocation"] as? [String: Any]
         let sharedScreenLocationMatchesExpected = {
             guard let mainX = mainScreenLocation?["x"] as? NSNumber,
                   let mainY = mainScreenLocation?["y"] as? NSNumber,
-                  let historyX = historyScreenLocation?["x"] as? NSNumber,
-                  let historyY = historyScreenLocation?["y"] as? NSNumber,
                   let snippetsX = snippetsScreenLocation?["x"] as? NSNumber,
                   let snippetsY = snippetsScreenLocation?["y"] as? NSNumber,
                   let actionX = actionScreenLocation?["x"] as? NSNumber,
@@ -15884,9 +15800,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 return false
             }
 
-            return mainX == historyX
-                && mainY == historyY
-                && mainX == snippetsX
+            return mainX == snippetsX
                 && mainY == snippetsY
                 && mainX == actionX
                 && mainY == actionY
@@ -15895,7 +15809,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         let report: [String: Any] = [
             "respondsToPopUpClipMenu": responds(to: popUpClipMenuSelector),
             "respondsToPopUpActionMenu": responds(to: popUpActionMenuSelector),
-            "respondsToPopUpHistoryMenu": responds(to: popUpHistoryMenuSelector),
             "respondsToPopUpSnippetsMenu": responds(to: popUpSnippetsMenuSelector),
             "respondsToKeepCurrentFrontProcessAndActivate": responds(to: keepCurrentFrontProcessSelector),
             "respondsToRestorePreviousFrontProcess": responds(to: restorePreviousFrontProcessSelector),
@@ -15905,21 +15818,17 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             "restorePreviousFrontProcessAfterStoredTargetReturnsTrue": restoreAfterStoredTarget,
             "storedFrontProcessAfterRestore": storedFrontProcessAfterRestore,
             "mainMenuCapture": mainCapture,
-            "historyMenuCapture": historyCapture,
             "snippetsMenuCapture": snippetsCapture,
             "actionMenuCapture": actionCapture,
             "expectedMainMenuCapture": expectedMainMenuCapture,
-            "expectedHistoryMenuCapture": expectedHistoryMenuCapture,
             "expectedSnippetsMenuCapture": expectedSnippetsMenuCapture,
             "expectedActionMenuCapture": expectedActionMenuCapture,
             "sharedScreenLocationMatchesExpected": sharedScreenLocationMatchesExpected,
             "matchesExpected": NSDictionary(dictionary: mainCapture).dictionaryWithValues(forKeys: ["menuTitle", "style", "topLevelCount", "topLevelTitles", "submenuTitlesByParent"]) as NSDictionary == expectedMainMenuCapture as NSDictionary
-                && NSDictionary(dictionary: historyCapture).dictionaryWithValues(forKeys: ["menuTitle", "style", "topLevelCount", "topLevelTitles", "submenuTitlesByParent"]) as NSDictionary == expectedHistoryMenuCapture as NSDictionary
                 && NSDictionary(dictionary: snippetsCapture).dictionaryWithValues(forKeys: ["menuTitle", "style", "topLevelCount", "topLevelTitles", "submenuTitlesByParent"]) as NSDictionary == expectedSnippetsMenuCapture as NSDictionary
                 && NSDictionary(dictionary: actionCapture).dictionaryWithValues(forKeys: ["menuTitle", "style", "topLevelCount", "topLevelTitles", "submenuTitlesByParent"]) as NSDictionary == expectedActionMenuCapture as NSDictionary
                 && responds(to: popUpClipMenuSelector)
                 && responds(to: popUpActionMenuSelector)
-                && responds(to: popUpHistoryMenuSelector)
                 && responds(to: popUpSnippetsMenuSelector)
                 && responds(to: keepCurrentFrontProcessSelector)
                 && responds(to: restorePreviousFrontProcessSelector)
@@ -15959,9 +15868,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             "clipMenuEnabled": defaults.bool(forKey: CMPrefHotKeyEnabledKey),
             "clipMenuKeyCode": defaults.integer(forKey: CMPrefHotKeyKeyCodeKey),
             "clipMenuModifierFlags": defaults.integer(forKey: CMPrefHotKeyModifierFlagsKey),
-            "historyEnabled": defaults.bool(forKey: CMPrefHistoryHotKeyEnabledKey),
-            "historyKeyCode": defaults.integer(forKey: CMPrefHistoryHotKeyKeyCodeKey),
-            "historyModifierFlags": defaults.integer(forKey: CMPrefHistoryHotKeyModifierFlagsKey),
             "snippetsEnabled": defaults.bool(forKey: CMPrefSnippetsHotKeyEnabledKey),
             "snippetsKeyCode": defaults.integer(forKey: CMPrefSnippetsHotKeyKeyCodeKey),
             "snippetsModifierFlags": defaults.integer(forKey: CMPrefSnippetsHotKeyModifierFlagsKey)
@@ -15974,9 +15880,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             "clipMenuEnabled": true,
             "clipMenuKeyCode": 9,
             "clipMenuModifierFlags": Int(NSEvent.ModifierFlags([.command, .shift]).rawValue),
-            "historyEnabled": true,
-            "historyKeyCode": 9,
-            "historyModifierFlags": Int(NSEvent.ModifierFlags([.command, .control]).rawValue),
             "snippetsEnabled": true,
             "snippetsKeyCode": 11,
             "snippetsModifierFlags": Int(NSEvent.ModifierFlags([.command, .shift]).rawValue)
@@ -16231,9 +16134,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             (CMPrefHotKeyEnabledKey, defaults.bool(forKey: CMPrefHotKeyEnabledKey)),
             (CMPrefHotKeyKeyCodeKey, defaults.integer(forKey: CMPrefHotKeyKeyCodeKey)),
             (CMPrefHotKeyModifierFlagsKey, defaults.integer(forKey: CMPrefHotKeyModifierFlagsKey)),
-            (CMPrefHistoryHotKeyEnabledKey, defaults.bool(forKey: CMPrefHistoryHotKeyEnabledKey)),
-            (CMPrefHistoryHotKeyKeyCodeKey, defaults.integer(forKey: CMPrefHistoryHotKeyKeyCodeKey)),
-            (CMPrefHistoryHotKeyModifierFlagsKey, defaults.integer(forKey: CMPrefHistoryHotKeyModifierFlagsKey)),
             (CMPrefSnippetsHotKeyEnabledKey, defaults.bool(forKey: CMPrefSnippetsHotKeyEnabledKey)),
             (CMPrefSnippetsHotKeyKeyCodeKey, defaults.integer(forKey: CMPrefSnippetsHotKeyKeyCodeKey)),
             (CMPrefSnippetsHotKeyModifierFlagsKey, defaults.integer(forKey: CMPrefSnippetsHotKeyModifierFlagsKey)),
@@ -16389,7 +16289,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
 
         unregisterHotKey()
 
-        let legacyOnlyDomain: [String: Any] = [
+        // Existing preference archives may still carry the retired History binding.
+        let importedHotKeyDomain: [String: Any] = [
             CMPrefLegacyHotKeysKey: [
                 "ClipMenu": [
                     "keyCode": 9,
@@ -16403,15 +16304,19 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                     "keyCode": 11,
                     "modifiers": cmdKey | shiftKey
                 ]
-            ]
+            ],
+            "historyHotKeyEnabled": true,
+            "historyHotKeyKeyCode": 9,
+            "historyHotKeyModifierFlags": Int(NSEvent.ModifierFlags([.command, .control]).rawValue)
         ]
-        defaults.setPersistentDomain(legacyOnlyDomain, forName: bundleIdentifier)
+        defaults.setPersistentDomain(importedHotKeyDomain, forName: bundleIdentifier)
 
         AppController.registerDefaults()
         AppController.migrateLegacyHotKeyDefaultsIfNeeded()
         registerHotKey()
 
         let registeredHotKeyIDs = hotKeyRefs.keys.sorted()
+        let retiredHistoryShortcutIgnored = hotKeyRefs[2] == nil
         let matchesExpected =
             defaults.bool(forKey: CMPrefHotKeyEnabledKey)
             && defaults.integer(forKey: CMPrefHotKeyKeyCodeKey) == 9
@@ -16419,12 +16324,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             && defaults.bool(forKey: CMPrefSnippetsHotKeyEnabledKey)
             && defaults.integer(forKey: CMPrefSnippetsHotKeyKeyCodeKey) == 11
             && defaults.integer(forKey: CMPrefSnippetsHotKeyModifierFlagsKey) == Int((NSEvent.ModifierFlags.command.union(.shift)).rawValue)
-            && defaults.bool(forKey: CMPrefHistoryHotKeyEnabledKey)
-            && defaults.integer(forKey: CMPrefHistoryHotKeyKeyCodeKey) == 9
-            && defaults.integer(forKey: CMPrefHistoryHotKeyModifierFlagsKey) == Int((NSEvent.ModifierFlags.command.union(.control)).rawValue)
             && defaults.dictionary(forKey: CMPrefLegacyHotKeysKey) != nil
-            && registeredHotKeyIDs == HotKeyKind.allCases.map(\.rawValue).sorted()
-            && hotKeyRefs[HotKeyKind.historyMenu.rawValue] != nil
+            && registeredHotKeyIDs == [1, 3]
+            && retiredHistoryShortcutIgnored
         let report: [String: Any] = [
             "visibleShortcutDefaults": [
                 "clipMenuEnabled": defaults.bool(forKey: CMPrefHotKeyEnabledKey),
@@ -16434,15 +16336,10 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 "snippetsKeyCode": defaults.integer(forKey: CMPrefSnippetsHotKeyKeyCodeKey),
                 "snippetsModifierFlags": defaults.integer(forKey: CMPrefSnippetsHotKeyModifierFlagsKey)
             ],
-            "historyShortcutDefaults": [
-                "enabled": defaults.bool(forKey: CMPrefHistoryHotKeyEnabledKey),
-                "keyCode": defaults.integer(forKey: CMPrefHistoryHotKeyKeyCodeKey),
-                "modifierFlags": defaults.integer(forKey: CMPrefHistoryHotKeyModifierFlagsKey)
-            ],
             "legacyHotKeysPresent": defaults.dictionary(forKey: CMPrefLegacyHotKeysKey) != nil,
             "registeredHotKeyIDs": registeredHotKeyIDs,
             "registeredHotKeyCount": registeredHotKeyIDs.count,
-            "historyHotKeyRegistered": hotKeyRefs[HotKeyKind.historyMenu.rawValue] != nil,
+            "retiredHistoryShortcutIgnored": retiredHistoryShortcutIgnored,
             "allDefaultHotKeysRegistered": registeredHotKeyIDs == HotKeyKind.allCases.map(\.rawValue).sorted(),
             "matchesExpected": matchesExpected
         ]
@@ -18661,9 +18558,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             CMPrefHotKeyEnabledKey: true,
             CMPrefHotKeyKeyCodeKey: 9,
             CMPrefHotKeyModifierFlagsKey: Int(NSEvent.ModifierFlags([.command, .shift]).rawValue),
-            CMPrefHistoryHotKeyEnabledKey: true,
-            CMPrefHistoryHotKeyKeyCodeKey: 9,
-            CMPrefHistoryHotKeyModifierFlagsKey: Int(NSEvent.ModifierFlags([.command, .control]).rawValue),
             CMPrefSnippetsHotKeyEnabledKey: true,
             CMPrefSnippetsHotKeyKeyCodeKey: 11,
             CMPrefSnippetsHotKeyModifierFlagsKey: Int(NSEvent.ModifierFlags([.command, .shift]).rawValue),
@@ -18738,10 +18632,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 "keyCode": 9,
                 "modifiers": cmdKey | shiftKey
             ],
-            "HistoryMenu": [
-                "keyCode": 9,
-                "modifiers": cmdKey | controlKey
-            ],
             "SnippetsMenu": [
                 "keyCode": 11,
                 "modifiers": cmdKey | shiftKey
@@ -18764,14 +18654,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             enabledKey: CMPrefHotKeyEnabledKey,
             keyCodeKey: CMPrefHotKeyKeyCodeKey,
             modifierFlagsKey: CMPrefHotKeyModifierFlagsKey
-        )
-        migrateLegacyHotKey(
-            identifier: "HistoryMenu",
-            from: legacyHotKeys,
-            persistentDomain: persistentDefaults,
-            enabledKey: CMPrefHistoryHotKeyEnabledKey,
-            keyCodeKey: CMPrefHistoryHotKeyKeyCodeKey,
-            modifierFlagsKey: CMPrefHistoryHotKeyModifierFlagsKey
         )
         migrateLegacyHotKey(
             identifier: "SnippetsMenu",
@@ -20016,8 +19898,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 }
                 statusItem?.menu = menu
             }
-        case .historyMenu:
-            menu = makeHistoryMenu()
         case .snippetsMenu:
             menu = makeSnippetsMenu()
         }
@@ -23956,10 +23836,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
 
     @objc private func popUpClipMenu(_ sender: Any?) {
         showMenu(for: .mainMenu)
-    }
-
-    @objc private func popUpHistoryMenu(_ sender: Any?) {
-        showMenu(for: .historyMenu)
     }
 
     @objc private func popUpSnippetsMenu(_ sender: Any?) {

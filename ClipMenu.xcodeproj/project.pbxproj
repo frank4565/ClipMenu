@@ -886,8 +886,8 @@
 				GCC_WARN_MISSING_PARENTHESES = NO;
 				CLIPMENU_SPARKLE_PUBLIC_KEY = "NGwXZKZ7wHAufq4WawE9TQG7lpoBqsM33yAzwd9TQQw=";
 				CLIPMENU_UPDATE_FEED_URL = "https://frank4565.github.io/ClipMenu/appcast.xml";
-				CURRENT_PROJECT_VERSION = 6.2.99;
-				MARKETING_VERSION = 0.5.2;
+				CURRENT_PROJECT_VERSION = 6.3.99;
+				MARKETING_VERSION = 0.5.3;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
@@ -922,8 +922,8 @@
 				GCC_WARN_MISSING_PARENTHESES = NO;
 				CLIPMENU_SPARKLE_PUBLIC_KEY = "NGwXZKZ7wHAufq4WawE9TQG7lpoBqsM33yAzwd9TQQw=";
 				CLIPMENU_UPDATE_FEED_URL = "https://frank4565.github.io/ClipMenu/appcast.xml";
-				CURRENT_PROJECT_VERSION = 6.2.99;
-				MARKETING_VERSION = 0.5.2;
+				CURRENT_PROJECT_VERSION = 6.3.99;
+				MARKETING_VERSION = 0.5.3;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
@@ -958,8 +958,8 @@
 				GCC_WARN_MISSING_PARENTHESES = NO;
 				CLIPMENU_SPARKLE_PUBLIC_KEY = "NGwXZKZ7wHAufq4WawE9TQG7lpoBqsM33yAzwd9TQQw=";
 				CLIPMENU_UPDATE_FEED_URL = "https://frank4565.github.io/ClipMenu/appcast.xml";
-				CURRENT_PROJECT_VERSION = 6.2.99;
-				MARKETING_VERSION = 0.5.2;
+				CURRENT_PROJECT_VERSION = 6.3.99;
+				MARKETING_VERSION = 0.5.3;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
@@ -991,8 +991,8 @@
 				GCC_WARN_MISSING_PARENTHESES = NO;
 				CLIPMENU_SPARKLE_PUBLIC_KEY = "NGwXZKZ7wHAufq4WawE9TQG7lpoBqsM33yAzwd9TQQw=";
 				CLIPMENU_UPDATE_FEED_URL = "https://frank4565.github.io/ClipMenu/appcast.xml";
-				CURRENT_PROJECT_VERSION = 6.2.99;
-				MARKETING_VERSION = 0.5.2;
+				CURRENT_PROJECT_VERSION = 6.3.99;
+				MARKETING_VERSION = 0.5.3;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
@@ -1026,8 +1026,8 @@
 				GCC_WARN_MISSING_PARENTHESES = NO;
 				CLIPMENU_SPARKLE_PUBLIC_KEY = "NGwXZKZ7wHAufq4WawE9TQG7lpoBqsM33yAzwd9TQQw=";
 				CLIPMENU_UPDATE_FEED_URL = "https://frank4565.github.io/ClipMenu/appcast.xml";
-				CURRENT_PROJECT_VERSION = 6.2.99;
-				MARKETING_VERSION = 0.5.2;
+				CURRENT_PROJECT_VERSION = 6.3.99;
+				MARKETING_VERSION = 0.5.3;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
@@ -1061,8 +1061,8 @@
 				GCC_WARN_MISSING_PARENTHESES = NO;
 				CLIPMENU_SPARKLE_PUBLIC_KEY = "NGwXZKZ7wHAufq4WawE9TQG7lpoBqsM33yAzwd9TQQw=";
 				CLIPMENU_UPDATE_FEED_URL = "https://frank4565.github.io/ClipMenu/appcast.xml";
-				CURRENT_PROJECT_VERSION = 6.2.99;
-				MARKETING_VERSION = 0.5.2;
+				CURRENT_PROJECT_VERSION = 6.3.99;
+				MARKETING_VERSION = 0.5.3;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";

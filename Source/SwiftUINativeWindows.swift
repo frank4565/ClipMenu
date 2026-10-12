@@ -2232,10 +2232,6 @@ func CMShortcutsPreferenceSnapshotForDebug() -> [String: Any] {
             ?? Int(NSEvent.ModifierFlags([.command, .shift]).rawValue)
         : 0
 
-    let historyDisplay = HotKeyRecorderDisplayString(
-        keyCode: 9,
-        modifierFlags: Int(NSEvent.ModifierFlags([.command, .control]).rawValue)
-    )
     return [
         "paneTitle": NSLocalizedString("1366.title", tableName: "Preferences", bundle: .main, value: "Shortcuts", comment: ""),
         "sectionTitle": NSLocalizedString("1366.title", tableName: "Preferences", bundle: .main, value: "Shortcuts", comment: ""),
@@ -2252,9 +2248,7 @@ func CMShortcutsPreferenceSnapshotForDebug() -> [String: Any] {
         "visibleRowTitles": [
             NSLocalizedString("1371.title", tableName: "Preferences", bundle: .main, value: "ClipMenu:", comment: ""),
             NSLocalizedString("1372.title", tableName: "Preferences", bundle: .main, value: "Snippets menu:", comment: "")
-        ],
-        "hiddenHistoryShortcutDisplay": historyDisplay,
-        "reservedHistoryBadge": CMShortcutReservedHistoryBadgeTitle(historyDisplay: historyDisplay)
+        ]
     ]
 }
 
@@ -3701,12 +3695,6 @@ private func CMVisibleShortcutBadgeTitle(label: String, keyCode: Int, modifierFl
     return "\(trimmedLabel)\(separator)\(HotKeyRecorderDisplayString(keyCode: keyCode, modifierFlags: modifierFlags))"
 }
 
-func CMShortcutReservedHistoryBadgeTitle(historyDisplay: String) -> String {
-    let label = CMTrimTrailingShortcutPunctuation(NSLocalizedString("History menu:", comment: ""))
-    let separator = CMModernLocalizationIsJapanese() ? " " : ": "
-    return "\(label)\(separator)\(historyDisplay)"
-}
-
 private func CMPreferencesSearchPlaceholder() -> String {
     NSLocalizedString("Search", comment: "")
 }
@@ -5017,13 +5005,6 @@ private struct ShortcutsPreferencesView: View {
                 snippetsHotKeyModifierFlags = newValue
                 snippetsHotKeyEnabled = snippetsHotKeyKeyCode >= 0 && newValue != 0
             }
-        )
-    }
-
-    private var historyShortcutDisplay: String {
-        HotKeyRecorderDisplayString(
-            keyCode: 9,
-            modifierFlags: Int(NSEvent.ModifierFlags([.command, .control]).rawValue)
         )
     }
 }

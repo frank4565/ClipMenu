@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClipMenu 0.5.3 リリースノート</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 13px/1.55 -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 15px; margin-top: 22px; }
+    li + li { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>ClipMenu 0.5.3</h1>
+  <p>環境設定に表示されない履歴専用ショートカットを削除し、利用できる 2 つのショートカットに合わせてドキュメントを更新したパッチリリースです。macOS 12 以降の Intel Mac と Apple シリコン搭載 Mac に対応します。</p>
+
+  <h2>アップデート</h2>
+  <p>ClipMenu 0.5.0〜0.5.2 からは Sparkle で通常どおり更新できます。以前の Objective-C 版から更新する場合は、ClipMenu を終了して、このリリースを手動でインストールしてください。従来のアップデータとは更新フィードと検証キーが異なります。</p>
+  <p>アプリは引き続きローカルのアドホック署名を使用し、Apple Developer ID による署名や公証は行いません。公開する更新 ZIP は、別途 Sparkle の Ed25519 署名で検証します。</p>
+
+  <h2>主な変更点</h2>
+  <ul>
+    <li><strong>履歴専用ショートカットの削除：</strong>これまで Command–Control–V として案内していた、環境設定に表示されない履歴専用ショートカットを削除しました。このショートカットの保存済み設定は無視されます。</li>
+    <li><strong>2 つのメニュー用ショートカット：</strong>ClipMenu 全体のメニューの既定は Command–Shift–V、スニペットメニューの既定は Command–Shift–B です。どちらも環境設定 → ショートカットで変更できます。クリップボード履歴は引き続き ClipMenu 全体のメニューから利用できます。</li>
+    <li><strong>ドキュメント：</strong>README、受け入れテスト項目、ショートカットに関する翻訳を現在の動作に合わせて更新しました。過去の検証記録には、削除したショートカットについての記述が現在は適用されないことを明記しました。</li>
+  </ul>
+
+  <h2>検証</h2>
+  <p>Debug ビルドが成功しました。対象を絞った 51 件のテストがすべて成功し、失敗はありませんでした。独立した Debug アプリで、関連する 6 件の実行時検証レポートも成功しました。従来の設定がある場合も含め、対応する 2 つのメニュー用ショートカットだけが登録されることを確認しました。</p>
+</body>
+</html>

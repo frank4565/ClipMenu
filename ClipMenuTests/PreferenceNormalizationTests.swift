@@ -448,7 +448,6 @@ final class PreferenceNormalizationTests: XCTestCase {
         let defaults = UserDefaults.standard
         let keys = [
             CMPrefHotKeyEnabledKey,
-            CMPrefHistoryHotKeyEnabledKey,
             CMPrefSnippetsHotKeyEnabledKey,
             CMPrefHotKeyKeyCodeKey,
             CMPrefTimeIntervalKey,
@@ -468,7 +467,6 @@ final class PreferenceNormalizationTests: XCTestCase {
         // Exercise the normal application pass without claiming system shortcuts
         // or starting clipboard/autosave timers in this isolated controller.
         defaults.set(false, forKey: CMPrefHotKeyEnabledKey)
-        defaults.set(false, forKey: CMPrefHistoryHotKeyEnabledKey)
         defaults.set(false, forKey: CMPrefSnippetsHotKeyEnabledKey)
         defaults.set(0.0, forKey: CMPrefTimeIntervalKey)
         defaults.set(0, forKey: CMPrefAutosaveDelayKey)

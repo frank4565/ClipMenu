@@ -151,7 +151,8 @@ final class PreferenceSnapshotTests: XCTestCase {
         let rows = try XCTUnwrap(shortcuts["rows"] as? [[String: String]])
         XCTAssertEqual(rows.count, 2)
         XCTAssertEqual(shortcuts["visibleRowTitles"] as? [String], rows.compactMap { $0["title"] })
-        XCTAssertFalse((shortcuts["reservedHistoryBadge"] as? String ?? "").isEmpty)
+        XCTAssertNil(shortcuts["hiddenHistoryShortcutDisplay"])
+        XCTAssertNil(shortcuts["reservedHistoryBadge"])
 
         let menu = CMMenuPreferencesSnapshotForDebug()
         let layout = try XCTUnwrap(menu["layout"] as? [String: Any])

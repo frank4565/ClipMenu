@@ -2,6 +2,8 @@
 
 This note records implementation progress toward `doc/feature_test_cases.md`; it is not a substitute for a full manual matrix run.
 
+**Historical shortcut evidence:** the hidden history-only shortcut was removed on 2026-10-12. Entries below about `HistoryMenu` hotkey registration, the three-shortcut default map, reserved-history UI, and corresponding Debug report fields describe earlier builds and are obsolete for current acceptance. The supported shortcuts now open the full ClipMenu menu and the Snippets menu; use the current [feature test cases](feature_test_cases.md) for validation.
+
 ## Strengthened areas
 
 - Action decoding now normalizes legacy action dictionaries at runtime and in Preferences, including missing `type` inference and `removeAction` normalization.

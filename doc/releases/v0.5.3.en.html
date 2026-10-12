@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClipMenu 0.5.3 release notes</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 13px/1.55 -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 15px; margin-top: 22px; }
+    li + li { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>ClipMenu 0.5.3</h1>
+  <p>This patch removes the hidden clipboard-history shortcut and aligns the documentation with the two shortcuts available in Preferences. It supports Intel and Apple silicon Macs running macOS 12 or later.</p>
+
+  <h2>Updating</h2>
+  <p>ClipMenu 0.5.0–0.5.2 users can update through Sparkle normally. When upgrading from an older Objective-C version, quit ClipMenu and install this release manually; the original updater uses a different feed and trust key.</p>
+  <p>The app continues to use a local ad-hoc code signature, without Apple Developer ID signing or notarization. Published update ZIPs use separate Sparkle Ed25519 signatures.</p>
+
+  <h2>What changed</h2>
+  <ul>
+    <li><strong>Removed history shortcut:</strong> the hidden history-only shortcut, previously documented as Command–Control–V, is removed. Previously saved settings for that shortcut are ignored.</li>
+    <li><strong>Two menu shortcuts:</strong> the full ClipMenu menu defaults to Command–Shift–V and the Snippets menu defaults to Command–Shift–B. Both can be changed in Preferences → Shortcuts. Clipboard history remains available in the full ClipMenu menu.</li>
+    <li><strong>Documentation:</strong> the README, acceptance cases, and shortcut localization match the supported behavior. Historical verification notes identify the removed shortcut's earlier claims as obsolete.</li>
+  </ul>
+
+  <h2>Validation</h2>
+  <p>The Debug build passed. 51 focused tests passed with no failures, and six affected runtime reports passed in an isolated Debug app. The runtime checks confirmed that only the two supported menu shortcuts are registered, including with legacy preferences.</p>
+</body>
+</html>
