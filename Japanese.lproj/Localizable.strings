@@ -398,8 +398,6 @@
 	<string>履歴</string>
 	<key>History retention</key>
 	<string>履歴の保持</string>
-	<key>History hot key</key>
-	<string>履歴ホットキー</string>
 	<key>Icon size:</key>
 	<string>アイコンの大きさ:</string>
 	<key>Icons</key>
@@ -964,8 +962,6 @@
 	<string>メインメニューとスニペットメニューのグローバルショートカット。</string>
 	<key>Hidden</key>
 	<string>非表示</string>
-	<key>History menu:</key>
-	<string>履歴メニュー:</string>
 	<key>Icons Off</key>
 	<string>アイコンオフ</string>
 	<key>Icons On</key>
@@ -1050,8 +1046,6 @@
 	<string>プレビュー規則</string>
 	<key>Review bundled JavaScript actions shipped with ClipMenu.</key>
 	<string>ClipMenu に同梱された JavaScript アクションを確認します。</string>
-	<key>Set the visible ClipMenu and Snippets hotkeys while the legacy history shortcut stays registered behind the scenes.</key>
-	<string>表示される ClipMenu とスニペットのホットキーを設定しつつ、従来の履歴ショートカットは内部で登録されたままにします。</string>
 	<key>Show snippet folders after clipboard history in the main menu.</key>
 	<string>メインメニューでスニペットフォルダをクリップボード履歴の後に表示します。</string>
 	<key>Show snippet folders before clipboard history in the main menu.</key>
@@ -1092,16 +1086,10 @@
 	<string>表示中のショートカットは即時更新</string>
 	<key>Visible Menu Shortcuts</key>
 	<string>表示メニュー用ショートカット</string>
-	<key>Legacy Shortcut</key>
-	<string>従来ショートカット</string>
 	<key>These two shortcuts are the editable preferences-backed menu triggers from the original pane.</key>
 	<string>この 2 つのショートカットは、元のペインにあった編集可能な設定連動メニュートリガーです。</string>
 	<key>Shortcut behavior summary</key>
 	<string>ショートカット動作の概要</string>
-	<key>ClipMenu and Snippets update immediately, while the original History shortcut remains registered in the background.</key>
-	<string>ClipMenu とスニペットのショートカットはすぐ更新され、元の履歴ショートカットは裏側で登録されたままです。</string>
-	<key>ClipMenu and Snippets can be edited here, while History keeps its original reserved binding.</key>
-	<string>ここでは ClipMenu とスニペットを編集でき、History は元の予約済みショートカットのまま保持されます。</string>
 	<key>These four modifier routes stay live for history clicks whenever actions are enabled.</key>
 	<string>アクションが有効な間は、この 4 つの修飾キー経路が履歴クリックで常に有効です。</string>
 	<key>%@ currently holds %d snippets.</key>
@@ -1204,8 +1192,6 @@
 	<string>テキスト系や書類系のクリップボード内容に使うアイコンを調整します。</string>
 	<key>Hide snippets from the main ClipMenu popup while leaving the editor and runtime data intact.</key>
 	<string>エディタと実行時データはそのままに、メインの ClipMenu ポップアップからスニペットを非表示にします。</string>
-	<key>History stays on Command-Control-V</key>
-	<string>履歴ショートカットは Command-Control-V のままです</string>
 	<key>Ignored during capture</key>
 	<string>記録時に無視</string>
 	<key>Image clips fall back to text-only treatment unless another icon rule applies.</key>
@@ -1376,8 +1362,6 @@
 	<string>アップデートパッケージをダウンロードできませんでした</string>
 	<key>The verified download is ready. Install now to open it and relaunch into the updated app.</key>
 	<string>検証済みダウンロードの準備ができました。今すぐインストールすると開いて、更新済みアプリとして再起動します。</string>
-	<key>This legacy shortcut stays registered for history-only access.</key>
-	<string>この従来のショートカットは履歴専用アクセス用に登録されたままです。</string>
 	<key>Titles only</key>
 	<string>タイトルのみ</string>
 	<key>Set fallback icon rules for image clip types when thumbnails are not used.</key>
@@ -1622,8 +1606,6 @@
 	<string>元の環境設定ペインと同じく、表示される ClipMenu と Snippets のショートカットを設定します。</string>
 	<key>ClipMenu and Snippets can be edited here and update immediately.</key>
 	<string>ここで ClipMenu と Snippets を編集すると、すぐに反映されます。</string>
-	<key>ClipMenu and Snippets update immediately when you record a new shortcut, while the original History shortcut stays reserved in the background.</key>
-	<string>新しいショートカットを記録すると ClipMenu と Snippets はすぐに更新され、元の History ショートカットはバックグラウンドで予約されたまま維持されます。</string>
 	<key>No Built-in Actions</key>
 	<string>内蔵アクションはありません</string>
 	<key>No Bundled Scripts</key>
