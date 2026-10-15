@@ -8226,6 +8226,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         }
 
         defer {
+            restoreDefault(originalMaxHistorySize, forKey: CMPrefMaxHistorySizeKey)
             clipsStore.clear()
             originalClips.forEach { clipsStore.add($0) }
             snippetStore.folders = originalFolders
@@ -8233,7 +8234,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             snippetStore.reload()
             snippetStore.restoreSelectionSnapshot(originalSelection)
             restoreDefault(originalShowLabels, forKey: CMPrefShowLabelsInMenuKey)
-            restoreDefault(originalMaxHistorySize, forKey: CMPrefMaxHistorySizeKey)
             restoreDefault(originalInlineCount, forKey: CMPrefNumberOfItemsPlaceInlineKey)
             restoreDefault(originalFolderCount, forKey: CMPrefNumberOfItemsPlaceInsideFolderKey)
             restoreDefault(originalMarkNumbers, forKey: CMPrefMenuItemsAreMarkedWithNumbersKey)
@@ -8288,6 +8288,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
 
         defaults.set(0, forKey: CMPrefNumberOfItemsPlaceInlineKey)
         let folderedNumberedHistoryMenu = makeHistoryMenu()
+        let folderedNumberedTitles = folderedNumberedHistoryMenu.items.first?.submenu?.items.map(\.title) ?? []
         let folderedNumberedKeyEquivalents = folderedNumberedHistoryMenu.items
             .first?
             .submenu?
@@ -8319,6 +8320,14 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         let numericSnippetsMenu = makeSnippetsMenu()
         let numericSnippetSubmenuTitles = numericSnippetsMenu.items.first?.submenu?.items.map(\.title) ?? []
         let numericSnippetSubmenuKeyEquivalents = numericSnippetsMenu.items.first?.submenu?.items.map(\.keyEquivalent) ?? []
+
+        // Reducing the history limit prunes the store, so capture this case last.
+        defaults.set(false, forKey: CMPrefMenuItemsTitleStartWithZeroKey)
+        defaults.set(10, forKey: CMPrefNumberOfItemsPlaceInlineKey)
+        defaults.set(10, forKey: CMPrefMaxHistorySizeKey)
+        let tenItemHistoryMenu = makeHistoryMenu()
+        let tenItemHistoryTitles = tenItemHistoryMenu.items.map(\.title)
+        let tenItemHistoryKeyEquivalents = tenItemHistoryMenu.items.map(\.keyEquivalent)
 
         let commandModifierMask = Int(NSEvent.ModifierFlags.command.rawValue)
         let unnumberedExpectedTitles = (0..<11).map { offset in
@@ -8359,6 +8368,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             let clipNumber = 11 - offset
             return "\(visibleNumber). num-\(clipNumber)"
         }
+        let tenItemHistoryExpectedTitles = Array(oneBasedHistoryExpectedTitles.prefix(10))
         let oneBasedHistoryExpectedKeyEquivalents = numberedExpectedKeyEquivalents
         let oneBasedHistoryExpectedModifierMasks = numberedExpectedModifierMasks
         let zeroBasedHistoryExpectedTitles = (0..<11).map { offset in
@@ -8380,9 +8390,15 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         report["numberedHistoryModifierMasks"] = numberedHistoryModifierMasks
         report["numberedHistoryMatchesExpected"] = numberedHistoryKeyEquivalents == numberedExpectedKeyEquivalents
             && numberedHistoryModifierMasks == numberedExpectedModifierMasks
+        report["tenItemHistoryTitles"] = tenItemHistoryTitles
+        report["tenItemHistoryKeyEquivalents"] = tenItemHistoryKeyEquivalents
+        report["tenItemHistoryMatchesExpected"] = tenItemHistoryTitles == tenItemHistoryExpectedTitles
+            && tenItemHistoryKeyEquivalents == Array(numberedExpectedKeyEquivalents.prefix(10))
+        report["folderedNumberedHistoryTitles"] = folderedNumberedTitles
         report["folderedNumberedHistoryKeyEquivalents"] = folderedNumberedKeyEquivalents
         report["folderedNumberedHistoryModifierMasks"] = folderedNumberedModifierMasks
-        report["folderedNumberedHistoryMatchesExpected"] = folderedNumberedKeyEquivalents == folderedNumberedExpectedKeyEquivalents
+        report["folderedNumberedHistoryMatchesExpected"] = folderedNumberedTitles == tenItemHistoryExpectedTitles
+            && folderedNumberedKeyEquivalents == folderedNumberedExpectedKeyEquivalents
             && folderedNumberedModifierMasks == folderedNumberedExpectedModifierMasks
         report["oneBasedHistoryTitles"] = oneBasedHistoryTitles
         report["oneBasedHistoryKeyEquivalents"] = oneBasedHistoryKeyEquivalents
@@ -8402,6 +8418,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             && numericSnippetSubmenuKeyEquivalents == numericSnippetExpectedKeyEquivalents
         report["matchesExpected"] = (report["unnumberedHistoryMatchesExpected"] as? Bool == true)
             && (report["numberedHistoryMatchesExpected"] as? Bool == true)
+            && (report["tenItemHistoryMatchesExpected"] as? Bool == true)
             && (report["folderedNumberedHistoryMatchesExpected"] as? Bool == true)
             && (report["oneBasedHistoryMatchesExpected"] as? Bool == true)
             && (report["zeroBasedHistoryMatchesExpected"] as? Bool == true)
@@ -20269,12 +20286,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         ) {
             switch group {
             case let .direct(offset):
-                let numberLimit = offset < inlineCount ? inlineCount : clips.count
-                let listNumber = menuListNumber(
-                    forOffset: offset,
-                    firstIndex: firstIndex,
-                    maxCount: numberLimit
-                )
+                let listNumber = firstIndex + offset
                 menu.addItem(makeClipMenuItem(clip: clips[offset], globalIndex: offset, listNumber: listNumber))
 
             case let .folder(range):
@@ -20294,11 +20306,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 let submenu = NSMenu(title: submenuItem.title)
                 submenu.delegate = self
                 for offset in range {
-                    let listNumber = menuListNumber(
-                        forOffset: offset - folderStart,
-                        firstIndex: firstIndex,
-                        maxCount: folderCount
-                    )
+                    let listNumber = firstIndex + offset - folderStart
                     submenu.addItem(
                         makeClipMenuItem(clip: clips[offset], globalIndex: offset, listNumber: listNumber)
                     )
@@ -20655,14 +20663,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         }
         let nsString = text as NSString
         return nsString.length > maxLength ? nsString.substring(to: maxLength) : text
-    }
-
-    private func menuListNumber(forOffset offset: Int, firstIndex: Int, maxCount: Int) -> Int {
-        let value = firstIndex + offset
-        if firstIndex == 1, maxCount == 10, value == 10 {
-            return 0
-        }
-        return value
     }
 
     private func applyPreferredFont(to item: NSMenuItem) {
