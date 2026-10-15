@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClipMenu 0.5.4 リリースノート</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 13px/1.55 -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 15px; margin-top: 22px; }
+    li + li { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>ClipMenu 0.5.4</h1>
+  <p>履歴メニューの連番表示を修正したパッチリリースです。macOS 12 以降の Intel Mac と Apple シリコン搭載 Mac に対応します。ClipMenu 0.5.0〜0.5.3 からは Sparkle で通常どおり更新できます。</p>
+
+  <h2>主な変更点</h2>
+  <ul>
+    <li>連番を 1 から始める設定では、10 件ごとのグループ内の 10 番目の履歴項目が、<strong>0.</strong> ではなく <strong>10.</strong> と表示されるようになりました。メインメニュー内とサブメニューの両方に適用されます。</li>
+    <li>履歴全体の 10 番目の項目のキーボードショートカットは引き続き <strong>Command–0</strong> です。0 から始める連番表示は変更ありません。</li>
+  </ul>
+
+  <h2>検証</h2>
+  <p>Debug ビルドが成功し、MenuNumberingSurface の対象を絞った 7 件の実行時検証がすべて成功しました。</p>
+</body>
+</html>

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClipMenu 0.5.4 release notes</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 13px/1.55 -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 15px; margin-top: 22px; }
+    li + li { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>ClipMenu 0.5.4</h1>
+  <p>This patch fixes history-menu sequence labels. It supports Intel and Apple silicon Macs running macOS 12 or later. ClipMenu 0.5.0–0.5.3 users can update through Sparkle normally.</p>
+
+  <h2>What changed</h2>
+  <ul>
+    <li>With numbering starting at 1, the tenth history item in each group of ten now shows <strong>10.</strong> instead of <strong>0.</strong>, both inline and in submenus.</li>
+    <li><strong>Command–0</strong> remains the keyboard shortcut for the tenth history entry. Numbering starting at 0 is unchanged.</li>
+  </ul>
+
+  <h2>Validation</h2>
+  <p>The Debug build and all seven focused MenuNumberingSurface runtime checks passed.</p>
+</body>
+</html>
