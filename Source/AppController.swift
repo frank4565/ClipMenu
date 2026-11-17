@@ -53,20 +53,9 @@ func CMHistoryMenuGroups(clipCount: Int, inlineCount: Int, folderCount: Int) -> 
     var folderStart = directCount
     let normalizedFolderCount = max(1, folderCount)
 
-    let remainingRange = folderStart..<clipCount
-    if remainingRange.count <= normalizedFolderCount {
-        groups.append(contentsOf: remainingRange.map(CMHistoryMenuGroup.direct))
-        return groups
-    }
-
     while folderStart < clipCount {
         let folderEnd = min(folderStart + normalizedFolderCount, clipCount)
-        let range = folderStart..<folderEnd
-        if range.count < normalizedFolderCount || normalizedFolderCount == 1 {
-            groups.append(contentsOf: range.map(CMHistoryMenuGroup.direct))
-        } else {
-            groups.append(.folder(range))
-        }
+        groups.append(.folder(folderStart..<folderEnd))
         folderStart = folderEnd
     }
 
@@ -12332,7 +12321,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         ]
         let expectedState: [String: Any] = [
             "normalizedStoredFolderItems": 1,
-            "topLevelTitles": ["1. gamma", "2. beta", "3. alpha"]
+            "topLevelTitles": ["1 - 1", "2 - 2", "3 - 3"]
         ]
 
         let report: [String: Any] = [
@@ -12401,7 +12390,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         ]
         let expectedState: [String: Any] = [
             "normalizedStoredInlineItems": 0,
-            "topLevelTitles": ["1. gamma", "2. beta", "3. alpha"]
+            "topLevelTitles": ["1 - 3"]
         ]
 
         let report: [String: Any] = [
@@ -23328,10 +23317,12 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         [textClip, filenamesClip, urlClip].forEach { clipsStore.add($0) }
         let partialBucketMenu = NSMenu(title: "Partial Folder Bucket")
         _ = addClips(to: partialBucketMenu)
-        let partialHistoryBucketIsDirect = partialBucketMenu.numberOfItems == 3
-            && partialBucketMenu.items.allSatisfy {
-                $0.submenu == nil && $0.representedObject != nil
-            }
+        let firstItemIsDirect = partialBucketMenu.items.first?.submenu == nil
+            && partialBucketMenu.items.first?.representedObject != nil
+        let overflowFolderItemCount = partialBucketMenu.items.last?.submenu?.items.count ?? 0
+        let partialHistoryBucketIsFoldered = partialBucketMenu.numberOfItems == 2
+            && firstItemIsDirect
+            && overflowFolderItemCount == 2
 
         return [
             "addedClips": addedClips,
@@ -23340,7 +23331,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             "snippetItemCount": snippetsMenu.numberOfItems,
             "directTitles": directItems.map(\.title),
             "directTooltips": directItems.map { $0.toolTip ?? "" },
-            "partialHistoryBucketIsDirect": partialHistoryBucketIsDirect,
+            "partialHistoryBucketIsFoldered": partialHistoryBucketIsFoldered,
             "trimmed": trimmedMenuTitle(for: "This is a very long history clip title that wraps past the visible menu limit."),
             "statusImages": (0...12).map { statusItemImageName(forTag: $0) }
         ]

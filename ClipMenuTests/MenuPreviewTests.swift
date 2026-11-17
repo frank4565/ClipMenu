@@ -90,33 +90,33 @@ final class MenuPreviewTests: XCTestCase {
         return Data(bytes: pixels, count: byteCount)
     }
 
-    func testHistoryMenuKeepsIncompleteBucketsAtTopLevel() {
+    func testHistoryMenuFoldersIncompleteOverflowPages() {
         XCTAssertEqual(
             CMHistoryMenuGroups(clipCount: 2, inlineCount: 1, folderCount: 10),
-            [.direct(0), .direct(1)]
+            [.direct(0), .folder(1..<2)]
         )
         XCTAssertEqual(
             CMHistoryMenuGroups(clipCount: 4, inlineCount: 1, folderCount: 10),
-            [.direct(0), .direct(1), .direct(2), .direct(3)]
+            [.direct(0), .folder(1..<4)]
         )
         XCTAssertEqual(
             CMHistoryMenuGroups(clipCount: 6, inlineCount: 1, folderCount: 3),
-            [.direct(0), .folder(1..<4), .direct(4), .direct(5)]
+            [.direct(0), .folder(1..<4), .folder(4..<6)]
         )
     }
 
-    func testHistoryMenuKeepsSingleOverflowPageAtTopLevel() {
+    func testHistoryMenuFoldersSingleOverflowPage() {
         XCTAssertEqual(
             CMHistoryMenuGroups(clipCount: 11, inlineCount: 1, folderCount: 10),
-            (0..<11).map(CMHistoryMenuGroup.direct)
+            [.direct(0), .folder(1..<11)]
         )
         XCTAssertEqual(
             CMHistoryMenuGroups(clipCount: 10, inlineCount: 0, folderCount: 10),
-            (0..<10).map(CMHistoryMenuGroup.direct)
+            [.folder(0..<10)]
         )
         XCTAssertEqual(
             CMHistoryMenuGroups(clipCount: 12, inlineCount: 1, folderCount: 10),
-            [.direct(0), .folder(1..<11), .direct(11)]
+            [.direct(0), .folder(1..<11), .folder(11..<12)]
         )
     }
 

@@ -677,7 +677,7 @@ final class AppControllerMenuSurfaceTests: XCTestCase {
         let report = appController.debugExerciseMenuSurfaceForTesting()
         XCTAssertEqual(report["addedClips"] as? Bool, true)
         XCTAssertEqual(report["addedSnippets"] as? Bool, true)
-        XCTAssertEqual(report["partialHistoryBucketIsDirect"] as? Bool, true)
+        XCTAssertEqual(report["partialHistoryBucketIsFoldered"] as? Bool, true)
     }
 
     func testSelectionDispatchExerciseWritesAndClearsExpectedTargets() throws {
