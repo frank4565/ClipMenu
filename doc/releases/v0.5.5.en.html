@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClipMenu 0.5.5 release notes</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 13px/1.55 -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 15px; margin-top: 22px; }
+    li + li { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>ClipMenu 0.5.5</h1>
+  <p>This patch restores the original history-menu foldering. It supports Intel and Apple silicon Macs running macOS 12 or later. ClipMenu 0.5.0–0.5.4 users can update through Sparkle normally.</p>
+
+  <h2>What changed</h2>
+  <ul>
+    <li>History items beyond <strong>Number of items place inline:</strong> now always appear inside range submenus, even when they fill only part of a folder page. With an inline count of 10 and twenty history items, items 1–10 stay inline and items 11–20 land in an <strong>11 - 20</strong> submenu.</li>
+    <li>Previously, overflow that fit within one full page stayed flat at the menu's top level, so no folder appeared until history exceeded twice the inline count.</li>
+  </ul>
+
+  <h2>Validation</h2>
+  <p>The Debug build and the full unit test suite passed, including the updated history-menu grouping tests and MenuSurface runtime checks.</p>
+</body>
+</html>

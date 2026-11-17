@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClipMenu 0.5.5 リリースノート</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 13px/1.55 -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 15px; margin-top: 22px; }
+    li + li { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>ClipMenu 0.5.5</h1>
+  <p>履歴メニューのフォルダリングを元の挙動に戻したパッチリリースです。macOS 12 以降の Intel Mac と Apple シリコン搭載 Mac に対応します。ClipMenu 0.5.0〜0.5.4 からは Sparkle で通常どおり更新できます。</p>
+
+  <h2>主な変更点</h2>
+  <ul>
+    <li>「インラインで配置する項目数」を超える履歴項目は、ページが部分的にしか埋まっていなくても、必ず範囲サブメニュー内に表示されるようになりました。インライン数 10 で履歴が 20 件の場合、1〜10 番はインラインのまま残り、11〜20 番は <strong>11 - 20</strong> サブメニューに入ります。</li>
+    <li>以前は、1 ページに収まる溢れ分はトップレベルにフラットに残っていたため、履歴数がインライン数の 2 倍を超えるまでフォルダが現れませんでした。</li>
+  </ul>
+
+  <h2>検証</h2>
+  <p>Debug ビルドとユニットテストの全スイートが成功しました。更新済みの履歴メニュー分割テストと MenuSurface の実行時検証も含まれます。</p>
+</body>
+</html>
