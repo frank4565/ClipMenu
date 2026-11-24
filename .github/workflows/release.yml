@@ -13,6 +13,10 @@ on:
         description: 'Build an unsigned preview without credentials or publishing'
         type: boolean
         default: true
+      runner:
+        description: 'GitHub-hosted macOS runner label'
+        type: string
+        default: 'macos-15-intel'
 
 permissions:
   contents: read
@@ -25,7 +29,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: ${{ inputs.runner || 'macos-15-intel' }}
     timeout-minutes: 60
     outputs:
       tag: ${{ steps.metadata.outputs.tag }}
@@ -78,7 +82,7 @@ jobs:
   publish:
     if: needs.build.outputs.dry_run != 'true'
     needs: build
-    runs-on: macos-15
+    runs-on: ${{ inputs.runner || 'macos-15-intel' }}
     timeout-minutes: 20
     permissions:
       contents: write
