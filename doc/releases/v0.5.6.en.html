@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClipMenu 0.5.6 release notes</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 13px/1.55 -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 15px; margin-top: 22px; }
+    li + li { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>ClipMenu 0.5.6</h1>
+  <p>This patch keeps history sequence numbers continuous across range submenus. It supports Intel and Apple silicon Macs running macOS 12 or later. ClipMenu 0.5.0–0.5.5 users can update through Sparkle normally.</p>
+
+  <h2>What changed</h2>
+  <ul>
+    <li>History items inside range submenus now keep their global sequence numbers instead of restarting from <strong>1.</strong> (or <strong>0.</strong>) in each folder. For example, with 10 inline items, the <strong>11 - 20</strong> submenu displays <strong>11.</strong> through <strong>20.</strong>, and 0-based numbering displays <strong>10.</strong> through <strong>19.</strong> inside <strong>10 - 19</strong>.</li>
+    <li><strong>Command–1</strong> through <strong>Command–0</strong> shortcuts remain assigned only to the first ten history entries.</li>
+  </ul>
+
+  <h2>Validation</h2>
+  <p>The Debug build and all 112 unit tests passed, including continuous subfolder numbering checks for 1-based, 0-based, and unnumbered history menus.</p>
+</body>
+</html>

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClipMenu 0.5.6 リリースノート</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 13px/1.55 -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 15px; margin-top: 22px; }
+    li + li { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>ClipMenu 0.5.6</h1>
+  <p>範囲サブメニュー内でも履歴項目の連番を継続するよう修正したパッチリリースです。macOS 12 以降の Intel Mac と Apple シリコン搭載 Mac に対応します。ClipMenu 0.5.0〜0.5.5 からは Sparkle で通常どおり更新できます。</p>
+
+  <h2>主な変更点</h2>
+  <ul>
+    <li>範囲サブメニューに入った履歴項目がフォルダごとに <strong>1.</strong>（または <strong>0.</strong>）から振り直されず、履歴全体の通し番号を維持するようになりました。たとえばインライン表示が 10 件の場合、<strong>11 - 20</strong> サブメニュー内は <strong>11.</strong>〜<strong>20.</strong>、0 から始める設定では <strong>10 - 19</strong> サブメニュー内が <strong>10.</strong>〜<strong>19.</strong> と表示されます。</li>
+    <li><strong>Command–1</strong>〜<strong>Command–0</strong> のキーボードショートカットは引き続き先頭 10 件の履歴項目にのみ割り当てられます。</li>
+  </ul>
+
+  <h2>検証</h2>
+  <p>Debug ビルドおよび全 112 件のユニットテスト（1 始まり・0 始まり・番号なしの各設定でのサブメニュー連番テストを含む）がすべて成功しました。</p>
+</body>
+</html>
