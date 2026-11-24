@@ -8278,6 +8278,12 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         defaults.set(0, forKey: CMPrefNumberOfItemsPlaceInlineKey)
         let folderedNumberedHistoryMenu = makeHistoryMenu()
         let folderedNumberedTitles = folderedNumberedHistoryMenu.items.first?.submenu?.items.map(\.title) ?? []
+        let folderedNumberedOverflowTitles = folderedNumberedHistoryMenu.items
+            .dropFirst()
+            .first?
+            .submenu?
+            .items
+            .map(\.title) ?? []
         let folderedNumberedKeyEquivalents = folderedNumberedHistoryMenu.items
             .first?
             .submenu?
@@ -8384,9 +8390,11 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
         report["tenItemHistoryMatchesExpected"] = tenItemHistoryTitles == tenItemHistoryExpectedTitles
             && tenItemHistoryKeyEquivalents == Array(numberedExpectedKeyEquivalents.prefix(10))
         report["folderedNumberedHistoryTitles"] = folderedNumberedTitles
+        report["folderedNumberedOverflowTitles"] = folderedNumberedOverflowTitles
         report["folderedNumberedHistoryKeyEquivalents"] = folderedNumberedKeyEquivalents
         report["folderedNumberedHistoryModifierMasks"] = folderedNumberedModifierMasks
         report["folderedNumberedHistoryMatchesExpected"] = folderedNumberedTitles == tenItemHistoryExpectedTitles
+            && folderedNumberedOverflowTitles == Array(oneBasedHistoryExpectedTitles.dropFirst(10))
             && folderedNumberedKeyEquivalents == folderedNumberedExpectedKeyEquivalents
             && folderedNumberedModifierMasks == folderedNumberedExpectedModifierMasks
         report["oneBasedHistoryTitles"] = oneBasedHistoryTitles
@@ -12800,8 +12808,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             "6 - 8"
         ]
         let expectedHistorySubmenuTitles = [
-            ["1. menu-6", "2. menu-5", "3. menu-4"],
-            ["1. menu-3", "2. menu-2", "3. menu-1"]
+            ["3. menu-6", "4. menu-5", "5. menu-4"],
+            ["6. menu-3", "7. menu-2", "8. menu-1"]
         ]
         let expectedSnippetSubmenuTitles = ["1. Greeting"]
         let actualState: [String: Any] = [
@@ -14678,8 +14686,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
             "6 - 8"
         ]
         report["folderedHistorySubmenusMatch"] = submenuTitles == [
-            ["1. menu-6", "2. menu-5", "3. menu-4"],
-            ["1. menu-3", "2. menu-2", "3. menu-1"]
+            ["3. menu-6", "4. menu-5", "5. menu-4"],
+            ["6. menu-3", "7. menu-2", "8. menu-1"]
         ]
 
         defaults.set(1, forKey: CMPrefTagOfSeparatorForExportHistoryToFileKey)
@@ -20295,7 +20303,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMe
                 let submenu = NSMenu(title: submenuItem.title)
                 submenu.delegate = self
                 for offset in range {
-                    let listNumber = firstIndex + offset - folderStart
+                    let listNumber = firstIndex + offset
                     submenu.addItem(
                         makeClipMenuItem(clip: clips[offset], globalIndex: offset, listNumber: listNumber)
                     )

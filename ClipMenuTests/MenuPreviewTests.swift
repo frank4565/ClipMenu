@@ -669,6 +669,75 @@ extension MenuPreviewTests {
         }
     }
 
+    func testHistorySubmenusKeepContinuousSequenceNumbers() throws {
+        let controller = try XCTUnwrap(NSApp.delegate as? AppController)
+        let originalClips = controller.debugHistoryClipsForTesting
+        defer { controller.debugReplaceHistoryClipsForTesting(originalClips) }
+
+        try withPreservedPreferences {
+            let defaults = UserDefaults.standard
+            defaults.set(25, forKey: CMPrefMaxHistorySizeKey)
+            defaults.set(10, forKey: CMPrefNumberOfItemsPlaceInlineKey)
+            defaults.set(10, forKey: CMPrefNumberOfItemsPlaceInsideFolderKey)
+            defaults.set(20, forKey: CMPrefMaxMenuItemTitleLengthKey)
+            defaults.set(false, forKey: CMPrefShowLabelsInMenuKey)
+            defaults.set(false, forKey: CMPrefReorderClipsAfterPasting)
+
+            let clips = (1...25).map { number -> ClipItem in
+                let date = Date(timeIntervalSince1970: TimeInterval(26 - number))
+                return ClipItem(text: "clip-\(number)", createdAt: date, lastUsedAt: date)
+            }
+            controller.debugReplaceHistoryClipsForTesting(clips)
+
+            defaults.set(true, forKey: CMPrefMenuItemsAreMarkedWithNumbersKey)
+            defaults.set(false, forKey: CMPrefMenuItemsTitleStartWithZeroKey)
+            let oneBasedMenu = controller.debugMakeHistoryMenuForTesting()
+            XCTAssertEqual(
+                oneBasedMenu.items.map(\.title),
+                (1...10).map { "\($0). clip-\($0)" } + ["11 - 20", "21 - 25"]
+            )
+            XCTAssertEqual(
+                Array(oneBasedMenu.items.prefix(10).map(\.keyEquivalent)),
+                ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
+            )
+            XCTAssertEqual(
+                oneBasedMenu.items[10].submenu?.items.map(\.title),
+                (11...20).map { "\($0). clip-\($0)" }
+            )
+            XCTAssertEqual(
+                oneBasedMenu.items[10].submenu?.items.map(\.keyEquivalent),
+                Array(repeating: "", count: 10)
+            )
+            XCTAssertEqual(
+                oneBasedMenu.items[11].submenu?.items.map(\.title),
+                (21...25).map { "\($0). clip-\($0)" }
+            )
+
+            defaults.set(true, forKey: CMPrefMenuItemsTitleStartWithZeroKey)
+            let zeroBasedMenu = controller.debugMakeHistoryMenuForTesting()
+            XCTAssertEqual(
+                Array(zeroBasedMenu.items.prefix(10).map(\.title)),
+                (0..<10).map { "\($0). clip-\($0 + 1)" }
+            )
+            XCTAssertEqual(zeroBasedMenu.items[10].title, "10 - 19")
+            XCTAssertEqual(
+                zeroBasedMenu.items[10].submenu?.items.map(\.title),
+                (10..<20).map { "\($0). clip-\($0 + 1)" }
+            )
+            XCTAssertEqual(
+                zeroBasedMenu.items[11].submenu?.items.map(\.title),
+                (20..<25).map { "\($0). clip-\($0 + 1)" }
+            )
+
+            defaults.set(false, forKey: CMPrefMenuItemsAreMarkedWithNumbersKey)
+            let unnumberedMenu = controller.debugMakeHistoryMenuForTesting()
+            XCTAssertEqual(
+                unnumberedMenu.items[10].submenu?.items.map(\.title),
+                (11...20).map { "clip-\($0)" }
+            )
+        }
+    }
+
     private func historyItem(for clip: ClipItem, in menu: NSMenu) -> NSMenuItem? {
         for item in menu.items {
             if item.representedObject as? String == clip.id.uuidString { return item }
