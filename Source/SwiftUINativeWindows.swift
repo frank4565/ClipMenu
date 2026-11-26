@@ -1972,6 +1972,50 @@ private struct PasteAutomationPreferencesView: View {
     }
 }
 
+extension Notification.Name {
+    /// Posted synchronously by the Preferences window before it closes (and
+    /// before `CMPreferencePanelWillClose`), so fields holding uncommitted
+    /// drafts can write them while observers of the close still see the result.
+    static let CMPreferencePanelWillCommitEdits = Notification.Name("CMPreferencePanelWillCommitEditsNotification")
+}
+
+/// Pure parsing and commit rules for integer preference fields that keep a
+/// text draft while the user is typing.
+enum CMPreferenceIntegerDraft {
+    private static let formatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.allowsFloats = false
+        formatter.usesGroupingSeparator = false
+        return formatter
+    }()
+
+    static func format(_ value: Int) -> String {
+        formatter.string(from: NSNumber(value: value)) ?? String(value)
+    }
+
+    /// Returns nil for empty, non-integer, or out-of-`Int`-range input.
+    static func parse(_ text: String) -> Int? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return formatter.number(from: trimmed)?.intValue ?? Int(trimmed)
+    }
+
+    static func clamp(_ value: Int, to range: ClosedRange<Int>) -> Int {
+        min(max(value, range.lowerBound), range.upperBound)
+    }
+
+    /// The value to store when editing ends. An unedited (or unparsable) draft
+    /// never overrides `current`, so a stale draft cannot clobber a value that
+    /// changed elsewhere while the field was focused.
+    static func resolvedValue(draft: String, isDirty: Bool, current: Int, range: ClosedRange<Int>) -> Int {
+        guard isDirty, let parsed = parse(draft) else {
+            return clamp(current, to: range)
+        }
+        return clamp(parsed, to: range)
+    }
+}
+
 private struct PreferenceStepper: View {
     let title: String
     @Binding var value: Int
@@ -1980,13 +2024,14 @@ private struct PreferenceStepper: View {
     let suffix: String?
     let labelWidth: CGFloat
 
-    private static let integerFormatter: NumberFormatter = {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.allowsFloats = false
-        formatter.usesGroupingSeparator = false
-        return formatter
-    }()
+    // Edits are kept in a local draft and only written to the bound value when
+    // the user presses Return, the field loses focus, or the window closes.
+    // Committing on every keystroke would apply intermediate values (e.g. "1"
+    // while typing "1000"), which for settings like the max history size
+    // immediately trims data.
+    @State private var draft: String
+    @State private var isDraftDirty = false
+    @FocusState private var isFieldFocused: Bool
 
     init(_ title: String, value: Binding<Int>, in range: ClosedRange<Int>, step: Int = 1, suffix: String? = nil, labelWidth: CGFloat = 190) {
         self.title = title
@@ -1995,24 +2040,105 @@ private struct PreferenceStepper: View {
         self.step = step
         self.suffix = suffix
         self.labelWidth = labelWidth
+        self._draft = State(initialValue: CMPreferenceIntegerDraft.format(
+            CMPreferenceIntegerDraft.clamp(value.wrappedValue, to: range)
+        ))
+    }
+
+    private var draftBinding: Binding<String> {
+        Binding(
+            get: { draft },
+            set: { newText in
+                guard newText != draft else { return }
+                draft = newText
+                isDraftDirty = true
+            }
+        )
+    }
+
+    private func showValue(_ newValue: Int) {
+        draft = CMPreferenceIntegerDraft.format(newValue)
+        isDraftDirty = false
+    }
+
+    private func commitDraft() {
+        let newValue = CMPreferenceIntegerDraft.resolvedValue(
+            draft: draft,
+            isDirty: isDraftDirty,
+            current: value,
+            range: range
+        )
+        if newValue != value {
+            value = newValue
+        }
+        showValue(newValue)
+    }
+
+    private var stepperValue: Binding<Int> {
+        Binding(
+            get: {
+                CMPreferenceIntegerDraft.resolvedValue(
+                    draft: draft,
+                    isDirty: isDraftDirty,
+                    current: value,
+                    range: range
+                )
+            },
+            set: { newValue in
+                let newValue = CMPreferenceIntegerDraft.clamp(newValue, to: range)
+                value = newValue
+                showValue(newValue)
+            }
+        )
     }
 
     var body: some View {
         PreferenceRow(title, labelWidth: labelWidth) {
             HStack(spacing: 10) {
-                TextField("", value: $value, formatter: Self.integerFormatter)
+                TextField("", text: draftBinding)
                     .textFieldStyle(.roundedBorder)
                     .multilineTextAlignment(.trailing)
                     .font(.body)
                     .preferenceValueFieldFrame(width: 76)
-                    .onChange(of: value) { newValue in
-                        value = min(max(newValue, range.lowerBound), range.upperBound)
+                    .focused($isFieldFocused)
+                    .onSubmit(commitDraft)
+                    .onChange(of: isFieldFocused) { focused in
+                        if !focused {
+                            commitDraft()
+                        }
                     }
+                    .onChange(of: value) { newValue in
+                        let normalized = CMPreferenceIntegerDraft.clamp(newValue, to: range)
+                        if normalized != newValue {
+                            value = normalized
+                        }
+                        // Reflect outside changes unless the user has pending edits.
+                        if !isDraftDirty {
+                            draft = CMPreferenceIntegerDraft.format(normalized)
+                        }
+                    }
+                    .onAppear {
+                        if !isDraftDirty {
+                            draft = CMPreferenceIntegerDraft.format(
+                                CMPreferenceIntegerDraft.clamp(value, to: range)
+                            )
+                        }
+                    }
+                    // Focus-change callbacks arrive on a later SwiftUI update,
+                    // which can be after the window has closed or the app has
+                    // quit. These notifications are delivered synchronously.
+                    .onReceive(NotificationCenter.default.publisher(for: .CMPreferencePanelWillCommitEdits)) { _ in
+                        commitDraft()
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                        commitDraft()
+                    }
+                    .onDisappear(perform: commitDraft)
                 if let suffix {
                     Text(suffix)
                         .foregroundColor(.secondary)
                 }
-                Stepper("", value: $value, in: range, step: step)
+                Stepper("", value: stepperValue, in: range, step: step)
                     .labelsHidden()
             }
         }

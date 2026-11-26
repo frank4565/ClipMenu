@@ -334,6 +334,41 @@ final class PreferenceNormalizationTests: XCTestCase {
         XCTAssertEqual(CMNormalizedLegacyThumbnailDimension(-100), 1)
     }
 
+    func testIntegerPreferenceDraftParsesOnlyWholeIntegers() {
+        XCTAssertEqual(CMPreferenceIntegerDraft.parse("1000"), 1000)
+        XCTAssertEqual(CMPreferenceIntegerDraft.parse("  42 \n"), 42)
+        XCTAssertEqual(CMPreferenceIntegerDraft.parse("-5"), -5)
+        XCTAssertNil(CMPreferenceIntegerDraft.parse(""))
+        XCTAssertNil(CMPreferenceIntegerDraft.parse("   "))
+        XCTAssertNil(CMPreferenceIntegerDraft.parse("abc"))
+        XCTAssertNil(CMPreferenceIntegerDraft.parse("12abc"))
+        XCTAssertNil(CMPreferenceIntegerDraft.parse("1.5"))
+        XCTAssertNil(CMPreferenceIntegerDraft.parse("99999999999999999999"))
+        XCTAssertEqual(
+            CMPreferenceIntegerDraft.parse(CMPreferenceIntegerDraft.format(123_456)),
+            123_456
+        )
+    }
+
+    func testIntegerPreferenceDraftCommitsOnlyEditedValidDrafts() {
+        let range = 1...Int.max
+
+        // Edited, valid drafts are committed and clamped into range.
+        XCTAssertEqual(CMPreferenceIntegerDraft.resolvedValue(draft: "1000", isDirty: true, current: 20, range: range), 1000)
+        XCTAssertEqual(CMPreferenceIntegerDraft.resolvedValue(draft: "0", isDirty: true, current: 20, range: range), 1)
+        XCTAssertEqual(CMPreferenceIntegerDraft.resolvedValue(draft: "50", isDirty: true, current: 20, range: 1...10), 10)
+
+        // Invalid or overflowing drafts keep the current value instead of
+        // falling back to the range minimum (which would trim history).
+        XCTAssertEqual(CMPreferenceIntegerDraft.resolvedValue(draft: "", isDirty: true, current: 20, range: range), 20)
+        XCTAssertEqual(CMPreferenceIntegerDraft.resolvedValue(draft: "12abc", isDirty: true, current: 20, range: range), 20)
+        XCTAssertEqual(CMPreferenceIntegerDraft.resolvedValue(draft: "99999999999999999999", isDirty: true, current: 20, range: range), 20)
+
+        // A stale, unedited draft never overwrites a value changed elsewhere.
+        XCTAssertEqual(CMPreferenceIntegerDraft.resolvedValue(draft: "5", isDirty: false, current: 20, range: range), 20)
+        XCTAssertEqual(CMPreferenceIntegerDraft.resolvedValue(draft: "5", isDirty: false, current: 0, range: range), 1)
+    }
+
     func testNearestOptionPreferencesChooseSupportedValues() {
         XCTAssertEqual(CMNormalizedMenuLegacyFontSize(8), 9)
         XCTAssertEqual(CMNormalizedMenuLegacyFontSize(20), 16)

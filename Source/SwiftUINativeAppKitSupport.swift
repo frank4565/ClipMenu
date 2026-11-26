@@ -294,6 +294,7 @@ final class SwiftUIPreferencesWindowController: NSWindowController, NSWindowDele
         if let window, !window.makeFirstResponder(window) {
             window.endEditing(for: nil)
         }
+        NotificationCenter.default.post(name: .CMPreferencePanelWillCommitEdits, object: nil)
         CMCommitPreferencesBeforeWindowClose()
         CMForegroundWindowActivationPolicyBridge.releaseRegularActivationPolicy()
         NSApp.deactivate()
