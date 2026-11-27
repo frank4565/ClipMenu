@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClipMenu 0.5.7 リリースノート</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 13px/1.55 -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 15px; margin-top: 22px; }
+    li + li { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>ClipMenu 0.5.7</h1>
+  <p>「記憶する履歴の数:」などの数値設定フィールドで、キー入力ごとではなく編集完了時に値を反映するよう修正したパッチリリースです。macOS 12 以降の Intel Mac と Apple シリコン搭載 Mac に対応します。ClipMenu 0.5.0〜0.5.6 からは Sparkle で通常どおり更新できます。</p>
+
+  <h2>主な変更点</h2>
+  <ul>
+    <li>環境設定の<strong>「記憶する履歴の数:」</strong>（および他の整数ステッパー入力欄）への入力を一時的な下書きとして保持し、<strong>Return</strong> キー押下・フォーカス移動・環境設定ウインドウを閉じるとき・アプリ終了時に確定するようになりました。これにより <strong>1000</strong> と入力する途中の <strong>1</strong> が即座に適用されて既存のクリップボード履歴が切り詰められる問題を防ぎます。</li>
+    <li>ステッパーの上下矢印は引き続き即座に反映され、不正な文字列や桁溢れの入力があった場合は最小値へ戻さず現在の設定値を維持します。また、未編集の入力欄が他所で更新された値を上書きすることもありません。</li>
+  </ul>
+
+  <h2>検証</h2>
+  <p>Debug ビルドおよび全 114 件のユニットテスト（整数設定フィールドの下書きパース・範囲制限・確定タイミングのテストを含む）がすべて成功しました。</p>
+</body>
+</html>

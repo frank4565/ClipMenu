@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClipMenu 0.5.7 release notes</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 13px/1.55 -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 15px; margin-top: 22px; }
+    li + li { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>ClipMenu 0.5.7</h1>
+  <p>This patch commits edited integer preference fields—such as <strong>Max clipboard history size:</strong>—only after editing finishes instead of on every keystroke. It supports Intel and Apple silicon Macs running macOS 12 or later. ClipMenu 0.5.0–0.5.6 users can update through Sparkle normally.</p>
+
+  <h2>What changed</h2>
+  <ul>
+    <li>Typing into <strong>Max clipboard history size:</strong> (and other integer stepper fields in Preferences) now keeps edits in a local draft and commits on <strong>Return</strong>, focus loss, Preferences window close, or app termination, so typing intermediate digits such as <strong>1</strong> on the way to <strong>1000</strong> no longer trims existing clipboard history.</li>
+    <li>Stepper arrows continue to apply changes immediately, invalid or overflowing input preserves the current setting instead of falling back to the minimum, and unedited drafts never overwrite values updated elsewhere.</li>
+  </ul>
+
+  <h2>Validation</h2>
+  <p>The Debug build and all 114 unit tests passed, including integer preference draft parsing, clamping, and commit-timing checks.</p>
+</body>
+</html>
